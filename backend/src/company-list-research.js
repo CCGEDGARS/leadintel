@@ -66,18 +66,22 @@ function failure(cause,events=[],operation=''){
 
 // Every wake is bounded. Browser HTTP and the minute scheduler use the same
 // persisted stages and lease; the browser is not the owner of the run.
-export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=45000,services=env.COMPANY_LIST_TEST_SERVICES||{},clock=Date.now}={}){
+export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=45000,services=env.COMPANY_LIST_TEST_SERVICES||{},clock=Date.now,lanes=env.COMPANY_LIST_LANES}={}){
  const budget=env.bookInvocationBudget;if(budget&&!budget.admit(90))return [];
  let row,timer;const token=crypto.randomUUID(),controller=new AbortController();
  try{
   row=await sql(env,`UPDATE company_lists SET status='running',lease_token=?,lease_until=? WHERE id=(SELECT id FROM company_lists WHERE status IN ('queued','running') AND lease_until<? AND COALESCE(json_extract(state_json,'$.nextAttemptAt'),0)<=? ${jobId?'AND id=?':''} ORDER BY updated_at,rowid LIMIT 1) RETURNING *`,token,now+windowMs+30000,now,now,...(jobId?[jobId]:[])).first();
   if(!row)return [];
   const s=parse(row.state_json),criteria=parse(row.input_json),start=clock(),profilePolicy=criteria.qualityVersion===M.PROFILE_VERSION,strict=profilePolicy||criteria.qualityVersion===M.QUALITY_VERSION;
+  // A state written by several lanes stores every read page once and refers to it from the pending pages.
+  if(s.pagePool){const pool=s.pagePool,at=page=>page&&page.$page!==undefined?pool[page.$page]:page;for(const task of s.pending||[]){if(task.page)task.page=at(task.page);if(task.context)task.context=task.context.map(at).filter(Boolean);}delete s.pagePool;}
   timer=setTimeout(()=>controller.abort(),windowMs);
   s.receipts||=[];s.reviews||=[];s.seen||=[];s.pending||=[];
   // Older jobs keep their existing accounting. Do not invent past receipts.
   s.operationTotals||={started:0,complete:0,failed:0,interrupted:0,previousOperations:s.operations||0};
   if(s.inFlight){const prior=s.receipts.find(r=>r.id===s.inFlight.id);if(prior)prior.status='interrupted';s.operationTotals.interrupted++;s.inFlight=null;}
+  // A slice that ran several lanes records every operation in flight.
+  if(s.flying?.length){for(const id of s.flying){const prior=s.receipts.find(r=>r.id===id);if(prior?.status==='started'){prior.status='interrupted';s.operationTotals.interrupted++;}}s.flying=[];}
   const guard=async()=>{const live=await sql(env,`SELECT id FROM company_lists WHERE id=? AND lease_token=? AND status='running' AND ${authority}`,row.id,token).first();if(!live)throw error('Research authority changed.','authority',403);};
   let evidenceWrite;
   const retain=result=>{
@@ -97,14 +101,32 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
    }
    if(index<0)s.results.push(entry);else s.results[index]=entry;
   };
-  const checkpoint=async(status='running')=>{
-   const update=sql(env,`UPDATE company_lists SET state_json=?,status=?,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND lease_token=? AND status='running' AND ${authority}`,JSON.stringify(s),status,row.id,token);
-   const [r]=evidenceWrite?await env.DB.batch([update,evidenceWrite]):[await update.run()];
-   if(!r.meta.changes)throw error('Research context changed.','authority',403);
+  // `broken`: a write that carried a kept company's evidence row failed. The company is in memory but not stored, and a
+  // later write would store it without its evidence, so no later write of this slice is made.
+  // `packing`: a follow-up page carries up to four context pages, and its siblings carry the same ones. With several
+  // companies open at once the copies would pass D1's 2 MB row (3.3 MB measured with twelve lanes), so the lanes' state keeps
+  // each read page once: 0.74 MB at most with eight lanes when every page is full and every review asks for three more.
+  let broken=null,packing=false;
+  const pack=state=>{const pool={},keys=new Map(),ref=page=>{if(!page||typeof page!=='object')return page;let key=keys.get(page);if(key===undefined){key=String(keys.size);keys.set(page,key);pool[key]=page;}return {$page:key};};
+   return {...state,pending:state.pending.map(task=>({...task,...(task.page?{page:ref(task.page)}:{}),...(task.context?{context:task.context.map(ref)}:{})})),pagePool:pool};};
+  const write=async(status='running')=>{
+   if(broken)throw broken;
+   const update=sql(env,`UPDATE company_lists SET state_json=?,status=?,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND lease_token=? AND status='running' AND ${authority}`,JSON.stringify(packing?pack(s):s),status,row.id,token);
+   try{
+    const [r]=evidenceWrite?await env.DB.batch([update,evidenceWrite]):[await update.run()];
+    if(!r.meta.changes)throw error('Research context changed.','authority',403);
+   }catch(cause){if(evidenceWrite)broken=cause;throw cause;}
    evidenceWrite=null;
   };
+  // Every state write goes through one queue, so the writes of several lanes land in order, each with the latest state.
+  let writes=Promise.resolve();
+  const checkpoint=(status='running')=>{const next=writes.then(()=>write(status));writes=next.catch(()=>{});return next;};
+  // A change that must be stored by the very next write: a kept company together with its evidence row.
+  const commit=change=>{const next=writes.then(async()=>{change();await write();});writes=next.catch(()=>{});return next;};
   let lastOperation=null,operationEvents=[];
-  const observe=r=>{const safe={provider:clean(r.provider,40),operation:clean(r.operation,30),status:clean(r.status,30),...(r.reason?{reason:clean(r.reason,180)}:{}),...(r.httpStatus?{httpStatus:r.httpStatus}:{}),...(Number.isFinite(r.results)?{results:r.results}:{})};operationEvents.push(safe);};
+  const held=new Set();   // pages a lane is working on; always empty in the one-lane loop
+  const safeEvent=r=>({provider:clean(r.provider,40),operation:clean(r.operation,30),status:clean(r.status,30),...(r.reason?{reason:clean(r.reason,180)}:{}),...(r.httpStatus?{httpStatus:r.httpStatus}:{}),...(Number.isFinite(r.results)?{results:r.results}:{})});
+  const observe=r=>{operationEvents.push(safeEvent(r));};
   const search=services.search||createBuyerSourceSearch(env,row.workspace_id,{purpose:'company_list',guard,observe,scrapeResults:false,primaryTimeoutMs:12000});
   const operation=async(kind,target,fn)=>{
    await guard();if(controller.signal.aborted)throw error('Research slice finished.','slice_finished');
@@ -120,12 +142,13 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
    }catch(e){r.status='failed';if(e.code)r.failure=clean(e.code,40);if(e.detail)r.detail=clean(e.detail,80);s.operationTotals.failed++;for(const trace of e.researchTrace||[])observe(trace);throw e;}
    finally{signal.removeEventListener('abort',abort);if(operationEvents.length)r.providers=operationEvents.slice(0,10);s.inFlight=null;}
   };
-  const generate=async prompt=>operation(prompt.stage==='review'?'evidence_review':'analysis',prompt.stage==='plan'?'search plan':s.pending[0]?.url||prompt.stage,async(signal,receipt)=>{
+  const ask=async(prompt,signal,receipt,streamed=false)=>{
    let value;
    if(services.generate)value=await services.generate(prompt,criteria);
    else{
     const provider=await productionProvider(env,row.workspace_id);if(!provider)throw error('Connect a reasoning provider.','provider_missing');
-    const result=await provider.generate({system,prompt:JSON.stringify(prompt),maxOutputTokens:3500,reasoningEffort:'low',signal});
+    // A streamed answer frees the Worker's outgoing-connection slot as soon as its headers arrive.
+    const result=await provider.generate({system,prompt:JSON.stringify(prompt),maxOutputTokens:3500,reasoningEffort:'low',signal,...(streamed?{onDelta(){}}:{})});
     receipt.provider=clean(result.provider,40);receipt.model=clean(result.model,100);
     try{value=JSON.parse(String(result.text||'').replace(/^```(?:json)?\s*/,'').replace(/\s*```$/,''));}catch{throw unusable(String(result.text||'').trim()?'not_json':'empty_answer');}
    }
@@ -136,7 +159,8 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
    if(prompt.stage==='plan'&&!Array.isArray(value.queries))throw unusable('plan_without_queries');
    if(prompt.stage==='review'&&!['pass','needs_evidence','reject'].includes(value.decision))throw unusable('review_without_decision');
    return value;
-  });
+  };
+  const generate=async prompt=>operation(prompt.stage==='review'?'evidence_review':'analysis',prompt.stage==='plan'?'search plan':s.pending[0]?.url||prompt.stage,(signal,receipt)=>ask(prompt,signal,receipt));
   const recordGap=(task,reason,status='needs_evidence')=>{s.reviews.push({url:task.url,company:clean(task.candidate?.company,180),status,reason:clean(reason,700),at:new Date().toISOString()});s.reviews=s.reviews.slice(-500);s.lastGaps=clean(reason,700);};
   const followup=(task,raw,pages)=>{
    if((task.depth||0)>=3)return false;
@@ -146,20 +170,190 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
     if(!allowed.has(url)||pages.some(p=>p.url===url))continue;
     // A search may already have queued the linked page as a standalone hit.
     // Promote that unread hit so its assessment keeps the evidence that led here.
-    const queued=s.pending.findIndex((p,i)=>i>0&&p.url===url&&!p.context&&!p.page);
+    const queued=s.pending.findIndex(p=>p!==task&&!held.has(p)&&p.url===url&&!p.context&&!p.page);
     if(queued>=0)s.pending.splice(queued,1);
     else if(s.seen.includes(url)||s.seen.length>=4000)continue;
     else s.seen.push(url);
     additions.push({url,context:pages.slice(-4),depth:(task.depth||0)+1});
    }
-   s.pending.splice(1,0,...additions);return additions.length>0;
+   s.pending.splice(s.pending.indexOf(task)+1,0,...additions);return additions.length>0;
   };
-  const finishTask=(task,reason,status)=>{if(reason)recordGap(task,reason,status);s.checked++;s.pending.shift();s.reason=`${s.results.length} of ${criteria.count} companies matched`;};
+  const drop=task=>{const at=s.pending.indexOf(task);if(at>=0)s.pending.splice(at,1);};
+  const finishTask=(task,reason,status)=>{if(reason)recordGap(task,reason,status);s.checked++;drop(task);s.reason=`${s.results.length} of ${criteria.count} companies matched`;};
   const allowance=async()=>{s.failureCode='allowance';s.reason='Research allowance reached. Completed matches are retained. Resume grants the displayed additional allowance.';await checkpoint('incomplete');};
+  // Several companies at once inside one slice (COMPANY_LIST_LANES above 1). A lane takes one pending page of a website
+  // no other lane holds through the same steps as the one-lane loop below; one lane at a time searches or plans when
+  // nothing is left to claim. Model answers are streamed, which frees the Worker's connection slot after about a second.
+  const runLanes=async count=>{
+   const busy=new Set(),cooled=new Set();packing=true;let stop=null,feeding=null,readStreak=0,waiters=[];
+   const wake=()=>{const all=waiters;waiters=[];for(const resolve of all)resolve();};
+   const halt=reason=>{stop||=reason;wake();};
+   const claim=()=>{for(const task of s.pending){if(held.has(task)||cooled.has(task))continue;const site=M.domain(task.url);if(busy.has(site))continue;held.add(task);busy.add(site);return task;}return null;};
+   const release=task=>{held.delete(task);busy.delete(M.domain(task.url));wake();};
+   const laneOperation=async(lane,kind,target,fn)=>{
+    await guard();if(stop||controller.signal.aborted)throw error('Research slice finished.','slice_finished');
+    if(s.operations>=s.allowance)throw error('Research allowance reached.','allowance',409);
+    const r={id:++s.operations,operation:kind,target:clean(target,500),status:'started',at:new Date().toISOString()};
+    s.operationTotals.started++;s.receipts.push(r);s.receipts=s.receipts.slice(-250);(s.flying||=[]).push(r.id);lane.last=r;
+    const events=lane.events=[],family=kind==='page_read'?'page_read:':'model:';
+    await checkpoint();
+    // `short`: the slice was ending and this operation got less than its full time.
+    const budget=Math.max(1,Math.min(25000,windowMs-(clock()-start)-2000)),timeout=AbortSignal.timeout(budget),signal=AbortSignal.any([controller.signal,timeout]);lane.short=budget<20000;
+    let abort;const canceled=new Promise((_,reject)=>{abort=()=>reject(error('Research operation timed out.','timeout',504));signal.addEventListener('abort',abort,{once:true});});
+    try{
+     const result=await Promise.race([Promise.resolve().then(()=>fn(signal,r,events)),canceled]);await guard();
+     r.status='complete';s.operationTotals.complete++;if(kind==='page_read')readStreak=0;else if(kind!=='register_check'){s.modelStreak=0;s.modelDone=(s.modelDone||0)+1;}   // a register check says nothing about the model
+     // A success ends the retry count of its own kind only: a page that reads well says nothing about the model.
+     if(!s.retryKey||s.retryKey.startsWith(family)){s.failures=0;s.retryKey='';s.nextAttemptAt=0;s.failureCode='';}
+     return result;
+    }catch(e){r.status='failed';if(e.code)r.failure=clean(e.code,40);if(e.detail)r.detail=clean(e.detail,80);s.operationTotals.failed++;for(const trace of e.researchTrace||[])events.push(safeEvent(trace));try{e.operationFailure=true;}catch{}throw e;}
+    finally{signal.removeEventListener('abort',abort);if(events.length)r.providers=events.slice(0,10);s.flying=(s.flying||[]).filter(id=>id!==r.id);}
+   };
+   const laneAsk=(lane,prompt,task)=>laneOperation(lane,prompt.stage==='review'?'evidence_review':'analysis',task.url,(signal,receipt)=>ask(prompt,signal,receipt,true));
+   // One step for one page: read it, assess it, check the register, or review the evidence.
+   const step=async(lane,task)=>{
+    if(s.results.some(r=>r.domain===M.domain(task.url))){drop(task);await checkpoint();return;}
+    if(!task.page){
+     const raw=await laneOperation(lane,'page_read',task.url,async(signal,receipt,events)=>{
+      const value=await (services.read?services.read(task.url,{signal}):readPublicBuyerPage(env,row.workspace_id,task.url,{purpose:'company_list',signal,totalTimeoutMs:18000,directTimeoutMs:3000,firecrawlTimeoutMs:12000}));
+      for(const trace of value.researchTrace||[])events.push(safeEvent(trace));return value;
+     });
+     const p=raw.data||raw,actual=M.url(p.url||p.metadata?.sourceURL||task.url),text=String(p.markdown||p.description||p.text||'').slice(0,16000);
+     if(M.domain(actual)!==M.domain(task.url)||text.trim().length<40){recordGap(task,'Source redirected to another domain or returned no readable evidence.');drop(task);await checkpoint();return;}
+     task.page={url:actual,text,links:(Array.isArray(p.links)?p.links:[]).map(M.url).filter(Boolean).slice(0,100),readAt:new Date().toISOString(),receipt:{...lane.last}};
+     s.phase='checking';await checkpoint();return;
+    }
+    const pages=[...(task.context||[]),task.page];
+    if(task.candidate&&criteria.target&&!task.registerChecked){
+     const candidate=task.candidate;
+     const facts=await laneOperation(lane,'register_check',candidate.company,async signal=>{
+      try{return await (services.registry||lookupCompanyFacts)({market:candidate.market,company:candidate.company,website:candidate.website,pages:pages.map(p=>({url:p.url,text:p.text}))},{signal});}
+      catch(cause){if(signal.aborted)throw cause;return {status:'unavailable'};}
+     });
+     const outcome=M.targetOutcome(candidate,facts,criteria);
+     if(outcome.excluded)finishTask(task,outcome.reason,'rejected');
+     else{task.candidate=outcome.candidate;task.registerChecked=true;}
+    }else if(task.candidate){
+     const review=await laneAsk(lane,{stage:'review',criteria:modelCriteria(criteria),pages,candidate:modelCandidate(task.candidate),instructions:profileReview},task);
+     const result=M.reviewResult(task.candidate,review,criteria);
+     if(result){
+      result.audit={reads:pages.map(p=>({url:p.url,readAt:p.readAt,operationId:p.receipt?.id,providers:p.receipt?.providers||[]})),assessment:task.assessment,review:{...lane.last}};
+      // Kept and written in one turn of the writer. Another lane may have completed the list while this review ran:
+      // nothing beyond the requested number is kept.
+      await commit(()=>{
+       if(s.results.length>=criteria.count&&!s.results.some(r=>r.domain===result.domain)){drop(task);return;}
+       for(const prior of s.reviews)if(prior.status==='needs_evidence'&&M.domain(prior.url)===result.domain)prior.status='resolved';
+       retain(result);finishTask(task);
+      });
+      return;
+     }
+     if(review.decision!=='reject')followup(task,review,pages);
+     finishTask(task,(review.gaps||[]).map(g=>clean(g)).join(' · ')||clean(review.reason)||'Required evidence review did not pass.',review.decision==='reject'?'rejected':'needs_evidence');
+    }else{
+     const raw=await laneAsk(lane,{stage:'assess',criteria:modelCriteria(criteria),pages,instructions:profileAssessment+(criteria.target?.industries?.length?industryStatement:'')},task);
+     const result=M.assess(raw,criteria,pages);
+     if(result&&result.commercialFit){task.candidate=result;task.assessment={...lane.last};s.phase='reviewing';}
+     else{if(raw.excluded!==true)followup(task,raw,pages);finishTask(task,(raw.gaps||[]).map(g=>clean(g)).join(' · ')||(raw.excluded?'Company excluded':'Identity, market, selected signal or commercial-fit evidence is incomplete.'),raw.excluded?'rejected':'needs_evidence');}
+    }
+    await checkpoint();
+   };
+   // What a failed operation means. A page that cannot be read or whose answer is refused is that page's matter: skipped,
+   // asked once more, or left for the next slice. A model or register failure is not the page's fault: the page
+   // stays, and three such failures with no success between them stop every lane, as does a rate limit, missing credits or
+   // a lost connection; the list then waits or ends as in the one-lane loop. Anything that is not a failed operation (a
+   // state write, a fault in this code) ends the slice without blaming a page.
+   const settle=async(lane,task,e)=>{
+    if(broken){halt({fatal:broken});return;}
+    if(e.code==='slice_finished'||controller.signal.aborted)return;
+    if(e.code==='authority'||/WORKSPACE_STORAGE_FULL/.test(String(e.message))){halt({fatal:e});return;}
+    if(e.code==='allowance'){halt({allowance:true});return;}
+    if(!e.operationFailure){halt({fatal:e});return;}
+    if(e.code==='timeout'&&lane.short)return;
+    const read=lane.last?.operation==='page_read',issue=failure(e,lane.events,lane.last?.operation),family=read?'page_read:':'model:';
+    if(issue.skip&&read){recordGap(task,issue.reason);drop(task);}
+    else if(issue.unusable){task.refused=(task.refused||0)+1;if(task.refused>=2){recordGap(task,'This source could not be assessed: the reasoning answer was unusable twice.');drop(task);}}
+    else if(issue.retry&&issue.code!=='rate_limit'&&read){
+     readStreak++;if(readStreak>=Math.max(3,count)){halt({issue,key:family+issue.code});return;}
+     // A page that cannot be read now is tried once a slice (`cooled`), and three slices give it up.
+     task.unread=(task.unread||0)+1;cooled.add(task);
+     if(task.unread>=3){recordGap(task,issue.reason);drop(task);}
+    }else if(issue.retry&&issue.code!=='rate_limit'){
+     // A model or register failure is the provider's. The one exception: an answer that does not come in time for this
+     // page although the model has answered for others since the last time. Twice, and the page is given up.
+     const done=s.modelDone||0;
+     if(e.code==='timeout'&&(task.slowAt===undefined||done>task.slowAt)){task.slow=(task.slow||0)+1;task.slowAt=done;if(task.slow>=2){recordGap(task,'The reasoning service did not answer for this page in time, twice, while it answered for other pages.');drop(task);}}
+     // Counted across slices: three failures with no success between them stop the lanes.
+     s.modelStreak=(s.modelStreak||0)+1;if(s.modelStreak>=3){halt({issue,key:family+issue.code});return;}
+    }else{halt({issue,key:family+issue.code});return;}
+    await checkpoint().catch(cause=>halt({fatal:cause}));
+   };
+   const feed=async()=>{
+    if(stop)return;
+    if(s.queryIndex<s.queries.length){
+     const q=s.queries[s.queryIndex],rows=await operation('search',q,async signal=>{const found=await search(q,{limit:10,signal}),rows=Array.isArray(found)?found:found?.results;if(!Array.isArray(rows))throw error('Search response needs retry.','invalid_response');return rows;});
+     for(const hit of rows.slice(0,10)){const url=M.url(hit.url);if(url&&!s.seen.includes(url)&&s.seen.length<4000&&!s.results.some(r=>r.domain===M.domain(url))){s.seen.push(url);s.pending.push({url});}}
+     s.queryIndex++;s.phase='researching';await checkpoint();return;
+    }
+    if(s.roundStart){s.noProgressRounds=(s.seen.length===s.roundStart.seen&&s.results.length===s.roundStart.matches)?(s.noProgressRounds||0)+1:0;s.roundStart=null;}
+    const maxRounds=Math.max(10,Math.ceil(criteria.count/5));
+    if(s.round>=maxRounds||s.noProgressRounds>=3||s.seen.length>=4000){halt({end:'incomplete',code:'search_exhausted',phase:'exhausted',reason:'The bounded search plan finished below target. Saved matches passed their checks; no weaker matches were added to fill the list.'});return;}
+    const plan=await generate({stage:'plan',criteria:modelCriteria(criteria),previousQueries:s.queries,alreadyMatched:s.results.map(r=>r.company),gaps:s.reviews.slice(-12),round:s.round,instructions:profilePlanning+targetPlanning(criteria)});
+    const queries=[...new Set((Array.isArray(plan.queries)?plan.queries:[]).map(q=>clean(q,350)).filter(q=>q&&!s.queries.some(old=>old.toLowerCase()===q.toLowerCase())))].slice(0,8);
+    s.round++;s.roundStart={seen:s.seen.length,matches:s.results.length};s.queries.push(...queries);
+    if(!queries.length){halt({end:'incomplete',code:'search_exhausted',phase:'exhausted',reason:'No further useful queries. Completed matches are retained; review the criteria.'});return;}
+    s.phase='researching';s.reason='Researching your selected profiles and buying signals';await checkpoint();
+   };
+   const settleFeed=e=>{
+    if(e.code==='slice_finished'||controller.signal.aborted)return;
+    if(e.code==='authority'||/WORKSPACE_STORAGE_FULL/.test(String(e.message))){halt({fatal:e});return;}
+    if(e.code==='allowance'){halt({allowance:true});return;}
+    halt({issue:failure(e,operationEvents,lastOperation?.operation),key:[lastOperation?.operation,lastOperation?.target].join(':')});
+   };
+   const lane=async index=>{
+    const me={index,last:null,events:[]};
+    while(!stop&&!controller.signal.aborted&&clock()-start<windowMs-10000){
+     if(s.results.length>=criteria.count){halt({done:true});break;}
+     if(s.operations>=s.allowance){halt({allowance:true});break;}
+     const task=claim();
+     if(!task){
+      if(feeding){await feeding;continue;}
+      // Nothing to claim and nothing to search for: the lanes still at work may add follow-up pages.
+      if(s.queryIndex>=s.queries.length&&held.size){await new Promise(resolve=>waiters.push(resolve));continue;}
+      // Only pages that could not be read in this slice are left: they are for the next slice, not a reason to plan new searches.
+      if(s.queryIndex>=s.queries.length&&s.pending.some(page=>cooled.has(page))){halt({rest:true});break;}
+      feeding=feed().catch(settleFeed).finally(()=>{feeding=null;wake();});
+      await feeding;continue;
+     }
+     try{await step(me,task);}
+     catch(e){await settle(me,task,e);}
+     finally{release(task);}
+    }
+   };
+   await Promise.all(Array.from({length:count},(_,index)=>lane(index).catch(cause=>halt({fatal:cause}))));
+   await writes;
+   if(broken)throw broken;
+   if(stop?.fatal)throw stop.fatal;
+   if(s.results.length>=criteria.count){s.reason='Requested number of matching companies reached';s.phase='done';s.failureCode='';await checkpoint('complete');return [row.id];}
+   if(stop?.allowance||s.operations>=s.allowance){await allowance();return [row.id];}
+   if(stop?.end){s.failureCode=stop.code;s.phase=stop.phase;s.reason=stop.reason;await checkpoint(stop.end);return [row.id];}
+   if(stop?.issue){
+    const issue=stop.issue;s.failures=s.retryKey===stop.key?(s.failures||0)+1:1;s.retryKey=stop.key;s.failureCode=issue.code;
+    if(issue.retry&&s.failures<3){s.nextAttemptAt=now+(s.failures===1?30000:120000);s.phase='retrying';s.reason=issue.reason+' Retrying automatically ('+s.failures+'/2); no extra allowance is granted.';await checkpoint('queued');}
+    else{s.nextAttemptAt=0;s.reason=issue.retry?issue.reason+' Automatic retries stopped after three attempts.'+(issue.unusable?' Resume to try again.':' Check connections and resume.'):issue.reason;await checkpoint('incomplete');}
+    return [row.id];
+   }
+   // Pages that could not be read in this slice are tried again after a wait, as in the one-lane loop: the list view
+   // starts a slice every few seconds, and three tries in a row would give a page up within seconds of a reader's trouble.
+   if(stop?.rest)s.nextAttemptAt=now+30000;
+   await checkpoint('queued');return [row.id];
+  };
   try{
    await guard();
    if(s.results.length>=criteria.count){s.reason='Requested number of matching companies reached';s.phase='done';s.failureCode='';await checkpoint('complete');return [row.id];}
    if(s.operations>=s.allowance){await allowance();return [row.id];}
+   // One lane is the loop below, unchanged. More lanes are for lists under the current profile policy only.
+   const laneCount=Math.max(1,Math.min(8,Math.floor(Number(lanes)||1)));
+   if(laneCount>1&&profilePolicy)return await runLanes(laneCount);
    for(let stage=0;stage<12&&clock()-start<windowMs-10000;stage++){
     if(s.pending.length){
      const task=s.pending[0];

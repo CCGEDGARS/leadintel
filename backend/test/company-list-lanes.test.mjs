@@ -1,0 +1,288 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {buyerJobsFixture,workspaceId} from './buyer-research-jobs-fixture.mjs';
+import {putCustomerState} from '../src/customer-state.js';
+import {runCompanyListJobs,readCompanyList} from '../src/company-lists.js';
+import app from '../src/app.js';
+import {profileMain,profileServices} from './company-list-profile-fixture.mjs';
+
+// A list was researched one operation at a time: about six a minute, hours for fifty companies (live run of
+// 22-23 Nov 2026). With COMPANY_LIST_LANES above 1 a slice takes several companies through the same steps at once.
+async function setup(t,lanes){const f=await buyerJobsFixture(t);f.payload.main={...f.payload.main,...profileMain()};f.version=1;await putCustomerState(f.env,{workspaceId,userId:f.users.owner.id,expectedVersion:f.version++,payload:f.payload});if(lanes)f.env.COMPANY_LIST_LANES=String(lanes);return f;}
+async function request(f,body,params={},waits=[]){return app.fetch(new Request('https://app.fixture.test/api/company-lists?'+new URLSearchParams({workspace_id:workspaceId,...params}),{method:body?'POST':'GET',headers:{Cookie:'leadintel_session='+f.users.owner.token,Origin:f.env.APP_ORIGIN,'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})}),f.env,{waitUntil:p=>waits.push(p)});}
+async function start(f,change={}){const fingerprint=(await (await request(f,null,{options:'1'})).json()).options.contextFingerprint,waits=[],r=await request(f,{action:'start',name:'Lanes',count:3,budget:200,profileIds:['icp-core'],profileMode:'any',signalMode:'off',markets:['Sweden'],contextFingerprint:fingerprint,...change},{},waits);assert.equal(r.status,200,await r.clone().text());const body=await r.json();await Promise.all(waits);return body.list||body;}
+async function tick(f,now=Date.now()){const waits=[],noop=async()=>{};await app.scheduled({cron:'* * * * *',scheduledTime:now},f.env,{waitUntil:p=>waits.push(p)},{runCompanyListJobs,runWritingReferenceJobs:noop,runWorkspaceSkillJobs:noop,runCompanyMaterialJobs:noop,runLanguagePackJobs:noop});await Promise.all(waits);}
+async function finish(f,id,limit=14){for(let i=0;i<limit;i++){const list=await readCompanyList(f.env,workspaceId,id);if(['complete','incomplete'].includes(list.status))return list;await tick(f,list.progress.nextAttemptAt?list.progress.nextAttemptAt+1:Date.now());}assert.fail('Company-list scheduler did not finish');}
+const stateOf=(f,id)=>JSON.parse(f.DB.raw.prepare('SELECT state_json FROM company_lists WHERE id=?').get(id).state_json);
+const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+const host=url=>new URL(url).hostname;
+// Slow services that count how many operations are in flight, in all and for one website.
+function watched(count,change={}){
+ const base=profileServices({count}),seen={most:0,now:0,sites:new Map(),mostPerSite:0};
+ const during=async(url,work)=>{const site=host(url);seen.now++;seen.most=Math.max(seen.most,seen.now);seen.sites.set(site,(seen.sites.get(site)||0)+1);seen.mostPerSite=Math.max(seen.mostPerSite,seen.sites.get(site));try{await pause(15);return await work();}finally{seen.now--;seen.sites.set(site,seen.sites.get(site)-1);}};
+ return {seen,services:{...base,
+  search:change.search||base.search,
+  read:url=>during(url,()=>(change.read||base.read)(url)),
+  generate:p=>p.stage==='plan'?base.generate(p):during(p.pages.at(-1).url,()=>(change.generate||base.generate)(p))}};
+}
+const outcome=state=>({kept:state.results.map(r=>r.company).sort(),reviews:state.reviews.map(r=>host(r.url)+' '+r.status).sort()});
+
+test('several lanes keep the same companies and record the same checks as one lane',async t=>{
+ const run=async lanes=>{
+  const f=await setup(t,lanes),{services}=watched(8,{generate:async p=>{const answer=await profileServices({count:8}).generate(p);if(p.stage==='assess'&&answer.company==='Factory2')answer.location.label='Greater Stockholm, Sweden';if(p.stage==='review'&&p.candidate.company==='Factory5')return {...answer,decision:'reject',reason:'A confirmed exclusion.',gaps:['Excluded'],identityConfirmed:false};return answer;}});
+  f.env.COMPANY_LIST_TEST_SERVICES=services;
+  const list=await finish(f,(await start(f,{count:8})).id);return {status:list.status,...outcome(stateOf(f,list.id))};
+ };
+ const one=await run(0),four=await run(4);
+ assert.deepEqual(one.kept,['Factory0','Factory1','Factory3','Factory4','Factory6','Factory7']);
+ assert.deepEqual(four,one);
+});
+
+test('with four lanes several companies are in work at once, and one website is never in two lanes',async t=>{
+ const f=await setup(t,4),{seen,services}=watched(8,{search:async()=>[{url:'https://factory0.example/'},{url:'https://factory0.example/about'},{url:'https://factory1.example/'},{url:'https://factory1.example/contact'},...Array.from({length:6},(_,i)=>({url:`https://factory${i+2}.example/`}))]});
+ f.env.COMPANY_LIST_TEST_SERVICES=services;
+ const list=await finish(f,(await start(f,{count:8})).id);
+ assert.equal(list.status,'complete');
+ assert.ok(seen.most>=3&&seen.most<=4,'operations in flight at once: '+seen.most);
+ assert.equal(seen.mostPerSite,1);
+ const alone=await setup(t,0),single=watched(8);alone.env.COMPANY_LIST_TEST_SERVICES=single.services;
+ await finish(alone,(await start(alone,{count:8})).id);
+ assert.equal(single.seen.most,1,'one lane works on one operation at a time');
+});
+
+test('reaching the requested number stops new work and keeps no company beyond it',async t=>{
+ const f=await setup(t,4),{services}=watched(12);f.env.COMPANY_LIST_TEST_SERVICES=services;
+ const list=await finish(f,(await start(f,{count:3})).id),state=stateOf(f,list.id);
+ assert.equal(list.status,'complete');
+ assert.equal(state.results.length,3);
+ assert.equal(new Set(state.results.map(r=>r.domain)).size,3);
+ assert.ok(state.operations<12*3,'not every candidate was taken to the end: '+state.operations);
+ assert.deepEqual(state.flying,[]);
+});
+
+test('a page whose answer is refused twice is skipped at once; the other lanes go on and the list does not sleep',async t=>{
+ const f=await setup(t,4),asked=new Map(),{services}=watched(5,{generate:async p=>{if(p.stage==='assess'&&host(p.pages.at(-1).url)==='factory1.example'){asked.set('factory1',(asked.get('factory1')||0)+1);return ['a list is not an answer'];}return profileServices({count:5}).generate(p);}});
+ f.env.COMPANY_LIST_TEST_SERVICES=services;
+ const first=await start(f,{count:4});await tick(f);
+ const list=await readCompanyList(f.env,workspaceId,first.id),state=stateOf(f,first.id);
+ assert.equal(list.status,'complete','finished in the first slice, with no retry wait');
+ assert.deepEqual(state.results.map(r=>r.company).sort(),['Factory0','Factory2','Factory3','Factory4']);
+ assert.equal(asked.get('factory1'),2);
+ assert.equal(state.reviews.find(r=>host(r.url)==='factory1.example').reason,'This source could not be assessed: the reasoning answer was unusable twice.');
+ assert.ok(!state.nextAttemptAt);
+});
+
+test('the allowance is never exceeded by lanes working at once',async t=>{
+ const f=await setup(t,4),{services}=watched(12);f.env.COMPANY_LIST_TEST_SERVICES=services;
+ const list=await finish(f,(await start(f,{count:10,budget:14})).id),state=stateOf(f,list.id);
+ assert.equal(list.status,'incomplete');assert.equal(state.failureCode,'allowance');
+ assert.equal(state.operations,14);assert.equal(state.operationTotals.started,14);
+});
+
+test('every kept company of a list larger than twenty has its evidence row',async t=>{
+ // One search gives at most ten pages, so three searches feed the lanes.
+ let searches=0;const f=await setup(t,6),{services}=watched(30,{search:async()=>{const from=searches++*10;return Array.from({length:10},(_,i)=>({url:`https://factory${from+i}.example/`}));}});
+ f.env.COMPANY_LIST_TEST_SERVICES={...services,generate:p=>p.stage==='plan'?Promise.resolve({queries:p.round?[]:['first','second','third']}):services.generate(p)};
+ const list=await finish(f,(await start(f,{count:22,budget:400})).id,30),state=stateOf(f,list.id);
+ assert.equal(list.status,'complete');assert.equal(state.results.length,22);
+ const rows=f.DB.raw.prepare('SELECT domain,evidence_id FROM company_list_evidence WHERE list_id=?').all(list.id);
+ assert.equal(rows.length,22);
+ assert.deepEqual(rows.map(r=>r.domain).sort(),state.results.map(r=>r.domain).sort());
+});
+
+// The tests below drive every slice themselves (no waitUntil at the start), as the reviewer of 23 Nov 2026 did.
+async function bare(f,body,params={}){return app.fetch(new Request('https://app.fixture.test/api/company-lists?'+new URLSearchParams({workspace_id:workspaceId,...params}),{method:body?'POST':'GET',headers:{Cookie:'leadintel_session='+f.users.owner.token,Origin:f.env.APP_ORIGIN,'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})}),f.env,{});}
+async function startBare(f,change={}){const fingerprint=(await (await bare(f,null,{options:'1'})).json()).options.contextFingerprint,r=await bare(f,{action:'start',name:'Lanes',count:3,budget:200,profileIds:['icp-core'],profileMode:'any',signalMode:'off',markets:['Sweden'],contextFingerprint:fingerprint,...change});assert.equal(r.status,200,await r.clone().text());const body=await r.json();return body.list||body;}
+const statusOf=(f,id)=>f.DB.raw.prepare('SELECT status FROM company_lists WHERE id=?').get(id).status;
+const active=(f,id)=>['queued','running'].includes(statusOf(f,id));
+
+test('a model outage keeps every page: the lanes stop, the list retries later, although pages are read at different speeds',async t=>{
+ const f=await setup(t,4),base=profileServices({count:8});
+ f.env.COMPANY_LIST_TEST_SERVICES={...base,
+  read:async url=>{await pause(5+30*Number(host(url).match(/\d+/)[0]));return base.read(url);},
+  generate:async p=>{if(p.stage==='plan')return base.generate(p);await pause(2);throw new Error('Reasoning request failed (503)');}};
+ const list=await startBare(f,{count:8});
+ await runCompanyListJobs(f.env,{jobId:list.id,windowMs:45000});
+ const state=stateOf(f,list.id);
+ assert.equal(statusOf(f,list.id),'queued');assert.equal(state.phase,'retrying');
+ assert.ok(state.nextAttemptAt>Date.now());
+ assert.match(state.reason,/temporarily unavailable.*Retrying automatically \(1\/2\)/);
+ assert.equal(state.reviews.length,0,'no page was given up');
+ assert.equal(state.pending.length,8,'every page is still waiting');
+ assert.ok(state.operations<=14,'a few answers were tried, not every page twice: '+state.operations);
+ // The second slice first reads the pages the first one had not reached (they are put to the head of the queue here).
+ // Those successful reads do not end the model's retry count.
+ const unread=state.pending.filter(page=>!page.page).length;assert.ok(unread>=1,'some pages are still unread: '+unread);
+ state.pending.sort((a,b)=>Boolean(a.page)-Boolean(b.page));
+ f.DB.raw.prepare('UPDATE company_lists SET state_json=? WHERE id=?').run(JSON.stringify(state),list.id);
+ await runCompanyListJobs(f.env,{jobId:list.id,now:state.nextAttemptAt+1,windowMs:45000});
+ const second=stateOf(f,list.id);
+ assert.equal(statusOf(f,list.id),'queued');
+ assert.ok(second.pending.filter(page=>!page.page).length<unread,'pages were read in the second slice');
+ assert.match(second.reason,/Retrying automatically \(2\/2\)/);
+ assert.equal(second.reviews.length,0);
+});
+
+test('a model that always runs into its time limit ends as a provider failure after three waits, not as a spent allowance',async t=>{
+ const f=await setup(t,4),base=profileServices({count:5});let fake=Date.now();
+ const timedOut=()=>Object.assign(new Error('Research operation timed out.'),{code:'timeout',status:504});
+ f.env.COMPANY_LIST_TEST_SERVICES={...base,generate:async p=>{if(p.stage==='plan')return base.generate(p);const from=fake;await pause(5);fake=Math.max(fake,from+25000);throw timedOut();}};
+ const list=await startBare(f,{count:4,budget:60}),trail=[];
+ for(let i=0;i<12&&active(f,list.id);i++){
+  const before=stateOf(f,list.id),now=Math.max(Date.now(),(before.nextAttemptAt||0)+1);fake=Math.max(fake,now);
+  await runCompanyListJobs(f.env,{jobId:list.id,now,clock:()=>fake,windowMs:45000});
+  const state=stateOf(f,list.id);trail.push(statusOf(f,list.id)+' '+(state.nextAttemptAt?'waits':'')+' '+(state.failureCode||''));
+ }
+ const state=stateOf(f,list.id);
+ assert.deepEqual(trail,['queued waits provider_temporary','queued waits provider_temporary','incomplete  provider_temporary']);
+ assert.match(state.reason,/Automatic retries stopped after three attempts/);
+ assert.ok(state.operations<30,'the allowance of 60 was not spent on time-outs: '+state.operations);
+ assert.equal(state.reviews.length,0);
+});
+
+test('when the write of a kept company with its evidence fails, the slice ends there and the stored list stays whole and readable',async t=>{
+ let searches=0;const f=await setup(t,6),base=profileServices({count:30});
+ f.env.COMPANY_LIST_TEST_SERVICES={...base,
+  search:async()=>{const from=searches++*10;return Array.from({length:10},(_,i)=>({url:`https://factory${from+i}.example/`}));},
+  read:async url=>{await pause(15);return base.read(url);},
+  generate:async p=>{if(p.stage==='plan')return {queries:p.round?[]:['first','second','third']};await pause(15);return base.generate(p);}};
+ const batch=f.DB.batch.bind(f.DB);let failed=0;
+ f.DB.batch=async statements=>{if(statements.length===2&&!failed){failed++;await pause(1);throw new Error('D1_ERROR: Network connection lost.');}return batch(statements);};
+ const list=await startBare(f,{count:22,budget:400});
+ for(let i=0;i<30&&active(f,list.id);i++){const before=stateOf(f,list.id);await runCompanyListJobs(f.env,{jobId:list.id,now:Math.max(Date.now(),(before.nextAttemptAt||0)+1),windowMs:45000});}
+ assert.equal(failed,1,'the failure was met');
+ const state=stateOf(f,list.id),rows=f.DB.raw.prepare('SELECT domain FROM company_list_evidence WHERE list_id=?').all(list.id).map(r=>r.domain);
+ assert.equal(statusOf(f,list.id),'incomplete');
+ assert.deepEqual(state.results.map(r=>r.domain).filter(domain=>!rows.includes(domain)),[],'no stored company without its evidence row');
+ const read=await readCompanyList(f.env,workspaceId,list.id);
+ assert.equal(read.results.length,state.results.length,'the list can still be read');
+});
+
+test('the state row stays far under D1\'s 2 MB with eight lanes on full pages whose reviews all ask for three more',async t=>{
+ const f=await setup(t,8),base=profileServices({count:12});
+ const pad=' Lorem ipsum dolor sit amet production equipment.'.repeat(400);
+ const links=url=>Array.from({length:100},(_,k)=>`https://${host(url)}/page/${encodeURIComponent(new URL(url).pathname.replace(/\//g,'_'))}-${k}`);
+ f.env.COMPANY_LIST_TEST_SERVICES={...base,
+  search:async()=>Array.from({length:12},(_,i)=>({url:`https://factory${i}.example/`})),
+  read:async url=>{await pause(10);const page=await base.read(url);return {...page,markdown:(page.markdown+pad).slice(0,16000),links:links(url)};},
+  generate:async p=>{const answer=await base.generate(p);await pause(10);return p.stage==='review'?{...answer,decision:'needs_evidence',reason:'More evidence needed.',gaps:['Need more'],followupUrls:p.pages.at(-1).links.slice(0,3)}:answer;}};
+ let peak=0,copies=0;const prepare=f.DB.prepare.bind(f.DB),count=(text,part)=>text.split(part).length-1;
+ f.DB.prepare=sql=>{const statement=prepare(sql);if(/^UPDATE company_lists SET state_json=\?/.test(sql)){const bind=statement.bind.bind(statement);statement.bind=(...values)=>{peak=Math.max(peak,Buffer.byteLength(values[0]));copies=Math.max(copies,count(values[0],'Factory3 builds automated production equipment. Factory3 operates'));return bind(...values);};}return statement;};
+ const list=await startBare(f,{count:12,budget:200});
+ for(let i=0;i<6&&active(f,list.id);i++){const before=stateOf(f,list.id);await runCompanyListJobs(f.env,{jobId:list.id,now:Math.max(Date.now(),(before.nextAttemptAt||0)+1),windowMs:45000});}
+ assert.ok(peak>300000,'the pages are large enough to matter: '+peak);
+ assert.ok(peak<1200000,'peak state size in bytes, with room to D1\'s 2,000,000: '+peak);
+ assert.ok(copies>=1&&copies<=6,'a read page is stored once, however many follow-up pages refer to it (one company has at most six pages here): '+copies);
+ assert.ok(stateOf(f,list.id).operations>60,'the lanes kept working: '+stateOf(f,list.id).operations);
+});
+
+test('companies kept by several lanes while the database is slow each get their evidence row',async t=>{
+ let searches=0;const f=await setup(t,6),base=profileServices({count:30});
+ f.env.COMPANY_LIST_TEST_SERVICES={...base,
+  search:async()=>{const from=searches++*10;return Array.from({length:10},(_,i)=>({url:`https://factory${from+i}.example/`}));},
+  read:async url=>{await pause(8);return base.read(url);},
+  generate:async p=>{if(p.stage==='plan')return {queries:p.round?[]:['first','second','third']};await pause(8);return base.generate(p);}};
+ // Every state write takes longer than a model answer, so several reviews end while one write is on its way.
+ const prepare=f.DB.prepare.bind(f.DB),batch=f.DB.batch.bind(f.DB);
+ f.DB.prepare=sql=>{const statement=prepare(sql);if(/^UPDATE company_lists SET state_json=\?/.test(sql)){const bind=statement.bind.bind(statement);statement.bind=(...values)=>{const bound=bind(...values),run=bound.run.bind(bound);bound.run=async()=>{await pause(25);return run();};return bound;};}return statement;};
+ f.DB.batch=async statements=>{await pause(25);return batch(statements);};
+ const list=await startBare(f,{count:22,budget:400});
+ for(let i=0;i<40&&active(f,list.id);i++){const before=stateOf(f,list.id);await runCompanyListJobs(f.env,{jobId:list.id,now:Math.max(Date.now(),(before.nextAttemptAt||0)+1),windowMs:45000});}
+ const state=stateOf(f,list.id),rows=f.DB.raw.prepare('SELECT domain FROM company_list_evidence WHERE list_id=?').all(list.id).map(r=>r.domain);
+ assert.equal(statusOf(f,list.id),'complete');assert.equal(state.results.length,22);
+ assert.deepEqual(state.results.map(r=>r.domain).filter(domain=>!rows.includes(domain)),[]);
+ await readCompanyList(f.env,workspaceId,list.id);
+});
+
+test('a list that stopped in one slice goes on in the next from the pages it had already read',async t=>{
+ const f=await setup(t,4),base=profileServices({count:6});let down=true,reads=0;
+ f.env.COMPANY_LIST_TEST_SERVICES={...base,
+  read:async url=>{reads++;await pause(5);return base.read(url);},
+  generate:async p=>{if(p.stage==='plan')return base.generate(p);await pause(20);if(down)throw new Error('Reasoning request failed (503)');return base.generate(p);}};
+ const list=await startBare(f,{count:6});
+ await runCompanyListJobs(f.env,{jobId:list.id,windowMs:45000});
+ const first=stateOf(f,list.id),readFirst=reads;
+ assert.equal(statusOf(f,list.id),'queued');
+ assert.ok(first.pending.filter(page=>page.page).length>=3,'several pages were read before the lanes stopped');
+ assert.ok(first.pagePool&&Object.keys(first.pagePool).length>=3,'each read page is stored once, in the pool');
+ down=false;
+ await runCompanyListJobs(f.env,{jobId:list.id,now:first.nextAttemptAt+1,windowMs:45000});
+ const second=stateOf(f,list.id);
+ assert.equal(statusOf(f,list.id),'complete');
+ assert.deepEqual(second.results.map(r=>r.company).sort(),['Factory0','Factory1','Factory2','Factory3','Factory4','Factory5']);
+ assert.equal(reads,6,'no page was read twice: '+readFirst+' in the first slice');
+});
+
+test('one page whose answer never comes in time is given up after the model answered for others; the list finishes without it',async t=>{
+ const f=await setup(t,4),base=profileServices({count:5});let fake=Date.now(),sliceStart=fake;
+ const timedOut=()=>Object.assign(new Error('Research operation timed out.'),{code:'timeout',status:504});
+ f.env.COMPANY_LIST_TEST_SERVICES={...base,generate:async p=>{
+  // The slow page uses all the time its operation has: 25 s, or what is left of the slice.
+  if(p.stage==='assess'&&host(p.pages.at(-1).url)==='factory1.example'){const from=fake;await pause(5);fake=Math.max(fake,from+Math.max(1,Math.min(25000,45000-(from-sliceStart)-2000)));throw timedOut();}
+  await pause(5);return base.generate(p);}};
+ const list=await startBare(f,{count:5,budget:40});let slices=0;
+ for(;slices<14&&active(f,list.id);slices++){
+  const before=stateOf(f,list.id),now=Math.max(Date.now(),(before.nextAttemptAt||0)+1);fake=Math.max(fake,now)+1;sliceStart=fake;
+  await runCompanyListJobs(f.env,{jobId:list.id,now,clock:()=>fake,windowMs:45000});
+ }
+ const state=stateOf(f,list.id);
+ assert.equal(statusOf(f,list.id),'incomplete');
+ assert.notEqual(state.failureCode,'allowance','the allowance was not spent on one slow page');
+ assert.deepEqual(state.results.map(r=>r.company).sort(),['Factory0','Factory2','Factory3','Factory4']);
+ assert.ok(state.operations<=26,'operations: '+state.operations);
+ assert.ok(slices<=6,'slices: '+slices);
+});
+
+test('a reader failure that lasts one slice does not cost the page: it is tried once in that slice and read in the next',async t=>{
+ const f=await setup(t,4),base=profileServices({count:1});let outage=true,reads=0;
+ f.env.COMPANY_LIST_TEST_SERVICES={...base,read:async url=>{reads++;await pause(3);if(outage)throw Object.assign(new Error('Public page read failed'),{status:503});return base.read(url);}};
+ const list=await startBare(f,{count:1,budget:40});
+ await runCompanyListJobs(f.env,{jobId:list.id,windowMs:45000});
+ const first=stateOf(f,list.id);
+ assert.equal(statusOf(f,list.id),'queued');
+ assert.equal(reads,1,'one try in the slice, not three in a row');
+ assert.equal(first.reviews.length,0);assert.equal(first.pending.length,1);
+ assert.ok(first.nextAttemptAt>=Date.now()+25000,'the next try waits about thirty seconds');
+ // A slice started at once (the list view starts one every few seconds) does not touch the page before that.
+ await runCompanyListJobs(f.env,{jobId:list.id,windowMs:25000});
+ assert.equal(reads,1,'not read again before the wait is over');
+ outage=false;
+ await runCompanyListJobs(f.env,{jobId:list.id,now:Math.max(Date.now(),(first.nextAttemptAt||0)+1),windowMs:45000});
+ assert.equal(statusOf(f,list.id),'complete');
+ assert.deepEqual(stateOf(f,list.id).results.map(r=>r.company),['Factory0']);
+});
+
+test('a page that cannot be read in three slices is given up, and the list goes on without it',async t=>{
+ const f=await setup(t,4),base=profileServices({count:3});let reads=0;
+ f.env.COMPANY_LIST_TEST_SERVICES={...base,read:async url=>{if(host(url)==='factory1.example'){reads++;await pause(3);throw Object.assign(new Error('Public page read failed'),{status:503});}return base.read(url);}};
+ const list=await startBare(f,{count:3,budget:60});let slices=0;
+ for(;slices<8&&active(f,list.id);slices++){const before=stateOf(f,list.id);await runCompanyListJobs(f.env,{jobId:list.id,now:Math.max(Date.now(),(before.nextAttemptAt||0)+1),windowMs:45000});}
+ const state=stateOf(f,list.id);
+ assert.equal(reads,3);
+ assert.deepEqual(state.results.map(r=>r.company).sort(),['Factory0','Factory2']);
+ assert.match(state.reviews.find(r=>host(r.url)==='factory1.example').reason,/temporarily unavailable/);
+});
+
+test('a register check is not counted as a model answer, and Resume clears the count of model failures in a row',async t=>{
+ const f=await setup(t,4),base=profileServices({count:4});let down=false;
+ f.env.COMPANY_LIST_TEST_SERVICES={...base,
+  registry:async query=>({status:'found',registry:'SE-TEST',country:'SE',id:'5500000'+query.company.replace(/\D/g,''),name:query.company.toUpperCase()+' AB',city:'Stockholm',active:true,statusLabel:'ACTIVE',industry:{code:'289900',label:'Manufacture of special-purpose machinery'},employees:{count:120},revenue:null,marketingProtected:false,source:{name:'Test register',url:'https://register.example/'+query.company,checkedAt:'2026-11-20T12:00:00.000Z'}}),
+  generate:async p=>{if(p.stage==='plan')return base.generate(p);await pause(5);if(down)throw new Error('Reasoning request failed (503)');return base.generate(p);}};
+ const target={employees:{min:25,max:250},industries:['28'],registryOnly:true};
+ const list=await startBare(f,{count:2,target});
+ await runCompanyListJobs(f.env,{jobId:list.id,windowMs:45000});
+ const done=stateOf(f,list.id),answers=done.receipts.filter(r=>['analysis','evidence_review'].includes(r.operation)&&r.status==='complete'&&r.target!=='search plan').length;
+ assert.equal(statusOf(f,list.id),'complete');
+ assert.ok(done.receipts.some(r=>r.operation==='register_check'&&r.status==='complete'),'the register was asked');
+ assert.equal(done.modelDone,answers,'model answers counted: '+done.modelDone+' of '+answers);
+
+ const g=await setup(t,4);down=true;g.env.COMPANY_LIST_TEST_SERVICES=f.env.COMPANY_LIST_TEST_SERVICES;
+ const broken=await startBare(g,{count:4});
+ for(let i=0;i<6&&active(g,broken.id);i++){const before=stateOf(g,broken.id);await runCompanyListJobs(g.env,{jobId:broken.id,now:Math.max(Date.now(),(before.nextAttemptAt||0)+1),windowMs:45000});}
+ assert.equal(statusOf(g,broken.id),'incomplete');
+ assert.ok(stateOf(g,broken.id).modelStreak>=3);
+ const stored=g.DB.raw.prepare('SELECT revision FROM company_lists WHERE id=?').get(broken.id);
+ const resumed=await bare(g,{action:'resume',id:broken.id,revision:stored.revision});
+ assert.equal(resumed.status,200,await resumed.clone().text());
+ assert.equal(stateOf(g,broken.id).modelStreak,0);
+});
