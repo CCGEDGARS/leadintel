@@ -53,6 +53,10 @@ function failure(cause,events=[],operation=''){
  const providerStatuses=[cause.httpStatus,cause.status,reportedStatus(cause.message),...traces.filter(t=>t.provider!=='direct').flatMap(t=>[t.httpStatus,reportedStatus(t.reason)])].map(Number);
  const message=[cause.code,cause.message,...traces.map(t=>t.reason||t.code)].join(' ');
  if(providerStatuses.includes(402)||creditFailure(0,message)||/insufficient.{0,20}(credits|quota)|credits?.{0,15}(exhaust|deplet)|billing.{0,12}limit|quota failure/i.test(message))return {code:'funds',retry:false,reason:'A research provider has insufficient credits. Check its billing in Settings, then resume; completed matches are retained.'};
+ // A reader that answers 403 for one page refuses that website, not our key: Firecrawl answers 403 "we do not support
+ // this site" for a Facebook address while its other reads in the same run succeed. The page is skipped like any other
+ // unreadable source. A 401, a missing provider, and a 403 outside a page read remain a connection to check.
+ if(operation==='page_read'&&providerStatuses.includes(403)&&!providerStatuses.includes(401)&&cause.code!=='provider_missing')return {code:'source_unreadable',retry:false,skip:true,reason:'Source is unavailable or does not provide readable evidence.'};
  if(providerStatuses.includes(401)||providerStatuses.includes(403)||cause.code==='provider_missing')return {code:'connection',retry:false,reason:'A required research connection is unavailable. Check connections in Settings, then resume.'};
  if(cause.code==='source_unreadable'||traces.some(t=>t.provider==='direct'&&[404,410].includes(t.httpStatus)))return {code:'source_unreadable',retry:false,skip:true,reason:'Source is unavailable or does not provide readable evidence.'};
  // The service answered, but the answer cannot be used: not an outage and not a connection problem.
