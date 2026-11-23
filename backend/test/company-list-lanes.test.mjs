@@ -591,3 +591,48 @@ test('the minute trigger gives a company list 54 seconds of every minute, and th
  const now=Date.now();await runCompanyListJobs(f.env,{jobId:list.id,now,windowMs:54000});
  assert.equal(during,now+84000);assert.equal(lease(),0);
 });
+
+// Live run of 23 Nov 2026 (release 9910fe7d): eight lanes closed about 70 operations a minute, 4.8 seconds for one
+// operation of one lane, and the stored row could not say where those seconds went — a receipt had only its start.
+test('a slice with several lanes records where its time went: per operation, per kind, and for the lanes as a whole',async t=>{
+ let searches=0;const f=await setup(t,8),base=profileServices({count:30});
+ f.env.COMPANY_LIST_TEST_SERVICES={...base,
+  search:async()=>{const from=searches++*10;return Array.from({length:10},(_,i)=>({url:`https://factory${from+i}.example/`}));},
+  read:async url=>{await pause(150);if(/factory3\./.test(url))throw Object.assign(new Error('Page could not be read.'),{code:'read_failed'});return base.read(url);},
+  generate:async p=>{if(p.stage==='plan')return {queries:p.round?[]:['first','second','third']};await pause(150);return base.generate(p);}};
+ const list=await startBare(f,{count:22,budget:400});
+ // Every write of the state row takes at least 20 ms, so the time an operation waits to be recorded can be told from none.
+ const prepare=f.DB.prepare.bind(f.DB),batch=f.DB.batch.bind(f.DB),slow=()=>pause(20);
+ f.DB.prepare=sql=>{const statement=prepare(sql);if(/^UPDATE company_lists SET state_json=\?/.test(sql)){const bind=statement.bind.bind(statement);statement.bind=(...values)=>{const bound=bind(...values),run=bound.run.bind(bound);bound.run=async()=>{await slow();return run();};return bound;};}return statement;};
+ f.DB.batch=async statements=>{await slow();return batch(statements);};
+ await runCompanyListJobs(f.env,{jobId:list.id,windowMs:11000});
+ const s=stateOf(f,list.id),closed=s.receipts.filter(r=>['complete','failed'].includes(r.status)),whole=n=>Number.isInteger(n)&&n>=0;
+ assert.equal(statusOf(f,list.id),'queued');assert.ok(closed.length>=10,String(closed.length));
+ // Each closed operation: `wait` until its record was stored, `ms` from sending its work until it came back.
+ for(const r of closed)assert.ok(whole(r.ms)&&whole(r.wait)&&r.wait>=15,JSON.stringify(r));
+ for(const r of closed.filter(r=>r.operation==='page_read'||r.operation!=='search'&&r.operation!=='register_check'&&r.target!=='search plan'))assert.ok(r.ms>=140,JSON.stringify(r));
+ assert.ok(closed.some(r=>r.status==='failed'&&r.operation==='page_read'&&r.ms>=140),'a failed operation has its time too');
+ // A lane's operation names its lane; a search or a plan belongs to no lane.
+ for(const r of closed){const feeder=r.operation==='search'||r.target==='search plan';assert.equal(feeder?r.lane:Number.isInteger(r.lane)&&r.lane>=0&&r.lane<8,feeder?undefined:true,JSON.stringify(r));}
+ // The slice: eight lanes for `ms` each; what they spent on work, on being recorded, and on waiting for a page to claim.
+ const slice=s.slice;for(const key of ['ms','workMs','waitMs','idleMs','tailMs','feedMs'])assert.ok(whole(slice[key]),key+' '+JSON.stringify(slice));
+ assert.ok(slice.ms>=150&&slice.ms<=11000,JSON.stringify(slice));
+ assert.ok(slice.workMs+slice.waitMs+slice.idleMs+slice.tailMs<=8*slice.ms+400,JSON.stringify(slice));
+ assert.ok(slice.idleMs>0,'the lanes waited for the first search: '+JSON.stringify(slice));
+ // Work of 150 ms does not end for all eight lanes at once: those that left first waited for the others.
+ assert.ok(slice.tailMs>0,JSON.stringify(slice));
+ assert.equal(slice.workMs,closed.filter(r=>Number.isInteger(r.lane)).reduce((sum,r)=>sum+r.ms,0));
+ // The job: the same sums over all its slices, and per kind of operation — these outlive the 250 stored receipts.
+ assert.deepEqual(s.laneTime,{slices:1,laneMs:8*slice.ms,workMs:slice.workMs,waitMs:slice.waitMs,idleMs:slice.idleMs,tailMs:slice.tailMs,feedMs:slice.feedMs});
+ const kinds=s.operationTime;assert.deepEqual(Object.keys(kinds).filter(k=>!['page_read','analysis','evidence_review','register_check','search','plan'].includes(k)),[]);
+ assert.equal(Object.values(kinds).reduce((sum,k)=>sum+k.n,0),s.operationTotals.complete+s.operationTotals.failed);
+ for(const [kind,k] of Object.entries(kinds))assert.ok(whole(k.n)&&whole(k.ms)&&whole(k.wait)&&k.slowest>=k.ms/k.n,kind+' '+JSON.stringify(k));
+ assert.ok(kinds.page_read.ms>=kinds.page_read.n*140,JSON.stringify(kinds));
+ assert.equal(kinds.plan.n,closed.filter(r=>r.target==='search plan').length);assert.equal(kinds.search.n,closed.filter(r=>r.operation==='search').length);
+ assert.equal(slice.feedMs,closed.filter(r=>!Number.isInteger(r.lane)).reduce((sum,r)=>sum+r.wait+r.ms,0));assert.equal(slice.waitMs,closed.filter(r=>Number.isInteger(r.lane)).reduce((sum,r)=>sum+r.wait,0));
+ // A second slice adds to the job's sums.
+ await runCompanyListJobs(f.env,{jobId:list.id,now:Math.max(Date.now(),(s.nextAttemptAt||0)+1),windowMs:11000});
+ const next=stateOf(f,list.id);
+ assert.equal(next.laneTime.slices,2);assert.equal(next.laneTime.laneMs,8*(slice.ms+next.slice.ms));assert.equal(next.laneTime.workMs,slice.workMs+next.slice.workMs);assert.equal(next.laneTime.tailMs,slice.tailMs+next.slice.tailMs);
+ assert.equal(Object.values(next.operationTime).reduce((sum,k)=>sum+k.n,0),next.operationTotals.complete+next.operationTotals.failed);
+});

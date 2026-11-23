@@ -198,7 +198,7 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
   // no other lane holds through the same steps as the one-lane loop below; one lane at a time searches or plans when
   // nothing is left to claim. Model answers are streamed, which frees the Worker's connection slot after about a second.
   const runLanes=async count=>{
-   const busy=new Set(),cooled=new Set(),feeders=new Set(),FEEDERS=3;packing=true;s.slice={at:new Date().toISOString(),lanes:count,from:s.operations,writes:0,writeMs:0,slowestWriteMs:0};let stop=null,drained=null,feedDown=null,readStreak=0,waiters=[];
+   const busy=new Set(),cooled=new Set(),feeders=new Set(),FEEDERS=3;packing=true;s.slice={at:new Date().toISOString(),lanes:count,from:s.operations,writes:0,writeMs:0,slowestWriteMs:0,workMs:0,waitMs:0,idleMs:0,tailMs:0,feedMs:0};const sliceBegan=Date.now(),left=[];let stop=null,drained=null,feedDown=null,readStreak=0,waiters=[];
    const wake=()=>{const all=waiters;waiters=[];for(const resolve of all)resolve();};
    const halt=reason=>{stop||=reason;wake();};
    const claim=()=>{for(const task of s.pending){if(held.has(task)||cooled.has(task))continue;const site=M.domain(task.url);if(busy.has(site))continue;held.add(task);busy.add(site);return task;}return null;};
@@ -210,12 +210,16 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
     if(stop||controller.signal.aborted)throw error('Research slice finished.','slice_finished');
     if(s.operations>=s.allowance)throw error('Research allowance reached.','allowance',409);
     const r={id:++s.operations,operation:kind,target:clean(target,500),status:'started',at:new Date().toISOString()};
-    s.operationTotals.started++;s.receipts.push(r);s.receipts=s.receipts.slice(-250);(s.flying||=[]).push(r.id);lane.last=r;
+    s.operationTotals.started++;s.receipts.push(r);s.receipts=s.receipts.slice(-250);(s.flying||=[]).push(r.id);lane.last=r;const recorded=Date.now();
     // `answer`: a model answer about a page. A register check or a search plan says nothing about those.
     const events=lane.events=[],family=kind==='page_read'?'page_read:':kind==='search'?'search:':target==='search plan'?'plan:':'model:',answer=family==='model:'&&kind!=='register_check';
     // When this write fails nothing is sent. The receipt is closed here, because a slice that already has another
     // reason to end (the list is complete) would store it as started for good.
     try{await checkpoint();}catch(cause){r.status='interrupted';s.operationTotals.interrupted++;s.flying=(s.flying||[]).filter(id=>id!==r.id);throw cause;}
+    // Where the time goes (live run of 23 Nov 2026: 4.8 seconds for one operation of one lane, and nothing stored to
+    // say on what). `wait`: until the record above was stored. `ms`: from here until the work came back, whatever
+    // its end. A search or a plan belongs to no lane, so its time is kept apart from the lanes'.
+    const sent=Date.now();r.wait=sent-recorded;
     // `short`: the slice was ending and this operation got less than its full time.
     const budget=Math.max(1,Math.min(25000,windowMs-(clock()-start)-2000)),timeout=AbortSignal.timeout(budget),signal=AbortSignal.any([controller.signal,timeout]);lane.short=budget<20000;
     let abort;const canceled=new Promise((_,reject)=>{abort=()=>reject(error('Research operation timed out.','timeout',504));signal.addEventListener('abort',abort,{once:true});});
@@ -226,7 +230,12 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
      if(!s.retryKey||s.retryKey.startsWith(family)&&(family!=='model:'||answer)){s.failures=0;s.retryKey='';s.nextAttemptAt=0;s.failureCode='';}
      return result;
     }catch(e){r.status='failed';if(e.code)r.failure=clean(e.code,40);if(e.detail)r.detail=clean(e.detail,80);s.operationTotals.failed++;for(const trace of e.researchTrace||[])events.push(safeEvent(trace));try{e.operationFailure=true;}catch{}throw e;}
-    finally{signal.removeEventListener('abort',abort);if(events.length)r.providers=events.slice(0,10);s.flying=(s.flying||[]).filter(id=>id!==r.id);}
+    finally{
+     signal.removeEventListener('abort',abort);if(events.length)r.providers=events.slice(0,10);s.flying=(s.flying||[]).filter(id=>id!==r.id);
+     r.ms=Date.now()-sent;const own=Number.isInteger(lane.index),total=(s.operationTime||={})[family==='plan:'?'plan':kind]||={n:0,ms:0,wait:0,slowest:0};
+     total.n++;total.ms+=r.ms;total.wait+=r.wait;total.slowest=Math.max(total.slowest,r.ms);
+     if(own){r.lane=lane.index;s.slice.workMs+=r.ms;s.slice.waitMs+=r.wait;}else s.slice.feedMs+=r.wait+r.ms;
+    }
    };
    const laneAsk=(lane,prompt,task)=>laneOperation(lane,prompt.stage==='review'?'evidence_review':'analysis',task.url,(signal,receipt)=>ask(prompt,signal,receipt,true));
    // What a step changed is stored without the lane waiting for it: the write is asked for, and the lane's next operation
@@ -388,7 +397,7 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
      const task=claim();
      if(!task){
       // Nothing to claim. While another lane or a search is at work, wait for it; otherwise the slice is over.
-      if(held.size||feeders.size){await new Promise(resolve=>waiters.push(resolve));continue;}
+      if(held.size||feeders.size){const idle=Date.now();await new Promise(resolve=>waiters.push(resolve));s.slice.idleMs+=Date.now()-idle;continue;}
       // Only pages that could not be read in this slice are left: they are for the next slice.
       if(s.pending.some(page=>cooled.has(page))){halt({rest:true});break;}
       halt(feedDown||drained||{rest:true});break;
@@ -397,11 +406,17 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
      catch(e){await settle(me,task,e);}
      finally{release(task);}
     }
+    left.push(Date.now());   // from here this lane only waits for the slice to end
    };
    await Promise.all(Array.from({length:count},(_,index)=>lane(index).catch(cause=>halt({fatal:cause}))));
    // A search or plan still in flight ends with the slice's time; its query goes back, its result is stored.
    await Promise.all([...feeders]);
    await writes;
+   // The slice's length and the job's sums over all its slices; the write that ends the slice stores them. `tailMs`:
+   // the lanes that had left the loop while the slowest operation, a search or a write was still finishing. What is
+   // left of the lanes' time after work, wait, idle and tail is the writes a lane awaits inside a step.
+   const ended=Date.now();s.slice.ms=ended-sliceBegan;s.slice.tailMs=left.reduce((sum,at)=>sum+ended-at,0);
+   const sums=s.laneTime||={slices:0,laneMs:0,workMs:0,waitMs:0,idleMs:0,tailMs:0,feedMs:0};sums.slices++;sums.laneMs+=count*s.slice.ms;for(const key of ['workMs','waitMs','idleMs','tailMs','feedMs'])sums[key]+=s.slice[key];
    if(broken)throw broken;
    if(stop?.fatal)throw stop.fatal;
    if(s.results.length>=criteria.count){s.reason='Requested number of matching companies reached';s.phase='done';s.failureCode='';await checkpoint('complete');return [row.id];}
