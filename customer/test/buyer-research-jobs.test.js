@@ -330,3 +330,84 @@ test('the progress the page keeps carries the credit count the server sent, and 
  await without.client.restore(other,{profile:{decisionMakers:'COO'}});
  assert.equal(other.buyerResearchProgress.credits,null);
 });
+
+// L59 (23 Nov 2026): one status read of a running job was answered by the proxy with the plain text "LeadIntel backend
+// unavailable"; the page showed the parser's message, stopped asking and marked the company as failed while the job ran on.
+// A status read that was not answered is asked again at the next turn; a refusal stays visible at once (the test above).
+function statusHarness(poll,options={}){
+ const calls=[],owner=candidate(),bridge={workspace:{id:'workspace-1'},session:{authenticated:true,user:{id:'user-1'}},conflict:false};
+ const running=revision=>({...snapshot(owner,'running',revision)}),done=revision=>snapshot(owner,'complete',revision);
+ const readable=job=>({ok:true,status:200,json:async()=>({job})});
+ const unreadable=(status=502,text='LeadIntel backend unavailable')=>({ok:status>=200&&status<300,status,json:async()=>JSON.parse(text)});
+ const client=createClient({getBridge:()=>bridge,pollMs:2,requestTimeoutMs:60,fetchImpl:async(url,init)=>{
+  const call={url,method:init.method,job:/job_id=/.test(url),signal:init.signal,at:Date.now()};calls.push(call);
+  if(init.method==='POST')return options.post?options.post({readable,unreadable,running}):readable(running(1));
+  if(!call.job)return readable(null);
+  return poll(calls.filter(c=>c.job).length,{readable,unreadable,running,done,call});
+ },...options.client});
+ return {client,owner,calls,pollCalls:()=>calls.filter(c=>c.job),polls:()=>calls.filter(c=>c.job).length,posts:()=>calls.filter(c=>c.method==='POST').length};
+}
+const watch=h=>h.client.research(h.owner,{profile:{decisionMakers:'COO'}});
+test('a status read answered by a gateway with plain text is asked again and the research is followed to its end',async()=>{
+ for(const status of [502,503,504]){
+  const h=statusHarness((n,t)=>n===2?t.unreadable(status):n<4?t.readable(t.running(n+1)):t.readable(t.done(9)));
+  const job=await watch(h);assert.equal(job.status,'complete',String(status));assert.equal(h.polls(),4);assert.equal(h.posts(),1);assert.equal(h.owner.buyerResearchProgress.connection,'connected');
+ }
+});
+test('a status read that never reaches the server, gets no answer in time or is cut off is asked again',async()=>{
+ const offline=statusHarness((n,t)=>{if(n===1)throw new TypeError('Failed to fetch');return t.readable(t.done(5));});
+ assert.equal((await watch(offline)).status,'complete');assert.equal(offline.polls(),2);assert.equal(offline.posts(),1);
+ const silent=statusHarness((n,t)=>n===1?new Promise(()=>{}):t.readable(t.done(5)));
+ assert.equal((await watch(silent)).status,'complete');assert.equal(silent.polls(),2);assert.equal(silent.posts(),1);
+ const cut=statusHarness((n,t)=>n===1?t.unreadable(200,'{"job":{"id":"job-1","sta'):n===2?{ok:true,status:200,json:async()=>null}:t.readable(t.done(5)));
+ assert.equal((await watch(cut)).status,'complete');assert.equal(cut.polls(),3);assert.equal(cut.posts(),1);
+});
+test('an unanswered status read waits a whole turn before it is asked again',async()=>{
+ const h=statusHarness((n,t)=>n<=3?t.unreadable():t.readable(t.done(9)),{client:{pollMs:40}});
+ assert.equal((await watch(h)).status,'complete');const at=h.pollCalls().map(c=>c.at);assert.equal(at.length,4);
+ for(let i=1;i<at.length;i++)assert.ok(at[i]-at[i-1]>=35,`turn ${i} came after ${at[i]-at[i-1]} ms`);
+});
+test('status reads that stay unanswered end the watching with the way out, and never start or resume anything',async()=>{
+ const h=statusHarness((n,t)=>t.unreadable(),{client:{statusReadAttempts:4}});
+ await assert.rejects(watch(h),error=>{
+  assert.match(error.message,/may still be running/);assert.match(error.message,/Check research status/);assert.doesNotMatch(error.message,/Unexpected token|JSON|continues/);assert.equal(error.code,'BUYER_STATUS_UNAVAILABLE');return true;});
+ assert.equal(h.polls(),4);assert.equal(h.posts(),1);assert.equal(h.client.isObserving(h.owner),false);
+});
+test('a readable status answer starts the count of unanswered ones again',async()=>{
+ const h=statusHarness((n,t)=>n%2?t.unreadable():n<8?t.readable(t.running(n)):t.readable(t.done(20)),{client:{statusReadAttempts:2}});
+ assert.equal((await watch(h)).status,'complete');assert.equal(h.polls(),8);
+});
+test('a refusal during the watching is shown at once and is not asked again, whatever form it comes in',async()=>{
+ const answered=statusHarness(()=>({ok:false,status:503,json:async()=>({error:'Read unavailable'})}));
+ await assert.rejects(watch(answered),/Read unavailable/);assert.equal(answered.polls(),1);
+ // A sign-in page, a missing route or a rate limit answered as a page instead of as data. Only the statuses named
+ // in statusReadMissed are asked again; any other status is a refusal, listed here or not.
+ for(const status of [400,401,403,404,408,429,500,501]){
+  const h=statusHarness((n,t)=>t.unreadable(status,'<!doctype html><title>Sign in</title>'));
+  await assert.rejects(watch(h),error=>{assert.equal(error.code,'BUYER_ANSWER_UNREADABLE');assert.equal(error.status,status);assert.match(error.message,/could not be read/);return true;});assert.equal(h.polls(),1,String(status));
+ }
+ // An empty body is not an answer either, and with a refusal's status it is a refusal.
+ const empty=statusHarness(()=>({ok:false,status:401,json:async()=>null}));
+ await assert.rejects(watch(empty),error=>{assert.equal(error.code,'BUYER_ANSWER_UNREADABLE');assert.equal(error.status,401);return true;});assert.equal(empty.polls(),1);
+ // The page's own guard refuses before any request is made (customer/account-cache.js): not a failure of the network.
+ const guard=statusHarness(()=>{throw new Error('Workspace is not verified for this tab.');});
+ await assert.rejects(watch(guard),/not verified for this tab/);assert.equal(guard.polls(),1);
+ const account=statusHarness(()=>{throw Object.assign(new TypeError('Account changed'),{code:'account_context_changed'});});
+ await assert.rejects(watch(account),/Account changed/);assert.equal(account.polls(),1);
+});
+test('the first status read is asked once, and an unreadable answer to it is said in words that hold without a job',async()=>{
+ const owner=candidate(),bridge={workspace:{id:'w'},session:{authenticated:true}};let calls=0;
+ const client=createClient({getBridge:()=>bridge,fetchImpl:async()=>{calls++;return {ok:false,status:502,json:async()=>JSON.parse('LeadIntel backend unavailable')};}});
+ await assert.rejects(client.restore(owner),error=>{assert.match(error.message,/could not be read/);assert.match(error.message,/Reopen the company/);assert.doesNotMatch(error.message,/Unexpected token|JSON|Check research status/);assert.equal(error.code,'BUYER_ANSWER_UNREADABLE');assert.equal(error.status,502);return true;});
+ assert.equal(calls,1);
+});
+test('an unreadable answer to a start is said in words and the start is never sent again',async()=>{
+ const h=statusHarness(()=>{throw Error('no status read may follow a start that was not confirmed');},{post:t=>t.unreadable(502)});
+ await assert.rejects(watch(h),error=>{assert.equal(error.code,'BUYER_ANSWER_UNREADABLE');assert.doesNotMatch(error.message,/Unexpected token|JSON/);return true;});
+ assert.equal(h.posts(),1);assert.equal(h.polls(),0);
+});
+test('leaving while status reads are unanswered stops the asking at once',async()=>{
+ const stop=new AbortController();const h=statusHarness((n,t)=>{if(n===2)stop.abort();return t.unreadable();},{client:{statusReadAttempts:50}});
+ await assert.rejects(h.client.research(h.owner,{profile:{decisionMakers:'COO'},signal:stop.signal}),{name:'AbortError'});
+ const seen=h.polls();await new Promise(resolve=>setTimeout(resolve,30));assert.equal(h.polls(),seen);assert.ok(seen<=3);
+});

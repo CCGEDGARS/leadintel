@@ -59,7 +59,11 @@
     try{return await Promise.race([promise,canceled]);}
     finally{clearInterval(timer);signal?.removeEventListener('abort',stop);}
   }
-  function createClient({fetchImpl=(...args)=>root.fetch(...args),getBridge=()=>root.LeadIntelServerBridge,apiBase='https://leadintel-api.edgars-7e7.workers.dev',pollMs=2500,requestTimeoutMs=15000,observationTimeoutMs=2100000}={}){
+  // A status read that was not answered: the browser could not make the request (fetch rejects with a TypeError), no
+  // answer came in time, or what came was cut off or written by a gateway on the way instead of by the server. A
+  // refusal is not one of them, in whatever form it comes: a sign-in or rate-limit page, or the page's own guard.
+  const statusReadMissed=error=>error?.code==='BUYER_JOB_REQUEST_TIMEOUT'||error?.code==='BUYER_ANSWER_UNREADABLE'&&[200,502,503,504].includes(error.status)||error?.name==='TypeError'&&error.status===undefined&&error.code===undefined;
+  function createClient({fetchImpl=(...args)=>root.fetch(...args),getBridge=()=>root.LeadIntelServerBridge,apiBase='https://leadintel-api.edgars-7e7.workers.dev',pollMs=2500,requestTimeoutMs=15000,observationTimeoutMs=2100000,statusReadAttempts=8}={}){
     const active=new Map(),references=new WeakMap();
     function capture(owner,options){
       const bridge=getBridge(),workspaceId=bridge?.workspace?.id,userId=bridge?.session?.user?.id;
@@ -75,7 +79,7 @@
       const query=new URLSearchParams({workspace_id:scope.workspaceId,...(jobId?{job_id:jobId}:{domain:domain(scope.owner.domain||scope.owner.website)})});
       if(scope.restoreReceipts&&method==='GET'&&!jobId)query.set('restore','1');
       try{
-        const operation=(async()=>{const response=await fetchImpl(`${apiBase}/api/buyers/research?${query}`,{method,credentials:'include',headers:{Accept:'application/json',...(method==='POST'?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{}),signal:transport.signal});const payload=await response.json();if(!response.ok)throw Object.assign(Error(typeof payload.error==='string'?payload.error:payload.error?.message||'Buyer research request failed.'),{status:response.status,code:payload.error?.code});return payload.job||null;})();
+        const operation=(async()=>{const response=await fetchImpl(`${apiBase}/api/buyers/research?${query}`,{method,credentials:'include',headers:{Accept:'application/json',...(method==='POST'?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{}),signal:transport.signal});let payload;try{payload=await response.json();}catch{}if(!payload||typeof payload!=='object')throw Object.assign(Error('Buyer research answer could not be read. Reopen the company to read saved progress.'),{code:'BUYER_ANSWER_UNREADABLE',status:response.status});if(!response.ok)throw Object.assign(Error(typeof payload.error==='string'?payload.error:payload.error?.message||'Buyer research request failed.'),{status:response.status,code:payload.error?.code});return payload.job||null;})();
         const job=await Promise.race([operation,canceled]);if(!scope.current()||controller.signal.aborted)throw abortError();return job;
       }finally{clearTimeout(timer);clearInterval(contextTimer);controller.signal.removeEventListener('abort',stop);transport.abort();}
     }
@@ -158,14 +162,21 @@
       scope.acceptRoster();options.onProgress?.({...job.progress,phase:job.phase,job,status:job.status});options.persist?.(owner,job);return true;
     }
     async function observe(scope,job,options,controller){
-      const started=Date.now();
+      const started=Date.now();let misses=0;
       while(job){
         if(!scope.current()||controller.signal.aborted)throw abortError();
         if(!apply(scope,job,options))throw contextFailure(scope,job);
         if(!ACTIVE.has(job.status))return job;
         if(Date.now()-started>=observationTimeoutMs)throw Object.assign(Error('Status updates stopped. Check saved progress to see whether research is still running.'),{code:'BUYER_OBSERVATION_LIMIT'});
         await new Promise((resolve,reject)=>{let timer;const stop=()=>{clearTimeout(timer);controller.signal.removeEventListener('abort',stop);reject(abortError());};timer=setTimeout(()=>{controller.signal.removeEventListener('abort',stop);resolve();},pollMs);controller.signal.addEventListener('abort',stop,{once:true});});
-        job=await request(scope,'GET',null,job.id,controller);
+        // The job runs on the server; this only watches it, several hundred reads per research. A read that was not
+        // answered (see statusReadMissed) is asked again at the next turn, after the same wait, and only a run of them
+        // ends the watching. A refusal is shown at once, as before. What the page shows meanwhile is the last answer.
+        try{job=await request(scope,'GET',null,job.id,controller);misses=0;}
+        catch(error){
+          if(!statusReadMissed(error))throw error;
+          if(++misses>=statusReadAttempts)throw Object.assign(Error('The research may still be running. Press Check research status to see where it is.'),{code:'BUYER_STATUS_UNAVAILABLE',cause:error});
+        }
       }
       return null;
     }
