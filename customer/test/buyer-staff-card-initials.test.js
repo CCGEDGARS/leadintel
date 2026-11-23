@@ -199,3 +199,34 @@ test('a sentence between the title and the address ends the card, whatever it sa
  nothing('Karen Svendsen','Kundechef',`### Karen Svendsen\nKundechef\nTlf. 12 34 56 78\nHenvendelser om ordrer og levering sendes til vores kundeservice\n${link('ks')}`,'a sentence naming a department');
  nothing('Tine Dahl','Regnskabschef',[longCard('Tine Dahl','Regnskabschef','td'),longCard('Peter Skov','Projektleder','ps')].join('\n'),'a biography paragraph before the contact lines: a known miss');
 });
+
+// Live, 23 Nov 2026 23:02: the release did nothing on the very page it was written for. In production that page is read by
+// Firecrawl, whose text puts the card's portrait on a line of its own between the title and the address, and a picture ended
+// the card. The cards below have the shape of the text the platform received that evening (kept with the session's evidence).
+const portraitCard=(name,title,local,alt='',phone='12 34 56 78')=>`### ${name}\n\n${title}\n\n![${alt}](https://${domain}/wp-content/uploads/2024/05/${local}-scaled.jpg)\n\n[${local}@${domain}](mailto:${local}@${domain}) Direkte tlf.: ${phone}\n`;
+test('the card\'s own portrait may stand between the title and the contact lines',()=>{
+ const row=page([portraitCard('Karla Holm','Teknisk Chef','kh'),portraitCard('Jonas Berg','Ingeniør','jb','Jonas Berg'),'## Administration\n\n* * *\n',portraitCard('Mette Lund','Økonomichef','ml')].join('\n'));
+ for(const [name,title,local] of [['Karla Holm','Teknisk Chef','kh'],['Jonas Berg','Ingeniør','jb'],['Mette Lund','Økonomichef','ml']]){
+  const person=attach(buyer(name,title),row);
+  assert.equal(person.publicEmail,local+'@'+domain,name);assert.equal(accepted(person),local+'@'+domain,name);
+  assert.deepEqual(D.sourcedBuyerEmails(buyer(name,title),domain,[row],company).map(found=>found.email),[local+'@'+domain],name);
+  assert.equal(person.publicEmailEvidence.quote,`${name} ${title} ${local}@${domain}`);
+ }
+});
+
+test('a picture anywhere else in the card, a second picture, or one that names somebody else ends the card',()=>{
+ const picture=(alt,file)=>`![${alt}](https://${domain}/wp-content/uploads/2024/05/${file}.jpg)`,address=`${link('kh')} Direkte tlf.: 23 45 67 89`;
+ nothing('Karla Holm','Teknisk Chef',`### Karla Holm\n\nTeknisk Chef\n\nTlf. 12 34 56 78\n\n${picture('','kim')}\n\n${address}`,'a picture after a contact line: the next card\'s portrait');
+ nothing('Karla Holm','Teknisk Chef',`### Karla Holm\n\nTeknisk Chef\n\n${picture('','karla')}\n\n${picture('','kim')}\n\n${address}`,'two pictures');
+ nothing('Karla Holm','Teknisk Chef',`### Karla Holm\n\nTeknisk Chef\n\n${picture('Kim Hansen','kim')}\n\n${address}`,'a picture that names somebody else');
+ nothing('Karla Holm','Teknisk Chef',`### Karla Holm\n\nTeknisk Chef\n\n${picture('Portræt','x')}\n\n${address}`,'a picture with any other text');
+ nothing('Karla Holm','Teknisk Chef',`### Karla Holm\n\nTeknisk Chef\n\n${picture('','karla')}\n\nKim Hansen\n\n${address}`,'the portrait, then another person');
+ nothing('Karla Holm','Teknisk Chef',`### Karla Holm\n\nTeknisk Chef\n\n${picture('','karla')}\n\n${link('kh')}\n\n${link('jb')}`,'the portrait, then two addresses');
+ nothing('Karla Holm','Teknisk Chef',`### Karla Holm\n\nTeknisk Chef\n\n[![](https://${domain}/k.jpg)](mailto:kho@${domain})\n\nMail: ${link('kh')}`,'a picture that is a mail link hides a second address');
+ nothing('Karla Holm','Teknisk Chef',`### Karla Holm\n\nTeknisk Chef\n\n![](k.jpg)(kho@${domain})\n\nMail: ${link('kh')}`,'an address glued to the picture');
+});
+
+test('the card is walked from the heading it was recognised by, not from another mention of the name',()=>{
+ nothing('Karla Holm','Teknisk Chef',`### [Karla](mailto:x@${domain}) Holm\nTeknisk chef\nDirekte 12 34 56 78\n## Projekter\nKarla Holm\nTeknisk chef\n${link('kh')}`,'the heading holds a mail link, a plain mention follows further down');
+ nothing('Karla Holm','Teknisk Chef',`Karla Holm\nTeknisk Chef\n${link('kh')}\n### Karla Holm\nTeknisk Chef\nDirekte tlf.: 12 34 56 78\n### Kim Hansen\nIngeniør`,'a plain mention first, the heading after it');
+});

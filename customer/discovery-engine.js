@@ -218,28 +218,35 @@
   // card again with every mailto target visible and accepts `email` only when all of this holds: the page is not a model's
   // summary; the name starts the card as a heading or in bold; the next line is the person's title and nothing else; every
   // line from there on is a contact line and nothing else (phone and e-mail labels, numbers, addresses), at most eight;
-  // and `email` is the only address in those lines. The card ends at the first line of any other kind.
+  // and there is exactly one address in those lines, which is returned. The card ends at the first line of any other kind.
+  // One picture is part of a card: the person's portrait directly under the title, without text or with the person's own
+  // name. Firecrawl, the reader that runs in production, puts it there on a line of its own (seen live on 23 Nov 2026);
+  // a picture anywhere else is the next card's.
   // What a card may hold is listed here; what the next card, a footer or a department line may look like is not, because
   // that list never ends. A sentence between the title and the address ends the card too: whose address a sentence
   // announces ("contact my colleague at…") cannot be checked. Such cards are a known miss, not a guess.
-  function staffInitialsCard(person={},row={},host='',email='',prefix=''){
+  function staffInitialsCard(person={},row={},host=''){
     const name=clean(person.publicName||person.name),title=clean(person.title);
-    if(row.evidenceKind==='model_summary'||!/^\s*(?:#{1,6}\s*|\*{1,2})$/u.test(prefix))return false;
+    if(row.evidenceKind==='model_summary')return '';
     const open=decodePublishedEmailText(String(row.markdown||row.content||'')).replace(/\r/g,'').replace(/\[([^\]]*)\]\(mailto:([^)?\s]+)[^)]*\)/gi,'$1 $2 ').replace(/\[([^\]]+)\]\([^)]*\)/g,'$1');
-    const at=open.indexOf(name);if(at<0)return false;
+    // The heading or bold start is checked on this reading of the page, at the occurrence that is walked: with mailto
+    // targets visible the name's first occurrence can be another one than in the text the caller looked at.
+    const at=open.indexOf(name);if(at<0||!/^\s*(?:#{1,6}\s*|\*{1,2})$/u.test(open.slice(open.lastIndexOf('\n',at)+1,at)))return '';
     const plainLine=line=>line.replace(/^[-+*•>]\s+/,'').replace(/[*_]/g,'').replace(/\s+/g,' ').trim();
     const lines=open.slice(at+name.length,at+name.length+1500).replace(/^\*{1,2}/,'').trimStart().split('\n').map(plainLine).filter(Boolean);
-    if(!lines.length||lines[0].toLowerCase()!==title.toLowerCase())return false;
+    if(!lines.length||lines[0].toLowerCase()!==title.toLowerCase())return '';
     const label='(?:direkte|dir|tlf|telefon|tel|mobil|mob|phone|e-?mail|mail|e-post|nr|nummer|[tme](?=\\s*[:.]))',number='[+\\d][\\d\\s().-]{5,}';
     const part='(?:'+label+'[\\s.:]*){0,3}(?:'+number+')?',contact=new RegExp('^'+part+'(?:\\s*[/|·]\\s*'+part+'){0,2}$','i');
     const found=new Set();
     for(let index=1;index<lines.length&&index<=8;index++){
+      if(index===1&&(/^!\[\]\([^()\s@]*\)$/.test(lines[1])||lines[1]==='!'+name))continue;
       const line=lines[index],addresses=(line.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi)||[]).map(address=>address.toLowerCase());
       const rest=line.replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi,' ').replace(/\s+/g,' ').trim();
       if(rest.length>120||!contact.test(rest))break;
       for(const address of addresses)found.add(address);
     }
-    return found.size===1&&found.has(email);
+    const [address]=found;
+    return found.size===1&&validResearchEmail(address,host)?address:'';
   }
   function officialStaffEmailClaim(person={},row={},domain=''){
     const host=companyIdentityDomain(domain),name=clean(person.publicName||person.name),title=clean(person.title);
@@ -254,10 +261,14 @@
     const afterRole=tail.slice(tail.toLowerCase().indexOf(role.toLowerCase())+role.length);
     const bounded=afterRole.split(/\n\s*(?:#{1,6}\s|!\[|\*{1,2}\p{Lu}[\p{L}’'.-]+(?:[ \t]+\p{Lu}[\p{L}’'.-]+){1,4}\*{1,2})/u)[0];
     const emails=[...new Set((bounded.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi)||[]).map(email=>email.toLowerCase()))].filter(email=>validResearchEmail(email,host));
-    if(emails.length!==1)return null;
-    const email=emails[0],local=email.split('@')[0],first=emailNameParts(person)?.first;
-    if(local===first||emailLocalPatterns(person).some(pattern=>pattern.local===local))return {email,url:normalizeUrl(row.url||row.metadata?.sourceURL),quote:clean(name+' '+role+' '+bounded).slice(0,700)};
-    if(!staffEmailInitials(person).includes(local)||!staffInitialsCard(person,row,host,email,prefix))return null;
+    if(emails.length===1){
+      const local=emails[0].split('@')[0],first=emailNameParts(person)?.first;
+      if(local===first||emailLocalPatterns(person).some(pattern=>pattern.local===local))return {email:emails[0],url:normalizeUrl(row.url||row.metadata?.sourceURL),quote:clean(name+' '+role+' '+bounded).slice(0,700)};
+    }
+    // Not an address that resembles the name: the strict card reads the page for itself (it sees mailto targets and the
+    // portrait line, which `bounded` above does not) and names the card's one address, which must be the initials.
+    const email=staffInitialsCard(person,row,host);
+    if(!email||!staffEmailInitials(person).includes(email.split('@')[0]))return null;
     // The proof kept for an initials address is the card's name, the person's title and the address: what the saved
     // evidence is read back as (acceptedOfficialBuyerEmail), with nothing of the card's other lines or of a neighbour.
     return {email,url:normalizeUrl(row.url||row.metadata?.sourceURL),quote:clean(name+' '+title+' '+email)};
