@@ -2194,6 +2194,9 @@ function findPipelineDecisionMakers(index,{refreshDossier=false}={}){
 function retryPipelineDecisionMakers(domain){const index=pipelineRows().findIndex(item=>canonicalDomain(item.domain||item.website)===domain);return index<0?false:findPipelineDecisionMakers(index);}
 async function runDurableBuyerResearch(candidate,options={}){
   const jobs=window.LeadIntelBuyerResearchJobs;if(!jobs||!candidate)return false;
+  // Status updates that stopped leave their sentence twice: as the label of the progress and as the line above it.
+  // The first status read after that takes that line away; a line that says something else is not theirs and stays.
+  let lostStatusLine=candidate.buyerResearchProgress?.connection==='unavailable'?candidate.buyerResearchProgress.label||'':null;
   if(!options.restore&&!options.personIds?.length)buyerRecheckLayouts.delete(candidate);
   const state=discovery,b=bridge(),scope=discoveryOperationContext(),workspaceId=b?.workspace?.id,userId=b?.session?.user?.id;
   const collections=['selectedProspects','candidates','potentialMatches','pipeline'].filter(key=>(state[key]||[]).includes(candidate));
@@ -2218,6 +2221,7 @@ async function runDurableBuyerResearch(candidate,options={}){
     }
   },onProgress:detail=>{
     if(!current())return;observedJob=detail.job;
+    if(lostStatusLine!==null){const line=lostStatusLine;lostStatusLine=null;if(line&&candidate.__leadIntelBuyerStartMessage===line){delete candidate.__leadIntelBuyerStartMessage;renderAll();}}
     if(['queued','running'].includes(detail.status)){
       const id=`buyer-research-job:${detail.job.id}`;
       if(taskCentre&&taskId!==id){taskId=id;taskCentre.start({id,type:'public-contact-research',title:`Buyer research · ${candidate.company||candidate.domain}`,stage:detail.label||'Reading saved research progress',total:detail.total||1,completed:detail.completed||0,canCancel:true,metadata:{domain:canonicalDomain(candidate.domain),workspaceId,jobId:detail.job.id}});taskCentre.registerActions(id,{cancel:async()=>{try{return await jobs.cancel(candidate,{profile,isCurrent:current,persist});}catch(error){if(current())showToast(error.message);throw error;}}});}

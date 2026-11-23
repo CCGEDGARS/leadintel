@@ -131,3 +131,53 @@ test('Find buyers in a saved list still starts research once for a company with 
  assert.equal(await ctx.openListCompany(row),true);await new Promise(setImmediate);await new Promise(setImmediate);
  assert.equal(calls[0],'focus:example.com');assert.equal(calls.filter(call=>call==='example.com').length,1,'research starts exactly once');assert.ok(calls.includes('buyers'));
 });
+
+// L59 (23 Nov 2026): after "Check research status" brought the progress back, the line left by the stopped status
+// updates stayed above it. Stopped updates leave their sentence twice: as the progress label and as that line.
+function lostStatusRuntime(){
+ const stopped='The research may still be running. Press Check research status to see where it is.';
+ const candidate={company:'Example',domain:'example.com',crmId:'crm',people:[],peopleStatus:'error',buyerResearchProgress:{jobId:'j',phase:'error',connection:'unavailable',label:stopped}},data=new Map();
+ const line=value=>Object.defineProperty(candidate,'__leadIntelBuyerStartMessage',{value,writable:true,configurable:true});
+ const b={workspace:{id:'one'},session:{authenticated:true,user:{id:'owner'}},conflict:false};
+ const ctx={console,URL,URLSearchParams,AbortController,DOMException,CustomEvent:class{},setTimeout,clearTimeout,LeadIntelDiscovery:D,LeadIntelServerBridge:b,localStorage:{getItem:key=>data.get(key)||null,setItem:(key,value)=>data.set(key,String(value)),removeItem:key=>data.delete(key)},document:{getElementById:()=>null,querySelector:()=>null,querySelectorAll:()=>[]},navigator:{languages:[]},addEventListener(){},removeEventListener(){},dispatchEvent(){}};
+ ctx.window=ctx;vm.createContext(ctx);vm.runInContext(source.replace(/\ninitDiscoveryWhenReady\(\);\s*$/,''),ctx);
+ vm.runInContext('discovery={candidates:[],selectedProspects:[]}',ctx);const seen={renders:0};
+ Object.assign(ctx,{saveDiscovery:()=>{},renderAll:()=>{seen.renders++;},showToast:()=>{}});
+ vm.runInContext('discovery.selectedProspects',ctx).push(candidate);
+ const reads=()=>{ctx.LeadIntelBuyerResearchJobs={isObserving:()=>false,restore:async(owner,settings)=>{const before=seen.renders;settings.onProgress?.({job:{id:'j'},status:'running',label:'Reading official company sources'});seen.lineAtProgress=candidate.__leadIntelBuyerStartMessage;seen.rendersAtProgress=seen.renders-before;return {id:'j',status:'needs_review',progress:{}};}};};
+ return {ctx,candidate,line,stopped,seen,reads,b};
+}
+test('a status that can be read again takes away the line the stopped updates left',async()=>{
+ const r=lostStatusRuntime();r.line(r.stopped);r.reads();
+ assert.equal(await r.ctx.runDurableBuyerResearch(r.candidate,{restore:true}),true);
+ assert.equal(r.seen.lineAtProgress,undefined,'gone as soon as a status has been read');assert.ok(r.seen.rendersAtProgress>=1,'and the page is drawn again');
+});
+test('a line that says something else, or a read that fails, leaves the line where it is',async()=>{
+ // Status lost, then Find buyers pressed during a sync conflict: that line is about the conflict, and the conflict is still there.
+ const other=lostStatusRuntime(),conflict='Resolve workspace synchronization before finding buyers.';other.line(conflict);other.reads();
+ await other.ctx.runDurableBuyerResearch(other.candidate,{restore:true});assert.equal(other.candidate.__leadIntelBuyerStartMessage,conflict);
+ // The status was never lost.
+ const never=lostStatusRuntime();never.candidate.buyerResearchProgress={jobId:'j',phase:'official',connection:'connected',label:never.stopped};never.line(never.stopped);never.reads();
+ await never.ctx.runDurableBuyerResearch(never.candidate,{restore:true});assert.equal(never.candidate.__leadIntelBuyerStartMessage,never.stopped);
+ // Nothing could be read.
+ const failed=lostStatusRuntime();failed.line(failed.stopped);failed.ctx.LeadIntelBuyerResearchJobs={isObserving:()=>false,restore:async()=>{throw Error('Read unavailable');}};
+ await failed.ctx.runDurableBuyerResearch(failed.candidate,{restore:true}).catch(()=>{});assert.equal(failed.candidate.__leadIntelBuyerStartMessage,failed.stopped);
+});
+test('lost status and its recovery, through the real status client: the line comes with the stop and goes with the first read',async()=>{
+ const {createClient}=require('../buyer-research-jobs.js'),r=lostStatusRuntime(),{ctx,candidate,b}=r;
+ candidate.peopleStatus='idle';candidate.buyerRoles='COO';delete candidate.buyerResearchProgress;
+ let lost=true,polls=0,posts=0;
+ const job=(status,revision)=>({id:'job-1',domain:'example.com',status,phase:'official',revision,updatedAt:new Date().toISOString(),progress:{label:'Reading official company sources',completed:1,total:5},diagnostics:[]});
+ ctx.LeadIntelBuyerResearchJobs=createClient({getBridge:()=>b,pollMs:2,requestTimeoutMs:200,statusReadAttempts:3,fetchImpl:async(url,init)=>{
+  if(init.method==='POST'){posts++;return {ok:true,status:200,json:async()=>({job:job('running',1)})};}
+  if(!/job_id=/.test(url))return {ok:true,status:200,json:async()=>({job:lost?null:job('running',2)})};
+  polls++;return lost?{ok:false,status:502,json:async()=>JSON.parse('LeadIntel backend unavailable')}:{ok:true,status:200,json:async()=>({job:job('needs_review',3)})};
+ }});
+ // As findPotentialDecisionMakers reports a failure (its `fail`).
+ const onError=message=>r.line(message);
+ assert.equal(await ctx.runDurableBuyerResearch(candidate,{onError}),false);
+ assert.equal(polls,3);assert.equal(posts,1);assert.equal(candidate.buyerResearchProgress.connection,'unavailable');
+ assert.match(candidate.buyerResearchProgress.label,/may still be running/);assert.equal(candidate.__leadIntelBuyerStartMessage,candidate.buyerResearchProgress.label);
+ lost=false;assert.equal(await ctx.runDurableBuyerResearch(candidate,{restore:true,onError}),true);
+ assert.equal(candidate.__leadIntelBuyerStartMessage,undefined);assert.equal(candidate.buyerResearchProgress.connection,'connected');assert.equal(posts,1,'reading the status again starts nothing');
+});
