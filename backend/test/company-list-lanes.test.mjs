@@ -575,3 +575,19 @@ test('an operation whose record could not be written is closed as interrupted, a
  assert.deepEqual(state.flying,[]);
  assert.equal(totals.started,totals.complete+totals.failed+totals.interrupted);
 });
+
+// The minute trigger gave a list 45 seconds (new operations for 35), then nothing for 15: read from the scheduler
+// receipts of the live runs of 23 Nov 2026, where no slice ended later than 3.6 s after its window. With 54 seconds a
+// slice ends before the next trigger and starts new operations for 44 seconds of every minute.
+test('the minute trigger gives a company list 54 seconds of every minute, and the lease is given back when the slice ends',async t=>{
+ const seen=[],noop=async()=>{},waits=[];
+ await app.scheduled({cron:'* * * * *',scheduledTime:Date.parse('2026-11-23T07:32:13.092Z')},(await setup(t,8)).env,{waitUntil:p=>waits.push(p)},{runCompanyListJobs:async(env,options)=>{seen.push(options);return [];},runWritingReferenceJobs:noop,runWorkspaceSkillJobs:noop,runCompanyMaterialJobs:noop,runLanguagePackJobs:noop});
+ await Promise.all(waits);
+ assert.deepEqual(seen,[{now:Date.parse('2026-11-23T07:32:13.092Z'),windowMs:54000}]);
+ // The lease of a slice outlives its window by 30 seconds and is given back when the slice ends.
+ const f=await setup(t,8),base=profileServices({count:8});f.env.COMPANY_LIST_TEST_SERVICES=base;
+ const list=await startBare(f,{count:3}),lease=()=>f.DB.raw.prepare('SELECT lease_until FROM company_lists WHERE id=?').get(list.id).lease_until;
+ let during=null;f.env.COMPANY_LIST_TEST_SERVICES={...base,read:async url=>{during??=lease();return base.read(url);}};
+ const now=Date.now();await runCompanyListJobs(f.env,{jobId:list.id,now,windowMs:54000});
+ assert.equal(during,now+84000);assert.equal(lease(),0);
+});
