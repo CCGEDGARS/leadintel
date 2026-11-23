@@ -5,7 +5,13 @@
  const identity=()=>JSON.stringify([root.LeadIntelServerBridge?.session?.authenticated,root.LeadIntelServerBridge?.session?.user?.id,root.LeadIntelServerBridge?.workspace?.id,root.LeadIntelServerBridge?.workspace?.role]);
  function stopPolling(){clearTimeout(timer);pollVersion++;}
  function synchronize(){const key=identity();if(key!==scope){scope=key;current=null;options=null;prepared=null;showAll=false;searchScopeRevision++;searchKey='';savedSearch=null;lastSavedCopy=null;searchMessage='';searchState={snapshot:null,busy:false};stopPolling();if($('company-list-content'))$('company-list-content').replaceChildren();notice('');paintSearch();}return key;}
- async function api(params={},body){const key=synchronize(),bridge=root.LeadIntelServerBridge;if(!bridge?.session?.authenticated||!bridge.workspace?.id)throw Error('Sign in and select a workspace first.');const query=new URLSearchParams({workspace_id:bridge.workspace.id,...params});const response=await fetch('https://leadintel-api.edgars-7e7.workers.dev/api/company-lists?'+query,{signal:AbortSignal.timeout(30000),credentials:'include',method:body?'POST':'GET',headers:{'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});const data=await response.json();if(key!==identity())throw Error('Workspace changed. Reopen company lists.');if(!response.ok)throw Error(data.error||'Company list request failed.');return data;}
+ // A request that got no answer: the browser could not make it (fetch rejects with a TypeError) or none came in 30 s.
+ const unanswered=e=>{throw e?.name==='TimeoutError'||e?.name==='TypeError'&&e.code===undefined&&e.status===undefined?Object.assign(Error(e.message),{code:'LIST_REQUEST_UNANSWERED',cause:e}):e;};
+ // A status read worth asking again: it got no answer, or what came was cut off or written by a gateway on the way
+ // instead of by the server. A refusal is not one of them, in whatever form it comes (a sign-in or rate-limit page).
+ const statusReadMissed=e=>e?.code==='LIST_REQUEST_UNANSWERED'||e?.code==='LIST_ANSWER_UNREADABLE'&&[200,502,503,504].includes(e.status);
+ const STATUS_READ_ATTEMPTS=8;
+ async function api(params={},body){const key=synchronize(),bridge=root.LeadIntelServerBridge;if(!bridge?.session?.authenticated||!bridge.workspace?.id)throw Error('Sign in and select a workspace first.');const query=new URLSearchParams({workspace_id:bridge.workspace.id,...params});const response=await fetch('https://leadintel-api.edgars-7e7.workers.dev/api/company-lists?'+query,{signal:AbortSignal.timeout(30000),credentials:'include',method:body?'POST':'GET',headers:{'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})}).catch(unanswered);let data;try{data=await response.json();}catch{}if(!data||typeof data!=='object')throw Object.assign(Error('The company list answer could not be read.'),{code:'LIST_ANSWER_UNREADABLE',status:response.status});if(key!==identity())throw Error('Workspace changed. Reopen company lists.');if(!response.ok)throw Error(data.error||'Company list request failed.');return data;}
  // Shown while a list is researched: the server refuses to select or save companies of a running list.
  const BUYERS_WAIT='Find buyers and Save list to CRM are switched off while this research runs. They are available when it finishes, or at once after Pause research; a paused list can be resumed.';
  function notice(message){if($('company-list-notice'))$('company-list-notice').textContent=message;}
@@ -236,7 +242,10 @@
   if(!data.list)return showMissingList();
   current=data.list;render();
  }
- function poll(){
+ // The research runs at the server; this only watches it, one read every five seconds. A read that was not answered
+ // (see statusReadMissed) is asked again at the next turn, and only a run of them ends the watching. A refusal is
+ // shown at once, as before. Meanwhile the panel shows the last answer. Only this GET is repeated, never an action.
+ function poll(misses=0){
   stopPolling();
   if(!current||!['queued','running'].includes(current.status))return;
   const list=current,key=scope,version=pollVersion;
@@ -244,7 +253,13 @@
   timer=setTimeout(async()=>{
    try{
     if(!watching())return;
-    const data=await api({id:list.id});
+    let data;
+    try{data=await api({id:list.id});}
+    catch(e){
+     if(!watching()||!statusReadMissed(e))throw e;
+     if(misses+1>=STATUS_READ_ATTEMPTS)return notice('The research may still be running. Use Refresh to see where it is.');
+     return poll(misses+1);
+    }
     if(!watching())return;
     if(!data.list)return showMissingList();
     current=data.list;render();poll();
