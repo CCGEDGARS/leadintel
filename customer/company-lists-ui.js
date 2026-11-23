@@ -7,9 +7,11 @@
  function synchronize(){const key=identity();if(key!==scope){scope=key;current=null;options=null;prepared=null;showAll=false;searchScopeRevision++;searchKey='';savedSearch=null;lastSavedCopy=null;searchMessage='';searchState={snapshot:null,busy:false};stopPolling();if($('company-list-content'))$('company-list-content').replaceChildren();notice('');paintSearch();}return key;}
  async function api(params={},body){const key=synchronize(),bridge=root.LeadIntelServerBridge;if(!bridge?.session?.authenticated||!bridge.workspace?.id)throw Error('Sign in and select a workspace first.');const query=new URLSearchParams({workspace_id:bridge.workspace.id,...params});const response=await fetch('https://leadintel-api.edgars-7e7.workers.dev/api/company-lists?'+query,{signal:AbortSignal.timeout(30000),credentials:'include',method:body?'POST':'GET',headers:{'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});const data=await response.json();if(key!==identity())throw Error('Workspace changed. Reopen company lists.');if(!response.ok)throw Error(data.error||'Company list request failed.');return data;}
  function notice(message){if($('company-list-notice'))$('company-list-notice').textContent=message;}
- async function action(fn,formAction=false){
+ // `waiting` is shown at once for the requests that take seconds (the saved lists, the list criteria), so the
+ // panel does not look dead between the click and the answer. It is cleared when the request ends without an error.
+ async function action(fn,formAction=false,waiting=''){
   if(pending)return;
-  const owner=synchronize();pending=true;stopPolling();notice('');
+  const owner=synchronize();pending=true;stopPolling();notice(waiting);
   $('company-list-panel')?.setAttribute('aria-busy','true');
   try{await fn();}
   catch(e){
@@ -18,7 +20,7 @@
     if(inline){inline.textContent=e.message;inline.hidden=false;inline.focus();}
     else notice(e.message);
    }
-  }finally{pending=false;$('company-list-panel')?.setAttribute('aria-busy','false');poll();}
+  }finally{pending=false;if(waiting&&$('company-list-notice')?.textContent===waiting)notice('');$('company-list-panel')?.setAttribute('aria-busy','false');poll();}
  }
  let searchKey='',searchEpoch=0,searchScopeRevision=0,savedSearch=null,lastSavedCopy=null,searchBusy=false,searchMessage='',searchState={snapshot:null,busy:false};
  const digest=async value=>[...new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value)))].map(b=>b.toString(16).padStart(2,'0')).join('');
@@ -310,7 +312,7 @@
    }
    if(command==='buyer'){await root.LeadIntelDiscoveryUI?.openListCompany?.(result.candidate);return;}
    current=result.list;render();
-  },command==='review'||command==='start');
+  },command==='review'||command==='start',({new:'Loading the list criteria…',lists:'Loading your company lists…',open:'Opening the list…'})[command]||'');
  }
  root.addEventListener('leadintel:journey-focus-changed',e=>{if($('company-list-panel'))$('company-list-panel').hidden=e.detail?.focus==='buyers';});
  root.LeadIntelCompanyListUI={mount,refreshSearch,open: id=>action(()=>id?open(id):showLists())};
