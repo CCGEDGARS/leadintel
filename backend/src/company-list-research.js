@@ -75,6 +75,7 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
   const s=parse(row.state_json),criteria=parse(row.input_json),start=clock(),profilePolicy=criteria.qualityVersion===M.PROFILE_VERSION,strict=profilePolicy||criteria.qualityVersion===M.QUALITY_VERSION;
   // A state written by several lanes stores every read page once and refers to it from the pending pages.
   if(s.pagePool){const pool=s.pagePool,at=page=>page&&page.$page!==undefined?pool[page.$page]:page;for(const task of s.pending||[]){if(task.page)task.page=at(task.page);if(task.context)task.context=task.context.map(at).filter(Boolean);}delete s.pagePool;}
+  delete s.slice;   // the figures of the last slice with several lanes; a new such slice writes its own
   timer=setTimeout(()=>controller.abort(),windowMs);
   s.receipts||=[];s.reviews||=[];s.seen||=[];s.pending||=[];
   // Older jobs keep their existing accounting. Do not invent past receipts.
@@ -111,16 +112,28 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
    return {...state,pending:state.pending.map(task=>({...task,...(task.page?{page:ref(task.page)}:{}),...(task.context?{context:task.context.map(ref)}:{})})),pagePool:pool};};
   const write=async(status='running')=>{
    if(broken)throw broken;
+   const began=Date.now();
    const update=sql(env,`UPDATE company_lists SET state_json=?,status=?,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND lease_token=? AND status='running' AND ${authority}`,JSON.stringify(packing?pack(s):s),status,row.id,token);
    try{
     const [r]=evidenceWrite?await env.DB.batch([update,evidenceWrite]):[await update.run()];
     if(!r.meta.changes)throw error('Research context changed.','authority',403);
    }catch(cause){if(evidenceWrite)broken=cause;throw cause;}
    evidenceWrite=null;
+   // How long the writes of this slice took: stored with the next write, read when a list is slow.
+   if(s.slice){const ms=Date.now()-began;s.slice.writes++;s.slice.writeMs+=ms;s.slice.slowestWriteMs=Math.max(s.slice.slowestWriteMs,ms);}
   };
   // Every state write goes through one queue, so the writes of several lanes land in order, each with the latest state.
-  let writes=Promise.resolve();
-  const checkpoint=(status='running')=>{const next=writes.then(()=>write(status));writes=next.catch(()=>{});return next;};
+  // A write stores the whole state as it is when the write begins. So lanes that ask while a write is waiting for its
+  // turn share that one write: it will carry the changes of all of them. Live with eight lanes (23 Nov 2026) every
+  // request was a write of its own, two for each operation, and in the minutes when one write of the 300 KB row took a
+  // second the eight lanes made 22 to 32 operations between them.
+  let writes=Promise.resolve(),shared=null;
+  const checkpoint=(status='running')=>{
+   if(shared&&status==='running')return shared;
+   const next=writes.then(()=>{if(shared===next)shared=null;return write(status);});writes=next.catch(()=>{});
+   if(packing&&status==='running')shared=next;
+   return next;
+  };
   // A change that must be stored by the very next write: a kept company together with its evidence row.
   const commit=change=>{const next=writes.then(async()=>{change();await write();});writes=next.catch(()=>{});return next;};
   let lastOperation=null,operationEvents=[];
@@ -185,24 +198,29 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
   // no other lane holds through the same steps as the one-lane loop below; one lane at a time searches or plans when
   // nothing is left to claim. Model answers are streamed, which frees the Worker's connection slot after about a second.
   const runLanes=async count=>{
-   const busy=new Set(),cooled=new Set(),feeders=new Set(),FEEDERS=3;packing=true;let stop=null,drained=null,feedDown=null,readStreak=0,waiters=[];
+   const busy=new Set(),cooled=new Set(),feeders=new Set(),FEEDERS=3;packing=true;s.slice={at:new Date().toISOString(),lanes:count,from:s.operations,writes:0,writeMs:0,slowestWriteMs:0};let stop=null,drained=null,feedDown=null,readStreak=0,waiters=[];
    const wake=()=>{const all=waiters;waiters=[];for(const resolve of all)resolve();};
    const halt=reason=>{stop||=reason;wake();};
    const claim=()=>{for(const task of s.pending){if(held.has(task)||cooled.has(task))continue;const site=M.domain(task.url);if(busy.has(site))continue;held.add(task);busy.add(site);return task;}return null;};
    const release=task=>{held.delete(task);busy.delete(M.domain(task.url));wake();};
+   // No authority read of its own before or after: the write that records the operation as started asks the same
+   // question (lease, running, session) and is awaited before any work is sent, and nothing that comes back late can be
+   // stored, because every later write asks it again.
    const laneOperation=async(lane,kind,target,fn)=>{
-    await guard();if(stop||controller.signal.aborted)throw error('Research slice finished.','slice_finished');
+    if(stop||controller.signal.aborted)throw error('Research slice finished.','slice_finished');
     if(s.operations>=s.allowance)throw error('Research allowance reached.','allowance',409);
     const r={id:++s.operations,operation:kind,target:clean(target,500),status:'started',at:new Date().toISOString()};
     s.operationTotals.started++;s.receipts.push(r);s.receipts=s.receipts.slice(-250);(s.flying||=[]).push(r.id);lane.last=r;
     // `answer`: a model answer about a page. A register check or a search plan says nothing about those.
     const events=lane.events=[],family=kind==='page_read'?'page_read:':kind==='search'?'search:':target==='search plan'?'plan:':'model:',answer=family==='model:'&&kind!=='register_check';
-    await checkpoint();
+    // When this write fails nothing is sent. The receipt is closed here, because a slice that already has another
+    // reason to end (the list is complete) would store it as started for good.
+    try{await checkpoint();}catch(cause){r.status='interrupted';s.operationTotals.interrupted++;s.flying=(s.flying||[]).filter(id=>id!==r.id);throw cause;}
     // `short`: the slice was ending and this operation got less than its full time.
     const budget=Math.max(1,Math.min(25000,windowMs-(clock()-start)-2000)),timeout=AbortSignal.timeout(budget),signal=AbortSignal.any([controller.signal,timeout]);lane.short=budget<20000;
     let abort;const canceled=new Promise((_,reject)=>{abort=()=>reject(error('Research operation timed out.','timeout',504));signal.addEventListener('abort',abort,{once:true});});
     try{
-     const result=await Promise.race([Promise.resolve().then(()=>fn(signal,r,events)),canceled]);await guard();
+     const result=await Promise.race([Promise.resolve().then(()=>fn(signal,r,events)),canceled]);
      r.status='complete';s.operationTotals.complete++;if(kind==='page_read')readStreak=0;else if(kind==='search'){s.searchStreak=0;s.searchDone=(s.searchDone||0)+1;}else if(answer){s.modelStreak=0;s.modelDone=(s.modelDone||0)+1;}
      // A success ends the retry count of its own kind only: a page that reads well says nothing about the model.
      if(!s.retryKey||s.retryKey.startsWith(family)&&(family!=='model:'||answer)){s.failures=0;s.retryKey='';s.nextAttemptAt=0;s.failureCode='';}
@@ -211,18 +229,21 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
     finally{signal.removeEventListener('abort',abort);if(events.length)r.providers=events.slice(0,10);s.flying=(s.flying||[]).filter(id=>id!==r.id);}
    };
    const laneAsk=(lane,prompt,task)=>laneOperation(lane,prompt.stage==='review'?'evidence_review':'analysis',task.url,(signal,receipt)=>ask(prompt,signal,receipt,true));
+   // What a step changed is stored without the lane waiting for it: the write is asked for, and the lane's next operation
+   // waits for its own write, which is this one or a later one. A write that fails ends the slice.
+   const save=()=>{checkpoint().catch(cause=>halt({fatal:cause}));};
    // One step for one page: read it, assess it, check the register, or review the evidence.
    const step=async(lane,task)=>{
-    if(s.results.some(r=>r.domain===M.domain(task.url))){drop(task);await checkpoint();return;}
+    if(s.results.some(r=>r.domain===M.domain(task.url))){drop(task);save();return;}
     if(!task.page){
      const raw=await laneOperation(lane,'page_read',task.url,async(signal,receipt,events)=>{
       const value=await (services.read?services.read(task.url,{signal}):readPublicBuyerPage(env,row.workspace_id,task.url,{purpose:'company_list',signal,totalTimeoutMs:18000,directTimeoutMs:3000,firecrawlTimeoutMs:12000}));
       for(const trace of value.researchTrace||[])events.push(safeEvent(trace));return value;
      });
      const p=raw.data||raw,actual=M.url(p.url||p.metadata?.sourceURL||task.url),text=String(p.markdown||p.description||p.text||'').slice(0,16000);
-     if(M.domain(actual)!==M.domain(task.url)||text.trim().length<40){recordGap(task,'Source redirected to another domain or returned no readable evidence.');drop(task);await checkpoint();return;}
+     if(M.domain(actual)!==M.domain(task.url)||text.trim().length<40){recordGap(task,'Source redirected to another domain or returned no readable evidence.');drop(task);save();return;}
      task.page={url:actual,text,links:(Array.isArray(p.links)?p.links:[]).map(M.url).filter(Boolean).slice(0,100),readAt:new Date().toISOString(),receipt:{...lane.last}};
-     s.phase='checking';await checkpoint();return;
+     s.phase='checking';save();return;
     }
     const pages=[...(task.context||[]),task.page];
     if(task.candidate&&criteria.target&&!task.registerChecked){
@@ -256,7 +277,7 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
      if(result&&result.commercialFit){task.candidate=result;task.assessment={...lane.last};s.phase='reviewing';}
      else{if(raw.excluded!==true)followup(task,raw,pages);finishTask(task,(raw.gaps||[]).map(g=>clean(g)).join(' · ')||(raw.excluded?'Company excluded':'Identity, market, selected signal or commercial-fit evidence is incomplete.'),raw.excluded?'rejected':'needs_evidence');}
     }
-    await checkpoint();
+    save();
    };
    // What a failed operation means. A page that cannot be read or whose answer is refused is that page's matter: skipped,
    // asked once more, or left for the next slice. A model or register failure is not the page's fault: the page
@@ -298,7 +319,9 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
     if(e.code==='slice_finished'||controller.signal.aborted){again();return;}
     if(e.code==='authority'||/WORKSPACE_STORAGE_FULL/.test(String(e.message))){halt({fatal:e});return;}
     if(e.code==='allowance'){again();halt({allowance:true});return;}
-    if(!e.operationFailure){halt({fatal:e});return;}
+    // Not a failed search: the write that records it failed before anything was sent. The query was not tried, so it
+    // goes back (several searches may have shared that write).
+    if(!e.operationFailure){again();halt({fatal:e});return;}
     if(e.code==='timeout'&&lane.short){again();return;}
     const issue=failure(e,lane.events,lane.last?.operation),search=lane.last?.operation==='search';
     again();
@@ -312,12 +335,13 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
     }else halt({issue,key:(search?'search:':'plan:')+issue.code});
    };
    const feedSearch=async()=>{
-    const index=s.queryIndex++,q=s.queries[index],me={last:null,events:[]};
+    const index=s.queryIndex++,q=s.queries[index],me={last:null,events:[]};let searched=false;
     try{
      const rows=await laneOperation(me,'search',q,async(signal,receipt,events)=>{
       const run=services.search||createBuyerSourceSearch(env,row.workspace_id,{purpose:'company_list',guard,observe:r=>events.push(safeEvent(r)),scrapeResults:false,primaryTimeoutMs:12000});
       const found=await run(q,{limit:10,signal}),rows=Array.isArray(found)?found:found?.results;if(!Array.isArray(rows))throw error('Search response needs retry.','invalid_response');return rows;
      });
+     searched=true;
      for(const hit of rows.slice(0,10)){const url=M.url(hit.url);if(url&&!s.seen.includes(url)&&s.seen.length<4000&&!s.results.some(r=>r.domain===M.domain(url))){s.seen.push(url);s.pending.push({url});}}
      s.phase='researching';await checkpoint();
     }catch(e){
@@ -325,6 +349,8 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
      // searches in flight know their places). It is held against the query only when another search has succeeded since
      // its last failure (the service works, this query does not): twice, and it is not tried again.
      feedFailed(me,e,()=>{
+      // A search that came back keeps its pages: only the write after it failed, and the query is not asked again.
+      if(searched)return;
       const misses=s.searchMisses||={},miss=misses[q]||{n:0},done=s.searchDone||0;
       if(e.operationFailure&&!(e.code==='timeout'&&me.short)&&(miss.at===undefined||done>miss.at)){miss.n++;miss.at=done;misses[q]=miss;}
       if(miss.n<2&&s.queries.indexOf(q,s.queryIndex)<0)s.queries.push(q);   // not when it already waits further on

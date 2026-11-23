@@ -410,3 +410,168 @@ test('after a search outage of two slices the queries are still there: every pla
  assert.deepEqual([...new Set(ok)].sort(),['first','fourth','second','third']);
  assert.equal(statusOf(f,list.id),'complete');assert.equal(state.results.length,10);
 });
+
+// Live run of 23 Nov 2026 with eight lanes: every operation asked the database four times (two authority reads and two
+// writes of the whole state row, about 300 KB), and the writes of all lanes stood in one queue, one write per request.
+// In the minutes when one write took about a second the eight lanes together made 22 to 32 operations.
+test('lanes share the writes of the state row: a slow database is asked far fewer times than twice per operation',async t=>{
+ let searches=0;const f=await setup(t,8),base=profileServices({count:30});
+ f.env.COMPANY_LIST_TEST_SERVICES={...base,
+  search:async()=>{const from=searches++*10;return Array.from({length:10},(_,i)=>({url:`https://factory${from+i}.example/`}));},
+  read:async url=>{await pause(5);return base.read(url);},
+  generate:async p=>{if(p.stage==='plan')return {queries:p.round?[]:['first','second','third']};await pause(5);return base.generate(p);}};
+ const list=await startBare(f,{count:22,budget:400});
+ // Counted from here: every statement of the research slices, and the writes of the state row among them (each takes 30 ms).
+ let statements=0,writes=0;const prepare=f.DB.prepare.bind(f.DB),batch=f.DB.batch.bind(f.DB);
+ f.DB.prepare=sql=>{statements++;const statement=prepare(sql);if(/^UPDATE company_lists SET state_json=\?/.test(sql)){const bind=statement.bind.bind(statement);statement.bind=(...values)=>{writes++;const bound=bind(...values),run=bound.run.bind(bound);bound.run=async()=>{await pause(30);return run();};return bound;};}return statement;};
+ f.DB.batch=async list=>{await pause(30);return batch(list);};
+ for(let i=0;i<40&&active(f,list.id);i++){const before=stateOf(f,list.id);await runCompanyListJobs(f.env,{jobId:list.id,now:Math.max(Date.now(),(before.nextAttemptAt||0)+1),windowMs:45000});}
+ const state=stateOf(f,list.id),rows=f.DB.raw.prepare('SELECT domain FROM company_list_evidence WHERE list_id=?').all(list.id).map(r=>r.domain);
+ assert.equal(statusOf(f,list.id),'complete');assert.equal(state.results.length,22);
+ assert.deepEqual(state.results.map(r=>r.domain).filter(domain=>!rows.includes(domain)),[],'every kept company has its evidence row');
+ assert.ok(state.operations>=66,'three operations for every kept company at least: '+state.operations);
+ t.diagnostic(`operations ${state.operations}, state writes ${writes}, database statements ${statements}`);
+ assert.ok(writes<=state.operations,`state writes ${writes} for ${state.operations} operations`);
+ assert.ok(statements<=state.operations*2,`database statements ${statements} for ${state.operations} operations`);
+ assert.deepEqual(state.receipts.filter(r=>r.status==='started'),[],'no receipt is left as started');
+ assert.equal(state.operationTotals.started,state.operationTotals.complete+state.operationTotals.failed+state.operationTotals.interrupted);
+});
+
+test('a list paused while eight lanes work starts no further operation and stores nothing that came back late',async t=>{
+ let searches=0,reads=0,answers=0,entered,release;const seen=new Promise(r=>entered=r),gate=new Promise(r=>release=r);
+ const f=await setup(t,8),base=profileServices({count:30});
+ f.env.COMPANY_LIST_TEST_SERVICES={...base,
+  search:async()=>{const from=searches++*10;return Array.from({length:10},(_,i)=>({url:`https://factory${from+i}.example/`}));},
+  read:async url=>{reads++;if(reads>=8)entered();await gate;return base.read(url);},
+  generate:async p=>{if(p.stage==='plan')return {queries:p.round?[]:['first','second','third']};answers++;return base.generate(p);}};
+ const list=await startBare(f,{count:22,budget:400});
+ const slice=runCompanyListJobs(f.env,{jobId:list.id,windowMs:45000});
+ await seen;
+ const before=await readCompanyList(f.env,workspaceId,list.id);
+ assert.equal((await bare(f,{action:'pause',id:list.id,revision:before.revision})).status,200);
+ const paused=f.DB.raw.prepare('SELECT status,state_json,revision FROM company_lists WHERE id=?').get(list.id),readsAtPause=reads,searchesAtPause=searches;
+ release();await slice;
+ const after=f.DB.raw.prepare('SELECT status,state_json,revision FROM company_lists WHERE id=?').get(list.id);
+ assert.equal(after.status,'canceled');
+ assert.equal(reads,readsAtPause,'no page is read after the pause');
+ assert.equal(answers,0,'no model answer is asked after the pause');
+ assert.equal(searches,searchesAtPause,'no search is sent after the pause');
+ assert.equal(after.state_json,paused.state_json,'the stored state is the one of the pause');
+ assert.equal(after.revision,paused.revision);
+ assert.equal(f.DB.raw.prepare('SELECT COUNT(*) n FROM company_list_evidence WHERE list_id=?').get(list.id).n,0);
+});
+
+// A lane does not wait for the write after its step. So a write may fail that no lane is waiting for: it must still end
+// the slice (the list then retries, as after any failed write) and must not be left as a rejection nobody handles.
+test('a state write that fails once while lanes work ends that slice; the list retries and finishes with every company stored',async t=>{
+ const run=async failAt=>{
+  let searches=0,writes=0,failed=0;const f=await setup(t,8),base=profileServices({count:30});
+  f.env.COMPANY_LIST_TEST_SERVICES={...base,
+   search:async()=>{const from=searches++*10;return Array.from({length:10},(_,i)=>({url:`https://factory${from+i}.example/`}));},
+   read:async url=>{await pause(3);return base.read(url);},
+   generate:async p=>{if(p.stage==='plan')return {queries:p.round?[]:['first','second','third']};await pause(3);return base.generate(p);}};
+  const list=await startBare(f,{count:22,budget:400});
+  const prepare=f.DB.prepare.bind(f.DB);
+  f.DB.prepare=sql=>{const statement=prepare(sql);if(/^UPDATE company_lists SET state_json=\?/.test(sql)){const bind=statement.bind.bind(statement);statement.bind=(...values)=>{const bound=bind(...values),run=bound.run.bind(bound);bound.run=async()=>{if(++writes===failAt){failed++;throw new Error('D1_ERROR: Network connection lost.');}return run();};return bound;};}return statement;};
+  // Short slices (a tenth of a second of new work each), so the list cannot finish in the slice of the failure.
+  let retried=null;
+  for(let i=0;i<80&&active(f,list.id);i++){
+   const before=stateOf(f,list.id),was=failed;
+   await runCompanyListJobs(f.env,{jobId:list.id,now:Math.max(Date.now(),(before.nextAttemptAt||0)+1),windowMs:10100});
+   if(failed>was){const after=stateOf(f,list.id);retried={phase:after.phase,waits:after.nextAttemptAt>0,status:statusOf(f,list.id)};}
+  }
+  const state=stateOf(f,list.id),rows=f.DB.raw.prepare('SELECT domain FROM company_list_evidence WHERE list_id=?').all(list.id).map(r=>r.domain);
+  const totals=state.operationTotals;
+  return {failAt,failed,retried,status:statusOf(f,list.id),kept:state.results.length,withoutEvidence:state.results.map(r=>r.domain).filter(domain=>!rows.includes(domain)),started:state.receipts.filter(r=>r.status==='started').length,unaccounted:totals.started-totals.complete-totals.failed-totals.interrupted};
+ };
+ for(const failAt of [3,4,5,6,7,8,9,10,11,12,13,14]){
+  const end=await run(failAt);
+  assert.deepEqual(end,{failAt,failed:1,retried:{phase:'retrying',waits:true,status:'queued'},status:'complete',kept:22,withoutEvidence:[],started:0,unaccounted:0});
+ }
+});
+
+// Sharing a write is safe only while that write has not begun: a write that has begun does not carry what came after.
+// (Found by the review of 23 Nov 2026: with a write shared after it had begun, work went out before its record.)
+test('every operation is in the stored row as started before its work is sent, however slow and uneven the writes',async t=>{
+ let searches=0,listId;const f=await setup(t,8),base=profileServices({count:30}),early=[];
+ const stored=(kind,targets)=>stateOf(f,listId).receipts.some(r=>r.status==='started'&&r.operation===kind&&targets.includes(r.target));
+ f.env.COMPANY_LIST_TEST_SERVICES={...base,
+  search:async q=>{if(!stored('search',[q]))early.push('search '+q);const from=searches++*10;return Array.from({length:10},(_,i)=>({url:`https://factory${from+i}.example/`}));},
+  read:async url=>{if(!stored('page_read',[url]))early.push('read '+url);await pause(Math.floor(Math.random()*10));return base.read(url);},
+  generate:async p=>{
+   if(p.stage==='plan'){if(!stored('analysis',['search plan']))early.push('plan');return {queries:p.round?[]:['first','second','third']};}
+   const kind=p.stage==='review'?'evidence_review':'analysis';if(!stored(kind,p.pages.map(page=>page.url)))early.push(kind+' '+p.pages.at(-1).url);
+   await pause(Math.floor(Math.random()*10));return base.generate(p);}};
+ const list=await startBare(f,{count:22,budget:400});listId=list.id;
+ const prepare=f.DB.prepare.bind(f.DB),batch=f.DB.batch.bind(f.DB),slow=()=>pause(10+Math.floor(Math.random()*30));
+ f.DB.prepare=sql=>{const statement=prepare(sql);if(/^UPDATE company_lists SET state_json=\?/.test(sql)){const bind=statement.bind.bind(statement);statement.bind=(...values)=>{const bound=bind(...values),run=bound.run.bind(bound);bound.run=async()=>{await slow();return run();};return bound;};}return statement;};
+ f.DB.batch=async statements=>{await slow();return batch(statements);};
+ for(let i=0;i<40&&active(f,list.id);i++){const before=stateOf(f,list.id);await runCompanyListJobs(f.env,{jobId:list.id,now:Math.max(Date.now(),(before.nextAttemptAt||0)+1),windowMs:45000});}
+ assert.deepEqual(early,[],'work sent before its receipt was stored');
+ assert.equal(statusOf(f,list.id),'complete');
+});
+
+test('the figures of a slice with several lanes do not outlive it: after the switch is set back, a one-lane slice stores none',async t=>{
+ let searches=0;const f=await setup(t,8),base=profileServices({count:30});
+ f.env.COMPANY_LIST_TEST_SERVICES={...base,
+  search:async()=>{const from=searches++*10;return Array.from({length:10},(_,i)=>({url:`https://factory${from+i}.example/`}));},
+  read:async url=>{await pause(150);return base.read(url);},
+  generate:async p=>{if(p.stage==='plan')return {queries:p.round?[]:['first','second','third']};await pause(150);return base.generate(p);}};
+ const list=await startBare(f,{count:22,budget:400});
+ await runCompanyListJobs(f.env,{jobId:list.id,windowMs:10300});
+ const lanes=stateOf(f,list.id);assert.equal(statusOf(f,list.id),'queued');
+ assert.equal(lanes.slice.lanes,8);assert.ok(lanes.slice.writes>0&&lanes.slice.writeMs>=0&&lanes.slice.slowestWriteMs>=0,JSON.stringify(lanes.slice));
+ delete f.env.COMPANY_LIST_LANES;
+ await runCompanyListJobs(f.env,{jobId:list.id,now:Math.max(Date.now(),(lanes.nextAttemptAt||0)+1),windowMs:10300});
+ const one=stateOf(f,list.id);
+ assert.ok(one.operations>lanes.operations,'the one-lane slice worked');
+ assert.equal(one.slice,undefined);
+});
+
+// Found by the second review round (23 Nov 2026): the query went back also when the search had come back and only the
+// write after it failed, so the same query was searched, and paid for, a second time.
+test('a search that came back, and whose following write failed, is not searched again',async t=>{
+ const asked=[];const f=await setup(t,8),base=profileServices({count:30});let failed=0,armed=false;
+ f.env.COMPANY_LIST_TEST_SERVICES={...base,
+  search:async q=>{asked.push(q);const from=(asked.length-1)*10;armed=true;return Array.from({length:10},(_,i)=>({url:`https://factory${from+i}.example/`}));},
+  read:async url=>{await pause(3);return base.read(url);},
+  generate:async p=>{if(p.stage==='plan')return {queries:p.round?[]:['first','second','third']};await pause(3);return base.generate(p);}};
+ const list=await startBare(f,{count:22,budget:400});
+ const prepare=f.DB.prepare.bind(f.DB);
+ f.DB.prepare=sql=>{const statement=prepare(sql);if(/^UPDATE company_lists SET state_json=\?/.test(sql)){const bind=statement.bind.bind(statement);statement.bind=(...values)=>{const stored=JSON.parse(values[0]),hits=(stored.pending||[]).length,bound=bind(...values),run=bound.run.bind(bound);bound.run=async()=>{if(armed&&!failed&&hits>0&&stored.receipts.some(r=>r.operation==='search'&&r.status==='complete')){failed++;throw new Error('D1_ERROR: Network connection lost.');}return run();};return bound;};}return statement;};
+ for(let i=0;i<60&&active(f,list.id);i++){const before=stateOf(f,list.id);await runCompanyListJobs(f.env,{jobId:list.id,now:Math.max(Date.now(),(before.nextAttemptAt||0)+1),windowMs:45000});}
+ assert.equal(failed,1,'the failure was met');
+ assert.deepEqual([...asked].sort(),['first','second','third'],'every query is searched once');
+ assert.equal(statusOf(f,list.id),'complete');assert.equal(stateOf(f,list.id).results.length,22);
+});
+
+// The list reaches its number in the same slice in which another lane's record cannot be written. That slice ends as
+// complete, so no later slice would ever close a receipt left as started.
+test('an operation whose record could not be written is closed as interrupted, also when the list completes in that slice',async t=>{
+ let searches=0,failed=0;const f=await setup(t,8),base=profileServices({count:30}),written=new Set();
+ f.env.COMPANY_LIST_TEST_SERVICES={...base,
+  search:async()=>{const from=searches++*10;return Array.from({length:10},(_,i)=>({url:`https://factory${from+i}.example/`}));},
+  // Every website answers at its own speed, so the lanes are at different steps when the 22nd company is kept.
+  read:async url=>{await pause(5+Number(host(url).match(/\d+/)[0])*7%23);return base.read(url);},
+  generate:async p=>{if(p.stage==='plan')return {queries:p.round?[]:['first','second','third']};await pause(5+Number(host(p.pages.at(-1).url).match(/\d+/)[0])*11%29);return base.generate(p);}};
+ const list=await startBare(f,{count:22,budget:400});
+ // The write that keeps the 22nd company (a `batch`) also carries the receipts of operations other lanes have just
+ // opened; those lanes wait for a write after it. From then on every write fails, slowly, except the last one that
+ // stores the list as complete: the list has its number before the waiting lanes hear of the failure.
+ const prepare=f.DB.prepare.bind(f.DB),batch=f.DB.batch.bind(f.DB);
+ f.DB.prepare=sql=>{const statement=prepare(sql);if(/^UPDATE company_lists SET state_json=\?/.test(sql)){const bind=statement.bind.bind(statement);statement.bind=(...values)=>{
+  const stored=JSON.parse(values[0]),opened=stored.receipts.filter(r=>r.status==='started'&&!written.has(r.id)).map(r=>r.id),bound=bind(...values),run=bound.run.bind(bound);
+  bound.run=async()=>{if(bound.kept)return run();if(waiting&&values[1]==='running'){failed++;await pause(20);throw new Error('D1_ERROR: Network connection lost.');}for(const id of opened)written.add(id);return run();};
+  bound.opened=opened;bound.results=stored.results.length;return bound;};}return statement;};
+ let waiting=0;
+ f.DB.batch=async statements=>{await pause(30);for(const statement of statements){statement.kept=true;if(statement.results>=22)waiting+=(statement.opened||[]).length;for(const id of statement.opened||[])written.add(id);}return batch(statements);};
+ for(let i=0;i<40&&active(f,list.id);i++){const before=stateOf(f,list.id);await runCompanyListJobs(f.env,{jobId:list.id,now:Math.max(Date.now(),(before.nextAttemptAt||0)+1),windowMs:45000});}
+ const state=stateOf(f,list.id),totals=state.operationTotals;
+ t.diagnostic(`operations ${state.operations}, operations that waited for the failed write ${waiting}, totals ${JSON.stringify(totals)}`);
+ assert.ok(failed>0&&waiting>0,`writes failed ${failed}, operations that waited for one of them ${waiting}`);
+ assert.equal(statusOf(f,list.id),'complete');assert.equal(state.results.length,22);
+ assert.ok(totals.interrupted>=waiting,`the operations that were never sent are counted as interrupted: ${totals.interrupted}`);
+ assert.deepEqual(state.receipts.filter(r=>r.status==='started'),[],'no receipt is left as started');
+ assert.deepEqual(state.flying,[]);
+ assert.equal(totals.started,totals.complete+totals.failed+totals.interrupted);
+});
