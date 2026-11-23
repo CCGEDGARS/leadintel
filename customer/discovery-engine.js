@@ -205,6 +205,42 @@
     }
     return emailLocalPatterns(person).map((item,index)=>({email:`${item.local}@${host}`,type:'Company',format:item.format,status:'guessed',supportingContacts:evidence.get(item.format)?.size||0,priority:item.local.includes('-')?index: index>=10?index-9.5:index})).filter(item=>validResearchEmail(item.email,host)&&!rejected.has(item.email)).sort((a,b)=>b.supportingContacts-a.supportingContacts||a.priority-b.priority).slice(0,8).map(({priority,...item})=>({...item,reason:item.supportingContacts?`Format seen for ${item.supportingContacts} other named company contact${item.supportingContacts===1?'':'s'}`:'Name-based pattern only'}));
   }
+  // Companies in Denmark commonly write a staff address as the person's initials ("kh@" for Karla Holm; 25 of 26 addresses
+  // on one contact page read on 23 Nov 2026): the initials of every name word, or of the first and last. A mailbox of a
+  // function that could pass for initials is never a person's.
+  const STAFF_FUNCTION_MAILBOXES=new Set(['it','hr','pr','qa','job','post','mail','salg','web','vvs','edb','csr','dpo','ceo','cfo','cto','coo','hse','hms','pmo']);
+  function staffEmailInitials(person={}){
+    const words=clean(person.publicName||person.name).toLowerCase().replace(/ø/g,'o').replace(/æ/g,'ae').replace(/å/g,'aa').normalize('NFKD').replace(/[^a-z\s-]/g,'').split(/[\s-]+/).filter(Boolean);
+    if(words.length<2||words.length>4)return [];
+    return [...new Set([words.map(word=>word[0]).join(''),words[0][0]+words[words.length-1][0]])].filter(local=>!STAFF_FUNCTION_MAILBOXES.has(local));
+  }
+  // Initials are two or three letters and prove little by themselves, so the card has to do the proving. This reads the
+  // card again with every mailto target visible and accepts `email` only when all of this holds: the page is not a model's
+  // summary; the name starts the card as a heading or in bold; the next line is the person's title and nothing else; every
+  // line from there on is a contact line and nothing else (phone and e-mail labels, numbers, addresses), at most eight;
+  // and `email` is the only address in those lines. The card ends at the first line of any other kind.
+  // What a card may hold is listed here; what the next card, a footer or a department line may look like is not, because
+  // that list never ends. A sentence between the title and the address ends the card too: whose address a sentence
+  // announces ("contact my colleague at…") cannot be checked. Such cards are a known miss, not a guess.
+  function staffInitialsCard(person={},row={},host='',email='',prefix=''){
+    const name=clean(person.publicName||person.name),title=clean(person.title);
+    if(row.evidenceKind==='model_summary'||!/^\s*(?:#{1,6}\s*|\*{1,2})$/u.test(prefix))return false;
+    const open=decodePublishedEmailText(String(row.markdown||row.content||'')).replace(/\r/g,'').replace(/\[([^\]]*)\]\(mailto:([^)?\s]+)[^)]*\)/gi,'$1 $2 ').replace(/\[([^\]]+)\]\([^)]*\)/g,'$1');
+    const at=open.indexOf(name);if(at<0)return false;
+    const plainLine=line=>line.replace(/^[-+*•>]\s+/,'').replace(/[*_]/g,'').replace(/\s+/g,' ').trim();
+    const lines=open.slice(at+name.length,at+name.length+1500).replace(/^\*{1,2}/,'').trimStart().split('\n').map(plainLine).filter(Boolean);
+    if(!lines.length||lines[0].toLowerCase()!==title.toLowerCase())return false;
+    const label='(?:direkte|dir|tlf|telefon|tel|mobil|mob|phone|e-?mail|mail|e-post|nr|nummer|[tme](?=\\s*[:.]))',number='[+\\d][\\d\\s().-]{5,}';
+    const part='(?:'+label+'[\\s.:]*){0,3}(?:'+number+')?',contact=new RegExp('^'+part+'(?:\\s*[/|·]\\s*'+part+'){0,2}$','i');
+    const found=new Set();
+    for(let index=1;index<lines.length&&index<=8;index++){
+      const line=lines[index],addresses=(line.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi)||[]).map(address=>address.toLowerCase());
+      const rest=line.replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi,' ').replace(/\s+/g,' ').trim();
+      if(rest.length>120||!contact.test(rest))break;
+      for(const address of addresses)found.add(address);
+    }
+    return found.size===1&&found.has(email);
+  }
   function officialStaffEmailClaim(person={},row={},domain=''){
     const host=companyIdentityDomain(domain),name=clean(person.publicName||person.name),title=clean(person.title);
     if(!host||row.sourceRead!==true||!EvidencePolicy.firstParty(row.url||row.metadata?.sourceURL,host)||!hasFullBuyerName(name)||!title)return null;
@@ -220,8 +256,11 @@
     const emails=[...new Set((bounded.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi)||[]).map(email=>email.toLowerCase()))].filter(email=>validResearchEmail(email,host));
     if(emails.length!==1)return null;
     const email=emails[0],local=email.split('@')[0],first=emailNameParts(person)?.first;
-    if(local!==first&&!emailLocalPatterns(person).some(pattern=>pattern.local===local))return null;
-    return {email,url:normalizeUrl(row.url||row.metadata?.sourceURL),quote:clean(name+' '+role+' '+bounded).slice(0,700)};
+    if(local===first||emailLocalPatterns(person).some(pattern=>pattern.local===local))return {email,url:normalizeUrl(row.url||row.metadata?.sourceURL),quote:clean(name+' '+role+' '+bounded).slice(0,700)};
+    if(!staffEmailInitials(person).includes(local)||!staffInitialsCard(person,row,host,email,prefix))return null;
+    // The proof kept for an initials address is the card's name, the person's title and the address: what the saved
+    // evidence is read back as (acceptedOfficialBuyerEmail), with nothing of the card's other lines or of a neighbour.
+    return {email,url:normalizeUrl(row.url||row.metadata?.sourceURL),quote:clean(name+' '+title+' '+email)};
   }
   function sourcedBuyerEmails(person={},domain='',rows=[],company=''){
     const name=clean(person.publicName||person.name),host=companyIdentityDomain(domain),findings=[];
@@ -232,18 +271,21 @@
       let url;try{url=new URL(row.url||row.metadata?.sourceURL);}catch{continue;}
       if(!['http:','https:'].includes(url.protocol)||url.username||url.password)continue;
       const text=decodePublishedEmailText((row.evidenceKind==='model_summary'?[row.markdown,row.content]:[row.title,row.description,row.markdown,row.content]).filter(Boolean).join('\n'));
+      // The person's own staff card on the company's site, read by us: name, their title, one address before the next card.
+      const staffCard=officialStaffEmailClaim(person,row,host)?.email;
       for(const match of text.matchAll(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi)){
         const email=match[0].toLowerCase(),gmail=email.endsWith('@gmail.com');
         if(!validResearchEmail(email,gmail?'gmail.com':host)||findings.some(item=>item.email===email))continue;
         const near=text.slice(Math.max(0,match.index-160),match.index+email.length+100);
-        if(!named.test(near)||/e-?mail formats?|e-?mail patterns?|guessed|predicted|generated email/i.test(near))continue;
+        // A card may hold a paragraph between the name and the address; the card itself ties them, not the distance.
+        if(!named.test(near)&&staffCard!==email||/e-?mail formats?|e-?mail patterns?|guessed|predicted|generated email/i.test(near))continue;
         // Generic first-name aliases and unrelated addresses in multi-person directories are ambiguous.
         if(!gmail&&!emailLocalPatterns(person).filter(item=>!['first','last'].includes(item.format)).some(item=>item.local===email.split('@')[0]||item.local===email.split('@')[0].replace(/\d{1,3}$/,''))){
           const explicit=new RegExp(escape(name)+'\\s*(?:[|·,:-]\\s*)?(?:e-?mail\\s*:?\\s*)?'+escape(email),'iu');
           const parts=emailNameParts(person),local=email.split('@')[0];
           const initialFormat=new RegExp('^'+escape(parts.first)+'[._-](?:[a-z][._-]){1,3}'+escape(parts.last)+'$','i');
           const labelled=new RegExp('(?:e-?mail|e-post|email)\\s*:\\s*'+escape(email)+'\\s*(?:\\n|[|·,;])\\s*(?:kontakt|contact)\\s*:\\s*'+escape(name)+'(?![\\p{L}])','iu');
-          if(!explicit.test(near)&&!(initialFormat.test(local)&&labelled.test(near))&&officialStaffEmailClaim(person,row,host)?.email!==email)continue;
+          if(!explicit.test(near)&&!(initialFormat.test(local)&&labelled.test(near))&&staffCard!==email)continue;
         }
         if(gmail){
           if(!company||row.evidenceKind==='model_summary')continue;
@@ -435,7 +477,12 @@
           const roleWords=clean(person.title).toLowerCase().split(/[^\p{L}]+/u).filter(word=>word.length>=3);
           const roleSupported=roleWords.some(word=>new RegExp('(?:^|[^\\p{L}])'+word+'(?:$|[^\\p{L}])','iu').test(nearby));
           const contactPassage=text.slice(Math.max(0,match.index-90),Math.min(text.length,match.index+name.length+260));
-          const personal=sourcedBuyerEmails({name},domain,[{url,content:contactPassage}])[0]?.email;
+          // An address that does not resemble the name is still this person's when it is the one address of their own staff
+          // card on the company's site (officialStaffEmailClaim). Its quote is kept in the card's shape, so the saved evidence
+          // alone proves it again later (acceptedOfficialBuyerEmail).
+          const listed=sourcedBuyerEmails({name},domain,[{url,content:contactPassage}])[0]?.email;
+          const staffCard=!listed&&official&&row.sourceRead===true?officialStaffEmailClaim({name,title:person.title},{url,markdown:body,sourceRead:true},domain):null;
+          const personal=listed||staffCard?.email;
           let passage=directPhonePassage(text,match.index,name,person,personal);
           // Staff cards often put the role and labelled phone in separate
           // markdown paragraphs. Bridge only that exact named role/phone block;
@@ -448,7 +495,7 @@
           }
           if(row.sourceRead!==true)passage.phone='';
           if(!roleSupported&&!personal)continue;
-          matches.push({name,url,date:evidenceDate(row),checkedAt:Number.isFinite(Date.parse(row.extractedAt))?row.extractedAt:new Date().toISOString(),...(typeof row.sourceRead==='boolean'?{sourceRead:row.sourceRead}:{}),roleSupported,email:personal||"",emailQuote:clean(contactPassage),phone:passage.phone,quote:clean(text.slice(Math.max(0,match.index-90),match.index)+passage.quote),sourceKind:official?'official':'public_listing'});
+          matches.push({name,url,date:evidenceDate(row),checkedAt:Number.isFinite(Date.parse(row.extractedAt))?row.extractedAt:new Date().toISOString(),...(typeof row.sourceRead==='boolean'?{sourceRead:row.sourceRead}:{}),roleSupported,email:personal||"",emailQuote:staffCard?staffCard.quote:clean(contactPassage),phone:passage.phone,quote:clean(text.slice(Math.max(0,match.index-90),match.index)+passage.quote),sourceKind:official?'official':'public_listing'});
         }
       }
       const names=[...new Set(matches.map(match=>match.name.toLowerCase()))];
