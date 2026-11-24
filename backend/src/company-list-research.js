@@ -163,6 +163,11 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
     // A streamed answer frees the Worker's outgoing-connection slot as soon as its headers arrive.
     const result=await provider.generate({system,prompt:JSON.stringify(prompt),maxOutputTokens:3500,reasoningEffort:'low',signal,...(streamed?{onDelta(){}}:{})});
     receipt.provider=clean(result.provider,40);receipt.model=clean(result.model,100);
+    // What the call used, as the provider reported it: on its receipt, and summed per model for the whole list, because
+    // only the last 250 receipts are kept. An answer that turns out unusable below was still paid for.
+    const used=result.usage||{},spent={input:Number(used.input_tokens)||0,output:Number(used.output_tokens)||0,...(Number(used.reasoning_tokens)>0?{reasoning:Number(used.reasoning_tokens)}:{})};
+    const total=(s.modelUse||={})[receipt.provider+':'+receipt.model]||={calls:0,input:0,output:0};
+    Object.assign(receipt,spent);total.calls++;for(const key of Object.keys(spent))total[key]=(total[key]||0)+spent[key];
     try{value=JSON.parse(String(result.text||'').replace(/^```(?:json)?\s*/,'').replace(/\s*```$/,''));}catch{throw unusable(String(result.text||'').trim()?'not_json':'empty_answer');}
    }
    if(Array.isArray(value))throw unusable('top_level_list');
