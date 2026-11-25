@@ -165,7 +165,7 @@
     <div class="cl-choices cl-references">${options.references.map(r=>`<label><input type="checkbox" name="reference" value="${esc(r.id)}" ${r.active&&r.ready?'checked':''} ${r.ready?'':'disabled'}>${esc(r.name)}<small>${esc(r.group)}${r.ready?'':' · Analyze website in Profile first'}</small></label>`).join('')}</div>
    </fieldset>
    ${T?`<fieldset id="company-list-target-fields"><legend>4. Company size and industry (optional)</legend>
-    <p>These rules are checked against the national business register where one is connected. A company with a known mismatch is left out. A company whose size or revenue is not published stays in the list and is marked as not confirmed.</p>
+    <p>These rules are checked against the national business register where one is connected. A company with a known mismatch is left out. A company counts toward your target once its required size and revenue checks are verified. Missing figures appear in incomplete checks.</p>
     <div class="cl-grid"><label>Employees from<input type="number" name="employeesMin" min="0" step="1" inputmode="numeric"></label>
      <label>Employees to<input type="number" name="employeesMax" min="0" step="1" inputmode="numeric"></label>
      <label>Revenue minimum, millions<input type="number" name="revenueMin" min="0" step="0.1" inputmode="decimal"></label>
@@ -175,7 +175,7 @@
     <details><summary>Industries</summary><p>Tick every industry division a company may belong to. Leave all empty to accept any industry.</p>
      <div class="cl-choices cl-industries">${T.DIVISIONS.map(d=>`<label><input type="checkbox" name="industry" value="${esc(d.code)}">${esc(d.code+' '+d.label)}</label>`).join('')}</div></details>
     <label><input type="checkbox" name="registryOnly" checked>Leave out companies the business register does not hold</label>
-    <small>Applies when a size, revenue or industry rule is set. Revenue is compared only when the register publishes it in the selected currency.</small>
+    <small>Applies when a size, revenue or industry rule is set. Revenue needs a register figure or a verifiable annual turnover disclosure in the selected currency. Danish kroner can be compared to euros using the ECB average for a completed calendar year. Danish CVR base records omit turnover. An ideal range alone is optional.</small>
    </fieldset>`:''}
    <div class="cl-grid"><label>Research operation limit for this run<input type="number" name="budget" min="10" max="5000" value="${M.recommendedBudget(10)}" aria-describedby="company-list-allowance-note"><small>Searches, page reads, analysis, evidence reviews and retries use this allowance. Providers may bill several requests per operation.</small></label></div>
    <p id="company-list-allowance-note" role="status" hidden></p>
@@ -216,7 +216,7 @@
  function targetHtml(r){
   const t=r.target;if(!t||!Array.isArray(t.checks))return '';
   const entry=M.url(t.register?.source?.url);
-  return '<div class="cl-target"><p><strong>Target criteria</strong>'+(entry?' · <a target="_blank" rel="noopener noreferrer" href="'+esc(entry)+'">Register entry ↗</a>':'')+'</p><ul>'+t.checks.map(c=>'<li data-target-status="'+esc(c.status)+'">'+(c.status==='match'?'Confirmed':'Not confirmed')+' · '+esc(targetLabels[c.key]||c.key)+': '+esc(c.detail)+'</li>').join('')+'</ul>'+(t.register?.marketingProtected===true?'<p>This company has registered marketing protection in the business register. Check the rules for direct marketing before contacting it.</p>':'')+'</div>';
+  return '<div class="cl-target"><p><strong>Target criteria</strong>'+(entry?' · <a target="_blank" rel="noopener noreferrer" href="'+esc(entry)+'">Register entry ↗</a>':'')+'</p><ul>'+t.checks.map(c=>'<li data-target-status="'+esc(c.status)+'">'+(c.status==='match'?'Confirmed':'Not confirmed')+' · '+esc(targetLabels[c.key]||c.key)+': '+esc(c.detail)+(M.url(c.evidence?.url)?' · <a target="_blank" rel="noopener noreferrer" href="'+esc(M.url(c.evidence.url))+'">Source ↗</a>':'')+(M.url(c.exchangeRateSource)?' · <a target="_blank" rel="noopener noreferrer" href="'+esc(M.url(c.exchangeRateSource))+'">ECB rate ↗</a>':'')+'</li>').join('')+'</ul>'+(t.register?.marketingProtected===true?'<p>This company has registered marketing protection in the business register. Check the rules for direct marketing before contacting it.</p>':'')+'</div>';
  }
  function formValue(){const f=$('company-list-form'),data=new FormData(f),target=targetValue(data);return {minimumScore:80,name:data.get('name'),count:Number(data.get('preset')==='custom'?data.get('count'):data.get('preset')),markets:String(data.get('markets')).split('\n').map(s=>s.trim()).filter(Boolean),profileIds:data.getAll('profile'),profileMode:data.get('profileMode'),signalMode:data.get('signalMode'),signalIds:data.getAll('signal'),referenceIds:data.getAll('reference'),mode:data.get('mode')||'any',budget:Number(data.get('budget')),weights:Object.fromEntries((options.buyingSignals||[]).filter(s=>data.has('weight:'+s.id)).map(s=>[s.id,Number(data.get('weight:'+s.id))])),contextFingerprint:options.contextFingerprint,...(target?{target}:{})};}
  function review(){
@@ -235,7 +235,7 @@
   if(c.kind==='credits')return p+' has no credit left on your key. Add credit in the '+p+' console, then resume. Your results are kept.';
   if(c.kind==='key')return p+' rejected the API key'+error+'. Check the key in Settings, then resume. Your results are kept.';
   if(c.kind==='rate_limit')return p+' is limiting how fast requests may be sent. '+(active?'The search continues by itself.':'Wait a minute, then resume. Your results are kept.');
-  if(c.kind==='unavailable')return p+' did not answer'+error+'. '+(active?'The search retries by itself.':'This is on '+p+"'s side. Try again in a few minutes. Your results are kept.");
+  if(c.kind==='unavailable')return p+' did not answer'+error+'. '+(active?'The search retries by itself.':'Resume in a few minutes to retry. Your results are kept.');
   if(c.kind==='refused')return p+' refused the request'+error+'. Your results are kept. Send this line to LeadIntel support.';
   return '';
  }

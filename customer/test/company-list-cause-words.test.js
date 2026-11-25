@@ -37,8 +37,8 @@ test('a stopped list names the provider, says what happened and what to do',asyn
   ['search credits',{provider:'Firecrawl',kind:'credits',status:402},'Firecrawl has no credit left on your key. Add credit in the Firecrawl console, then resume. Your results are kept.'],
   ['key rejected',{provider:'OpenAI',kind:'key',status:401,code:'invalid_api_key'},'OpenAI rejected the API key (error 401 · invalid_api_key). Check the key in Settings, then resume. Your results are kept.'],
   ['rate limit',{provider:'OpenAI',kind:'rate_limit',status:429},'OpenAI is limiting how fast requests may be sent. Wait a minute, then resume. Your results are kept.'],
-  ['no answer',{provider:'Anthropic',kind:'unavailable',status:529,code:'overloaded_error'},"Anthropic did not answer (error 529 · overloaded_error). This is on Anthropic's side. Try again in a few minutes. Your results are kept."],
-  ['no answer, no status',{provider:'Gemini',kind:'unavailable'},"Gemini did not answer. This is on Gemini's side. Try again in a few minutes. Your results are kept."],
+  ['no answer',{provider:'Anthropic',kind:'unavailable',status:529,code:'overloaded_error'},"Anthropic did not answer (error 529 · overloaded_error). Resume in a few minutes to retry. Your results are kept."],
+  ['no answer, no status',{provider:'Gemini',kind:'unavailable'},"Gemini did not answer. Resume in a few minutes to retry. Your results are kept."],
   ['refused request',{provider:'Anthropic',kind:'refused',status:400,code:'invalid_request_error'},'Anthropic refused the request (error 400 · invalid_request_error). Your results are kept. Send this line to LeadIntel support.']]){
   await t.test(name,async t=>{
    const h=await shown(t,list({failureCause}));
