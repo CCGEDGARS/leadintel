@@ -15,13 +15,21 @@ export function websiteIdentitySupport(candidate,person){
 }
 export function websiteContactIdentity(person={}){
  if(!D.isIndependentContactPerson(person)||/(?:^|\s)(?:CEO|CFO|COO|CTO|CIO|CRO|CLO|CHRO|CMO)(?:\s|$)/u.test(String(person.publicName||person.name||'')))return false;
+ // A portfolio heading followed by an invitation to explore a project is not a staff card.
+ const title=String(person.title||'').trim();
+ if(/^(?:discover|explore|read about|learn more|experience|oplev|udforsk)\s+/iu.test(title)&&!/^(?:experience|discovery)\s+(?:manager|director|designer|lead|specialist)\b/i.test(title))return false;
  const source=person.publicNameUrl||'';
  if(!source)return person.identityOrigin==='apollo';
- try{const url=new URL(source);if(/(^|\.)linkedin\.com$/i.test(url.hostname)&&!D.normalizeProfessionalLinkedInUrl(source))return false;return ['https:','http:'].includes(url.protocol);}catch{return false;}
+ try{const url=new URL(source);
+  // Case-study pages can name real project leaders, but a heading and a
+  // description of the work alone do not establish a professional role.
+  if(/\/(?:projects?|projekter?|portfolio|case-studies|cases)(?:[/-]|$)/i.test(url.pathname)&&!/(?:\b(?:chief|head|manager|engineer|director|architect|designer|founder|owner|partner|supervisor|lead|CEO|CFO|COO|CTO)\b|leder\b|direktør|ingeniør|arkitekt|chef\b)/iu.test(title))return false;
+  if(/(^|\.)linkedin\.com$/i.test(url.hostname)&&!D.normalizeProfessionalLinkedInUrl(source))return false;return ['https:','http:'].includes(url.protocol);}catch{return false;}
 }
 export function websiteContactRole(value){
  const text=String(value||'').toLowerCase().replace(/^(?:group|global|corporate)\s+/,'');
  if(/\bchief\s+risk(?:\s|&)/.test(text))return 'cro';
+ if(/^(?:production director|produktionsdirektør)$/iu.test(text))return 'production director';
  if(/administrerende\s+direktør|adm\.?\s*direktør|verkställande\s+direktör/.test(text))return 'ceo';
  for(const [code,words] of [['ceo','chief executive officer'],['cfo','chief financial officer'],['coo','chief operating officer'],['cto','chief technology officer'],['cio','chief information officer'],['cmo','chief marketing officer'],['chro','chief human resources officer'],['cro','chief risk officer'],['clo','chief legal officer']])if(new RegExp('\\b'+code+'\\b').test(text)||text.includes(words))return code;
  return text.trim();

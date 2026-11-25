@@ -18,7 +18,7 @@ const leadership=title=>{
 };
 const sameHost=(url,domain)=>D.canonicalDomain(url)===domain;
 const clean=v=>String(v||'').replace(/\s+/g,' ').trim();
-const contactPage=url=>/contact|kontakt|team|management|leadership|about|people|board|staff|company|governance/i.test(url);
+const contactPage=url=>/contact|kontakt|team|management|leadership|about|om-oss?|ledelse|medarbejder|people|board|staff|company|governance/i.test(url);
 const companyDescription=page=>page.markdown.split(/\n/).filter(line=>!/^\s*#{1,6}\s/.test(line)).map(line=>clean(line.replace(/!\[[^\]]*\]\([^)]*\)/g,'').replace(/\[([^\]]+)\]\([^)]*\)/g,'$1').replace(/[*_]/g,''))).find(line=>line.length>=30&&line.split(/\s+/).length>=5&&!/cookie|privacy|copyright|all rights reserved|^©|^read more|^click here|^learn more/i.test(line))?.slice(0,320)||'';
 const reads=state=>(state.tasks||[]).filter(t=>t.kind==='read'&&t.status==='complete').map(t=>t.result);
 const candidateFor=(input,people=[])=>({company:input.company,domain:input.domain,website:input.website,people});
@@ -62,10 +62,12 @@ function compact(state){
  const completed=state.tasks.filter(t=>t.status==='complete'),keepReads=new Set(completed.filter(t=>t.kind==='read').slice(-60)),keepSearches=new Set(completed.filter(t=>t.kind==='search').slice(-60));
  for(const task of completed){if(task.kind==='read'&&state.phase==='contacts')delete task.result.links;if(task.kind==='read'&&!keepReads.has(task)&&!task.archived){const {markdown,links,...receipt}=task.result;task.result={...receipt,archived:true};task.archived=true;task.attempts=0;state.coverage.rotatedBodies=true;}if(task.kind==='search'&&!keepSearches.has(task)&&!task.archived){task.resultCount=task.result.length;task.result=task.result.map(({url,title})=>({url,title}));task.archived=true;task.attempts=0;state.coverage.rotatedBodies=true;}}
 }
-function queries(input){const domain=input.domain,name=input.company.replaceAll('"','');return [
- `site:${domain} (CEO OR chief OR management OR leadership OR directors OR board)`,
+function queries(input){const domain=input.domain,name=input.company.replaceAll('"','');
+ const localLeadership=domain.endsWith('.dk')?' OR direktør OR produktionsdirektør OR bestyrelse':'';
+ return [
+ `site:${domain} (CEO OR chief OR management OR leadership OR directors OR board${localLeadership})`,
  `site:${domain} (contact OR contacts OR kontakt OR team OR staff OR people) (email OR phone OR LinkedIn)`,
- `"${name}" (executive OR director OR manager OR head) (email OR contact OR LinkedIn)`,
+ `"${name}" (executive OR director OR manager OR head${localLeadership}) (email OR contact OR LinkedIn)`,
  `site:${domain} (press OR procurement OR sales OR engineering) (email OR telephone OR filetype:pdf)`,
  `site:${domain} (leadership OR management OR contact) filetype:pdf`,
  `"${name}" (association OR conference OR speaker) (email OR contact)`];}

@@ -1,6 +1,6 @@
 import './website-scanning.js?v=20261119-domain-identity-v1';
 import './website-scanning-handoff.js?v=20261111-contacts-v1';
-import './website-contact-ui.js?v=20261113-v1-identity';
+import './website-contact-ui.js?v=20261125-v3-identity';
 (function(root){
 'use strict';
 if(!root.document||root.LeadIntelWebsiteScanUI)return;
