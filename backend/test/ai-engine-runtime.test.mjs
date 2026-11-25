@@ -61,3 +61,17 @@ for(const method of ['PUT','PATCH'])for(const [revocation,sql,status] of [
   const event=DB.raw.prepare("SELECT metadata_json FROM audit_events WHERE event_type='ai.provider_authorization_revoked'").get();assert.equal(JSON.parse(event.metadata_json).reason,status===401?'session_expired_or_revoked':'workspace_owner_revoked');
  }finally{release();globalThis.fetch=old;}
 });
+
+test('a successful saved-key retest clears the prior credit warning; a rejected retest preserves it',async t=>{
+  const {recordProviderCredit,providerCreditIssue}=await import('../src/provider-credit-health.js');
+  const {env,add}=await setup();
+  await add('openai',1);
+  await recordProviderCredit(env,{workspaceId:'w1',provider:'openai',kind:'failed'});
+  const retest=()=>handleAiRoute(req('/api/integrations/ai/provider',{provider:'openai',model:'gpt-6.1-sol'},'PATCH'),env);
+  const fetch=t.mock.method(globalThis,'fetch',async()=>Response.json({error:{code:'insufficient_quota'}},{status:429}));
+  assert.equal((await retest()).status,422);
+  assert.equal((await providerCreditIssue(env,'w1','openai')).code,'credits_exhausted');
+  fetch.mock.mockImplementation(async()=>Response.json({output_text:'OK'}));
+  assert.equal((await retest()).status,200);
+  assert.equal(await providerCreditIssue(env,'w1','openai'),null);
+});
