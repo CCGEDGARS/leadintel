@@ -101,7 +101,7 @@ test('production adapters retain a blocked assessment, its provider error and so
  const f=await setup(t),responses=profileServices({count:3}),reads=[],stages=[];
  f.env.OAUTH_TOKEN_ENCRYPTION_KEY=Buffer.alloc(32,17).toString('base64');
  const key=await importAesKey(f.env.OAUTH_TOKEN_ENCRYPTION_KEY);
- f.DB.raw.prepare('INSERT INTO workspace_ai_integrations(workspace_id,provider,model,active,key_hint,encrypted_api_key) VALUES(?,?,?,?,?,?)').run(workspaceId,'openai','fixture-model',1,'test',await encryptSecret('fixture-ai',key));
+ f.DB.raw.prepare('INSERT INTO workspace_ai_integrations(workspace_id,provider,model,active,key_hint,encrypted_api_key) VALUES(?,?,?,?,?,?)').run(workspaceId,'openai','gpt-6.1-sol',1,'test',await encryptSecret('fixture-ai',key));
  f.DB.raw.prepare('INSERT INTO workspace_service_integrations(workspace_id,provider,key_hint,encrypted_api_key) VALUES(?,?,?,?)').run(workspaceId,'firecrawl','test',await encryptSecret('fixture-search',key));
  let blocked=true,rateLimited=true;
  t.mock.method(globalThis,'fetch',async(url,init)=>{
