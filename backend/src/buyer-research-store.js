@@ -66,7 +66,7 @@ export function normalizeBuyerInput(body,stored={}){
  const personIds=normalized.people.map(p=>String(p.id));
  return {candidate:normalized,profile,roles,personIds,scope:selected.length?'selected_buyers':'all_buyers'};
 }
-export async function buyerInputKey(input){return sha256(JSON.stringify([...(input.taskId?[input.taskId]:[]),input.paidResearch,input.candidate.domain,input.candidate.company,input.profile,input.roles.slice().sort(),input.personIds.slice().sort(),input.candidate.people.map(p=>[p.id,p.publicName||p.name,p.title,p.organization]).sort((a,b)=>String(a[0]).localeCompare(String(b[0])))]));}
+export async function buyerInputKey(input){return sha256(JSON.stringify([...(input.taskId?[input.taskId]:[]),...(input.freeDiscovery?['free-discovery']:[]),input.paidResearch,input.candidate.domain,input.candidate.company,input.profile,input.roles.slice().sort(),input.personIds.slice().sort(),input.candidate.people.map(p=>[p.id,p.publicName||p.name,p.title,p.organization]).sort((a,b)=>String(a[0]).localeCompare(String(b[0])))]));}
 export async function readBuyerJob(env,workspaceId,{id,domain}={}){
  return id?stmt(env,'SELECT * FROM buyer_research_jobs WHERE workspace_id=? AND id=?',workspaceId,id).first():stmt(env,'SELECT * FROM buyer_research_jobs WHERE workspace_id=? AND domain=? ORDER BY rowid DESC LIMIT 1',workspaceId,D.canonicalDomain(domain)).first();
 }

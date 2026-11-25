@@ -14,7 +14,7 @@ test('an explicit first request starts one durable free job and observes saved s
  const h=harness(call=>call.method==='POST'?{...job,status:'running',revision:1}:h.calls.length===1?null:{...job,revision:2});
  const result=await h.client.research(owner,{profile:{decisionMakers:'COO'},persist:()=>saved++});
  assert.equal(result.status,'complete');assert.equal(owner.people[0].publicPhone,'+371 23456789');assert.equal(h.calls.filter(c=>c.method==='POST').length,1);assert.equal(h.calls[1].body.action,'start');assert.equal(saved,2);assert.match(h.calls[0].url,/workspace_id=workspace-1/);assert.match(h.calls.at(-1).url,/job_id=job-1/);
- assert.ok(h.calls.every(c=>c.url.includes('/api/buyers/research?')));
+ assert.ok(h.calls.every(c=>new URL(c.url).pathname===(c.method==='POST'?'/api/buyers/research/free':'/api/buyers/research')));
 });
 test('GET restoration observes running jobs after reload without starting or resuming research',async()=>{
  const owner=candidate(),job=snapshot(owner);let reads=0;
@@ -143,7 +143,7 @@ test('actual UI acquisition and public Recheck entries use the durable client wi
  for(const entry of ['initial','recheck']){
   const owner=candidate();if(entry==='initial')owner.people=[];const job=snapshot({...owner,people:[person()]}),h=uiHarness(owner,call=>call.method==='POST'?job:null);
   const result=entry==='initial'?await h.ctx.searchDecisionMakers(owner):await h.ctx.findPublicProspectContacts(owner.domain,{force:true,personIds:['anna']});
-  assert.equal(result,true);assert.equal(h.saves,1);assert.equal(owner.people[0].id,'anna');assert.equal(h.calls.filter(call=>call.method==='POST').length,1);assert.ok(h.calls.every(call=>call.url.includes('/api/buyers/research?')));
+  assert.equal(result,true);assert.equal(h.saves,1);assert.equal(owner.people[0].id,'anna');assert.equal(h.calls.filter(call=>call.method==='POST').length,1);assert.ok(h.calls.every(call=>new URL(call.url).pathname===(entry==='initial'&&call.method==='POST'?'/api/buyers/research/free':'/api/buyers/research')));
  }
 });
 test('actual reopen scheduler queries authoritative jobs despite sync conflict and deduplicates retained owners',async()=>{
