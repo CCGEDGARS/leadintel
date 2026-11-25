@@ -6,7 +6,7 @@ const fold=v=>clean(v).normalize('NFKD').replace(/\p{M}/gu,'');
 const profileKey=value=>{const url=D.normalizeProfessionalLinkedInUrl(value);return url?new URL(url).pathname.toLowerCase():'';};
 const identity=(candidate,person)=>JSON.stringify([candidate.company,candidate.domain,person.publicName||person.name,person.title].map(clean));
 export function websiteLinkedInQueries(candidate,person){
- const name=clean(person.publicName||person.name),company=clean(candidate.company),alternate=fold(name);
+ const name=clean(person.publicName||person.name),company=clean(candidate.company),alternate=fold(name).replace(/ø/gi,c=>c==='Ø'?'O':'o');
  return [`site:linkedin.com/in/ "${name}" "${company}"`,`site:linkedin.com/in/ "${alternate}" "${company}"${alternate===name?' LinkedIn':''}`];
 }
 const exactQuery=(candidate,url)=>`site:linkedin.com/in/ "${new URL(url).pathname.split('/').filter(Boolean).at(-1)}" "${clean(candidate.company)}"`;
