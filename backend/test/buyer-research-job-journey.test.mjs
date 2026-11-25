@@ -51,9 +51,9 @@ async function terminal(f,job,services){
  assert.fail('Durable research did not reach a terminal state within 30 bounded slices');
 }
 for(const config of variants)test(`durable phase journey uses real source and qualification policies for ${config.industry}`,async t=>{
- const f=await buyerJobsFixture(t),s=scenario(config),job=await startScenario(f,s);
+ const f=await buyerJobsFixture(t),s=scenario(config),job=await startScenario(f,s,{peopleFirst:config.supportedOpportunity});
  const {row,phases}=await terminal(f,job,s.services),candidate=JSON.parse(row.result_json),quality=D.buyerQualityAssessment(candidate,{confirmedEmail:p=>D.acceptedOfficialBuyerEmail(candidate,p)});
- assert.deepEqual([...new Set(phases)],['official','dossier','identities','contacts','review']);assert.equal(row.phase,'done');assert.ok(['complete','needs_review'].includes(row.status));
+ assert.deepEqual([...new Set(phases)],config.supportedOpportunity?['official','identities','contacts','dossier','review']:['official','dossier','identities','contacts','review']);assert.equal(row.phase,'done');assert.ok(['complete','needs_review'].includes(row.status));
  t.diagnostic(JSON.stringify({industry:config.industry,status:row.status,researchPassed:quality.researchPassed,aiReviewStatus:quality.aiReviewStatus,priorityCount:quality.priorityCount,confirmedPriorityEmails:quality.confirmedPriorityEmails,gaps:quality.gaps,agentStatus:candidate.publicResearch.buyerAgent?.status}));
  assert.equal(s.counters.dossier,1);assert.equal(s.counters.review,1);assert.equal(quality.priorityCount,4,JSON.stringify({quality,people:candidate.people}));assert.equal(quality.confirmedPriorityEmails,2,JSON.stringify({quality,people:candidate.people}));
  assert.equal(candidate.people.filter(p=>D.qualifyBuyer(p,{decisionMakers:s.candidate.buyerRoles},candidate).eligible).length,4);
@@ -104,4 +104,18 @@ test('a selected buyer job keeps broad company inventory while executing only th
  assert.ok(contactsQueries.length>=9);assert.ok(contactsQueries.every(query=>query.includes(selected.name)));for(const other of s.candidate.people.filter(p=>p.id!==selected.id))assert.ok(contactsQueries.every(query=>!query.includes(other.name)),'No mandatory contact query belongs to '+other.name);
  assert.equal(D.acceptedOfficialBuyerEmail(candidate,person),s.email(2));assert.ok(D.confirmedBuyerPhone(candidate,person));
  const view=await publicBuyerJob(f.env,finished);assert.equal(view.status,'complete');assert.equal(view.input.scope,'selected_buyers');assert.deepEqual(view.input.personIds,[selected.id]);assert.equal(view.quality.passed,false);assert.equal(view.quality.requirements.find(r=>r.id==='four_buyers').passed,false);
+});
+
+test('Find buyers saves public staff results before any metered request and expansion requires explicit opt-in',async t=>{
+ const f=await buyerJobsFixture(t),s=scenario(variants[0]),job=await startScenario(f,s,{peopleFirst:true,freeDiscovery:true});
+ const unexpected=()=>assert.fail('Free discovery called a metered provider');
+ const services={read:s.services.read,registry:async()=>({status:'not_found'}),search:unexpected,apollo:unexpected,review:unexpected,independent:unexpected,dossier:unexpected,paidLookup:unexpected};
+ const {row,phases}=await terminal(f,job,services);
+ assert.deepEqual(phases,['official','identities']);assert.equal(row.status,'needs_review');
+ assert.equal(JSON.parse(row.diagnostic_json).at(-1).code,'free_discovery_finished');
+ assert.equal(JSON.parse(row.result_json).people.length,4);assert.equal(s.counters.queries.length,0);
+ const command={action:'resume',jobId:row.id,expectedRevision:row.revision};
+ const {commandBuyerJob}=await import('../src/buyer-research-store.js');
+ const held=await commandBuyerJob(f.env,workspaceId,f.users.owner,command);assert.equal(held.status,'needs_review');
+ const expanded=await commandBuyerJob(f.env,workspaceId,f.users.owner,{...command,allowMeteredPublicResearch:true});assert.equal(expanded.status,'queued');assert.equal(JSON.parse(expanded.input_json).freeDiscovery,false);assert.ok(!JSON.parse(expanded.input_json).paidResearch);
 });

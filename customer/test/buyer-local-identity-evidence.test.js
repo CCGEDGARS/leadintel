@@ -151,7 +151,7 @@ test('Danish companies get Danish title variants; Swedish ones keep theirs',()=>
  assert.ok(danish('Procurement Director').includes('Indkøbschef'));
  assert.ok(danish('Purchasing manager').includes('Indkøber'));
  assert.ok(danish('Plant Manager').includes('Fabrikschef'));
- assert.deepEqual(danish('Project Manager'),['Project Manager','Projektleder']);
+ assert.deepEqual(danish('Project Manager'),['Project Manager','Projektleder','Projektledelse']);
  assert.ok(danish('Project Director').includes('Projektchef'));
  const leadership=danish('Executive leadership');
  for(const title of ['Administrerende direktør','Direktør','Ejer','Indehaver'])assert.ok(leadership.includes(title),title);

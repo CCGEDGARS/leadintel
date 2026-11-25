@@ -156,7 +156,7 @@
       // longer runs it must not depend on when the job is read, or every reading makes an untouched workspace count
       // as changed and sends it to the server again: so how long the job ran, not how long ago it started.
       const elapsedMs=(running?Date.now():Date.parse(job.updatedAt))-Date.parse(ref.startedAt);
-      owner.buyerResearchProgress={phase:running?job.phase||'company':job.status==='complete'?'complete':'error',label:job.progress?.label||'Buyer research needs review',step:({official:1,dossier:2,identities:3,company:1,roles:2,people:3,identity:4,contacts:4,review:5,paid:5})[job.phase]||1,total:5,executionStatus:job.status,aiReviewStatus:job.quality?.aiReviewStatus||'not_assessed',startedAt:ref.startedAt,elapsedSeconds:Number.isFinite(elapsedMs)?Math.max(0,Math.floor(elapsedMs/1000)):0,timing:running?job.progress?.timing||{}:endedTiming(job.progress?.timing),credits:job.progress?.credits||null,windowPaused:job.progress?.windowPaused,stages:job.progress?.stages,connection:'connected',completedChecks:Number(job.progress?.completed)||0,inProgressChecks:Number(job.progress?.inProgress)||0,checkpointAt:job.progress?.lastActivityAt||job.updatedAt,jobId:job.id,diagnostics:(job.diagnostics||[]).slice(-10),...options.progressFields};
+      owner.buyerResearchProgress={peopleFirst:Boolean(job.input?.peopleFirst),phase:running?job.phase||'company':job.status==='complete'?'complete':'error',label:job.progress?.label||'Buyer research needs review',step:({official:1,dossier:job.input?.peopleFirst?4:2,identities:job.input?.peopleFirst?2:3,company:1,roles:2,people:3,identity:4,contacts:job.input?.peopleFirst?3:4,review:5,paid:5})[job.phase]||1,total:5,executionStatus:job.status,aiReviewStatus:job.quality?.aiReviewStatus||'not_assessed',startedAt:ref.startedAt,elapsedSeconds:Number.isFinite(elapsedMs)?Math.max(0,Math.floor(elapsedMs/1000)):0,timing:running?job.progress?.timing||{}:endedTiming(job.progress?.timing),credits:job.progress?.credits||null,windowPaused:job.progress?.windowPaused,stages:job.progress?.stages,connection:'connected',completedChecks:Number(job.progress?.completed)||0,inProgressChecks:Number(job.progress?.inProgress)||0,checkpointAt:job.progress?.lastActivityAt||job.updatedAt,jobId:job.id,diagnostics:(job.diagnostics||[]).slice(-10),...options.progressFields};
       if(job.crm)options.hydrateCrm?.(owner,job.crm);
       if(scope.restoreReceipts&&!ACTIVE.has(job.status)&&receiptOwners.length===(owner.people||[]).length&&Array.isArray(job.savedBuyerResearch))root.LeadIntelDiscovery?.restoreBuyerResearchReceipts?.(owner,job.savedBuyerResearch);
       scope.acceptRoster();options.onProgress?.({...job.progress,phase:job.phase,job,status:job.status});options.persist?.(owner,job);return true;
@@ -220,7 +220,7 @@
           if(expectedJobId&&job.id!==expectedJobId)throw Error('The saved research was replaced. Reopen the company to see its latest progress.');
           const savedPeople=(job.input?.personIds||[]).map(String).sort();
           if(stable(savedPeople)!==stable([...(scope.personIds||[])].sort()))throw Error('The selected buyers have changed. Reopen the company to see its latest progress.');
-          if(TERMINAL.has(job.status)&&job.status!=='complete')job=await request(scope,'POST',{action:'resume',jobId:job.id,expectedRevision:job.revision},null,controller);
+          if(TERMINAL.has(job.status)&&job.status!=='complete')job=await request(scope,'POST',{action:'resume',...(options.allowMeteredPublicResearch?{allowMeteredPublicResearch:true}:{}),jobId:job.id,expectedRevision:job.revision},null,controller);
         }else if(!readOnly){
           if(scope.bridge.conflict)throw Error('Resolve the workspace synchronization conflict before starting or resuming buyer research.');
           const jobIds=job?.input?.personIds||job?.progress?.personIds,selected=scope.personIds?.length?new Set(scope.personIds):null;
@@ -233,7 +233,7 @@
           if(!job||!ACTIVE.has(job.status)&&(options.force||options.paidResearch||job.status!=='complete'||!covered)){
             const resume=job&&covered&&paidScopeMatches&&!options.paidResearch&&(!options.force||options.resumeIncomplete===true&&job.resumePhase&&job.resumePhase!=='done')&&TERMINAL.has(job.status)&&job.status!=='complete';
             const observed=observedJob?.id&&domain(observedJob.domain||observedJob.candidate?.domain)===domain(owner.domain)?observedJob:null;
-            const command=resume?{action:'resume'}:{action:'start',...requestInput(owner,scope.profile),...(scope.personIds?{personIds:scope.personIds}:{}),force:options.force===true,resumeIncomplete:options.resumeIncomplete===true,paidResearch:options.paidResearch===true};
+            const command=resume?{action:'resume'}:{action:'start',peopleFirst:true,freeDiscovery:true,...requestInput(owner,scope.profile),...(scope.personIds?{personIds:scope.personIds}:{}),force:options.force===true,resumeIncomplete:options.resumeIncomplete===true,paidResearch:options.paidResearch===true};
             job=await request(scope,'POST',{...command,...(observed?{jobId:observed.id,expectedRevision:observed.revision}:{})},null,controller);
           }
         }

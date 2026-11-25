@@ -17,20 +17,20 @@ function render({empty=false,loading=false,rolesChanged=false,confirmedIds=['0',
  vm.runInContext(source.split('\n').find(line=>line.includes('$("customer-pipeline")?.addEventListener("click"')),ctx);
  ctx.renderPipeline();return {dom,doc,candidate,ctx,rows,meta:()=>meta};
 }
-test('company actions are in the header beneath qualification, followed by dossier and four contacts',()=>{
+test('company actions are in the header beneath qualification, followed by four buyers before dossier details',()=>{
  const {dom,doc}=render(),card=doc.querySelector('.selected-prospect-row'),header=card.querySelector('header');
  assert.ok(header.contains(doc.querySelector('.selected-prospect-actions')),'actions belong in company header');
  assert.equal(doc.querySelector('.selected-prospect-signal').nextElementSibling.className,'selected-prospect-actions');
- assert.equal(header.nextElementSibling.classList.contains('company-dossier'),true);
- assert.equal(header.nextElementSibling.nextElementSibling.classList.contains('company-contact-dossier'),true);
- assert.equal(header.nextElementSibling.nextElementSibling.nextElementSibling.classList.contains('selected-prospect-buyers'),true);
+ assert.equal(header.nextElementSibling.classList.contains('selected-prospect-buyers'),true);
+ assert.equal(header.nextElementSibling.nextElementSibling.classList.contains('company-dossier'),true);
+ assert.equal(header.nextElementSibling.nextElementSibling.nextElementSibling.classList.contains('company-contact-dossier'),true);
  assert.equal(doc.querySelector('.selected-prospect-buyers > .buyer-shortlist-group > ol').children.length,4);
  assert.equal(doc.querySelector('.selected-prospect-buyers').querySelector('.buyer-quality-supervisor'),null);dom.window.close();
 });
 test('held contacts stay collapsed and the four-contact shortfall keeps research recovery actionable',()=>{
  const {dom,doc}=render({rolesChanged:true}),buyers=doc.querySelector('.selected-prospect-buyers');
  assert.equal(buyers.querySelectorAll(':scope > .buyer-shortlist-group > .selected-prospect-people > li').length,0);
- assert.match(buyers.querySelector('.buyer-shortlist-gap').textContent,/0\/4 priority buyers with confirmed contact data/);assert.equal(buyers.querySelector('.buyer-other-contacts').open,false);assert.equal(buyers.querySelectorAll('.buyer-potential-list > li').length,6);
+ assert.match(buyers.textContent,/Buyer roles changed/);assert.equal(buyers.querySelector('.buyer-other-contacts').open,false);assert.equal(buyers.querySelectorAll('.buyer-potential-list > li').length,6);
  const resume=doc.querySelector('.selected-prospect-company [data-find-prospect-buyers]');assert.equal(resume.disabled,false);assert.equal(resume.dataset.findProspectBuyers,'example.com');
  dom.window.close();
 });
@@ -42,13 +42,12 @@ test('other contacts and research controls start collapsed below priority contac
  assert.equal(doc.querySelectorAll('[data-find-prospect-buyers]').length,1);assert.equal(doc.querySelectorAll('[data-save-buyer-research]').length,1);assert.equal(doc.querySelectorAll('[data-remove-buyer-company]').length,1);
  dom.window.close();
 });
-test('only confirmed relevant contacts occupy the main list, with a truthful shortfall below four',()=>{
+test('eligible priorities remain visible before their contact checks finish',()=>{
  for(const ids of [[],['2'],['2','3'],['0','1','2','3','4','5']]){
   const {dom,doc}=render({confirmedIds:ids}),buyers=doc.querySelector('.selected-prospect-buyers'),main=buyers.querySelectorAll(':scope > .buyer-shortlist-group > .selected-prospect-people > li');
-  assert.equal(main.length,Math.min(4,ids.length));
+  assert.equal(main.length,4);
   const other=buyers.querySelector('.buyer-other-contacts');assert.equal(other.open,false);assert.equal(other.querySelectorAll('.buyer-potential-list > li').length,6-main.length);
-  for(const card of main)assert.ok(ids.some(id=>card.textContent.includes('Anna Buyer'+id)));
-  if(ids.length<4)assert.match(buyers.querySelector('.buyer-shortlist-gap').textContent,new RegExp(ids.length+'/4 priority buyers with confirmed contact data'));else assert.equal(buyers.querySelector('.buyer-shortlist-gap'),null);
+  for(const card of main)assert.match(card.textContent,/Company email: not confirmed/);
   dom.window.close();
  }
 });

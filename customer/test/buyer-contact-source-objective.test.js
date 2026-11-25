@@ -108,3 +108,14 @@ test('email-protection helper links are not contact documents even when selected
  await D.runOfficialContactResearch(c,{seedUrls:[helper],search:async()=>[{url:helper}],readPage:async url=>{calls.push(url);assert.notEqual(url,helper);return {url,markdown:url===root?`[E-mail](${helper}#12345678)\n[Team](${team})`:'### Anna Berg\nOperations Director\nanna.berg@acme.example'};}});
  assert.deepEqual(calls.sort(),[root,team].sort());assert.equal(D.officialContactCoveragePassed(c),true);assert.ok(c.buyerDiscovery.officialContactInventory.channels.some(row=>row.value==='anna.berg@acme.example'));assert.deepEqual(c.buyerDiscovery.officialContactInventory.research.failures,[]);
 });
+
+test('Danish staff pages are read before provider discovery and preserve named contacts on the published email domain',async()=>{
+ const candidate={company:'Example Smedie A/S',domain:'smedie.example',website:'https://smedie.example/',people:[]};
+ const staff=candidate.website+'medarbejdere',events=[];
+ await D.runOfficialContactResearch(candidate,{peopleFirst:true,search:async()=>{events.push('search');return [];},readPage:async url=>{
+  events.push(url);return {url,markdown:url===staff?'Anna Jensen\nDirektør\nTlf. 1234 5678\naj@steel.example\n\nErik Larsen\nVærkfører\nTlf. 8765 4321\nel@steel.example':'[Medarbejdere]('+staff+')'};
+ }});
+ assert.deepEqual(events.slice(0,2),[candidate.website,staff]);
+ const inventory=D.safeOfficialContactInventory(candidate.buyerDiscovery.officialContactInventory,candidate.domain);
+ assert.deepEqual(inventory.contacts.map(p=>[p.name,p.publicPhone,p.companyChannels.map(c=>c.value)]),[['Anna Jensen','1234 5678',['aj@steel.example']],['Erik Larsen','8765 4321',['el@steel.example']]]);
+});
