@@ -112,3 +112,10 @@
 }
 .cl-history-group .cl-saved button { gap: .5rem 1rem; flex-wrap: wrap; }
 .cl-history-group .cl-saved button span { font-weight: 400; }
+
+.cl-library-row { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+.cl-library-row .cl-list-title { flex: 1 1 14rem; min-width: 0; }
+.cl-library-row .secondary-btn:not(.cl-list-title) { width: auto; }
+.cl-row-menu { position: relative; }
+.cl-row-menu > summary { cursor: pointer; list-style: none; padding: .5rem .75rem; font-weight: 700; }
+.cl-row-menu > div { position: absolute; z-index: 2; right: 0; display: grid; gap: .3rem; padding: .35rem; background: white; border: 1px solid #ceddd4; border-radius: .5rem; }

@@ -85,3 +85,25 @@ test('history opens on CRM lists and keeps drafts and archived searches folded',
  assert.match(groups[1].textContent,/Untitled draft/);
  assert.match(groups[0].textContent,/7 companies/);
 });
+
+test('library deletes the selected same-name draft by id only after confirmation',async t=>{
+ const p=setup(t);await settle();p.press('lists');await settle();
+ const draft={name:'My company list',status:'incomplete',criteria:{},revision:7,progress:{count:0,target:10}};
+ const lists=['a','b'].map(id=>({...draft,id}));
+ p.waiting.shift().answer({lists});await settle();
+ const buttons=[...p.w.document.querySelectorAll('.cl-library-row')];
+ assert.equal(buttons.length,2);
+ assert.deepEqual([...buttons[1].querySelectorAll('[data-cl]')].map(b=>b.dataset.cl),['open','row-resume','row-delete']);
+ const writes=[];
+ p.w.fetch=async(url,opts)=>{
+  const id=new URL(url).searchParams.get('id');
+  if(opts.body)writes.push(JSON.parse(opts.body));
+  return {ok:true,json:async()=>id?{list:lists.find(l=>l.id===id)}:{lists}};
+ };
+ const remove=buttons[1].querySelector('[data-cl="row-delete"]');
+ p.w.LeadIntelDialogs={confirm:async()=>false};remove.click();await settle();
+ assert.equal(writes.length,0);
+ p.w.LeadIntelDialogs.confirm=async()=>true;remove.click();await settle();
+ assert.deepEqual(writes,[{action:'delete',id:'b',revision:7}]);
+ assert.equal(p.w.document.querySelector('#prior-company-search').open,true);
+});

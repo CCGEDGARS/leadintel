@@ -205,7 +205,22 @@
    const name=draft&&/^My company list(?:[-–]\d+)?$/i.test(list.name)?'Untitled draft':list.name;
    const count=Number(list.progress.count)||0;
    const status=liveActive(list)?'Research in progress':list.crmList&&!list.saved?'Changes to save':'';
-   return '<button type="button" class="secondary-btn" data-cl="open" data-id="'+esc(list.id)+'"><strong>'+esc(name)+'</strong><span>'+esc([count+' '+(count===1?'company':'companies'),status,time].filter(Boolean).join(' · '))+'</span></button>';
+   const button=(cmd,label)=>'<button type="button" class="secondary-btn" data-cl="row-'+cmd+'" data-id="'+esc(list.id)+'">'+label+'</button>';
+   const active=liveActive(list),snapshot=list.kind==='search_snapshot';
+   let primary='',more='';
+   if(active){
+    primary=button('view','View progress');
+    if(!list.taskOwned)more=button('pause','Pause');
+   }else{
+    if(!snapshot&&!list.taskOwned){
+     if(count>0&&count<200)primary=button('adjust','Adjust');
+     else if(!count&&list.status!=='complete')primary=button('resume','Resume');
+    }
+    if(!snapshot&&count&&!list.saved)more=button('save','Save');
+    if(!list.taskOwned)more+=button('delete','Delete');
+   }
+   const menu=more?'<details class="cl-row-menu"><summary aria-label="Actions for '+esc(name)+'">⋯</summary><div>'+more+'</div></details>':'';
+   return '<div class="cl-library-row"><button type="button" class="secondary-btn cl-list-title" data-cl="open" data-id="'+esc(list.id)+'"><strong>'+esc(name)+'</strong><span>'+esc([count+' '+(count===1?'company':'companies'),status,time].filter(Boolean).join(' · '))+'</span></button>'+primary+menu+'</div>';
   }).join('');
   const label=esc(title)+' ('+lists.length+')',body='<div class="cl-saved">'+rows+'</div>';
   return collapsed?'<details class="cl-history-group"><summary>'+label+'</summary>'+body+'</details>':'<section class="cl-history-group"><h4>'+label+'</h4>'+body+'</section>';
@@ -463,10 +478,46 @@
   if(l.criteria.taskId){for(const action of ['pause','resume','delete'])$('company-list-content').querySelector('[data-cl="'+action+'"]')?.remove();const manage=document.createElement('button');manage.type='button';manage.className='secondary-btn';manage.textContent='Manage task in Ask LeadIntel';manage.onclick=()=>root.LeadIntelCopilotLoader?.loadCopilot();$('company-list-content').querySelector('.cl-toolbar')?.prepend(manage);}
  }
  function download(type,list=current){const content=type==='csv'?M.csv(list):M.xlsx(list),blob=new Blob([content],{type:type==='csv'?'text/csv;charset=utf-8':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=(list.name.replace(/[^\p{L}\p{N} _-]/gu,'').slice(0,80)||'companies')+'.'+type;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);}
+ async function deleteList(list,fromLibrary=false){
+  const owner=scope;
+  const confirmed=await root.LeadIntelDialogs.confirm('Permanently delete “'+list.name+'” and its research history? Its CRM companies and buyers are kept.',{title:'Delete company list?',action:'Delete list',danger:true});
+  if(!confirmed||owner!==identity())return;
+  await api({}, {action:'delete',id:list.id,revision:list.revision});
+  searchEpoch++;
+  if(savedSearch?.id===list.id)savedSearch=null;
+  if(lastSavedCopy?.id===list.id)lastSavedCopy=null;
+  searchMessage='';paintSearch();
+  if(current?.id===list.id){current=null;$('company-list-content').replaceChildren();}
+  if(fromLibrary)await loadHistory($('cl-history-lists'));else showLists();
+ }
  function click(event){
-  const b=event.target.closest('[data-cl]');if(!b||b.disabled||b.dataset.cl==='lists')return;
-  const command=b.dataset.cl;
+  let b=event.target.closest('[data-cl]');if(!b||b.disabled||b.dataset.cl==='lists')return;
+  let command=b.dataset.cl;
   return action(async()=>{
+   if(command.startsWith('row-')){
+    const id=b.dataset.id;
+    command=command.slice(4);
+    if(command==='delete'){
+     const {list}=await api({id});
+     if(list?.id===id&&!liveActive(list)&&!list.criteria.taskId)return deleteList(list,true);
+     await loadHistory($('cl-history-lists'));return;
+    }
+    if(command==='view')command='open';
+    else{
+     await open(id);
+     if(current?.id!==id)return;
+     const content=$('company-list-content');
+     const target=command==='adjust'?content.querySelector('[data-detail="extend"]'):content.querySelector('[data-cl="'+command+'"]');
+     if(!target||target.disabled||(command==='save'&&current.saved)){
+      await loadHistory($('cl-history-lists'));notice('The list changed. Its available actions have been updated.');return;
+     }
+     $('prior-company-search').open=false;
+     if(command==='adjust'){
+      target.open=true;$('cl-extra-count').focus();return;
+     }
+     b=target;
+    }
+   }
    if(command==='new')return newList();
    if(command==='open'){
     await open(b.dataset.id);
@@ -518,10 +569,7 @@
     root.dispatchEvent(new CustomEvent('leadintel:crm-changed'));return;
    }
    if(command==='cancel-name'){$('cl-save-name')?.remove();return;}
-   if(command==='delete'){
-    const confirmed=await root.LeadIntelDialogs.confirm('Permanently delete “'+list.name+'” and its research history? Its CRM companies and buyers are kept.',{title:'Delete company list?',action:'Delete list',danger:true});
-    if(!confirmed||owner!==identity()||current!==list)return;
-   }
+   if(command==='delete')return deleteList(list);
    const extraSearch=command==='resume'&&list.failureCode==='search_budget';
    if(extraSearch){
     const confirmed=await root.LeadIntelDialogs.confirm('Allow three more paid AI web-search queries, including provider fallback?',{title:'Continue research?',action:'Approve 3 searches'});
@@ -534,13 +582,6 @@
    }
    const extension=command==='extend'?{additional:Number($('cl-extra-count').value),budget:Number($('cl-extra-budget').value)}:{};
    const result=await api({}, {...extension,...(extraSearch?{additionalGroundedQueries:3}:{}),...(extraSpend?{additionalReasoningUsd:1}:{}),action:command,id:list.id,revision:list.revision,...(command==='buyer'?{domain:b.dataset.domain}:{})});
-   if(command==='delete'){
-    searchEpoch++;
-    if(savedSearch?.id===list.id)savedSearch=null;
-    if(lastSavedCopy?.id===list.id)lastSavedCopy=null;
-    searchMessage='';paintSearch();
-    current=null;$('company-list-content').replaceChildren();return showLists();
-   }
    if(command==='buyer'){await root.LeadIntelDiscoveryUI?.openListCompany?.(result.candidate);return;}
    if(command==='resume'&&result.list)startedHere.set(result.list.id,Date.now());
    current=result.list;render();
