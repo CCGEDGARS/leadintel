@@ -84,9 +84,9 @@ test('each kind of operation is named in plain words',async t=>{
 
 test('from two matches on, the time left is worked out from the pace so far',async t=>{
  const two=await open(t,list({kept:2,receipts:[receipt('page_read','https://a.example/',239)]}),240);
- assert.equal(two.part('estimate'),'About 16 minutes left at this pace','4 minutes for 2 companies, 8 to go');
+ assert.equal(two.part('estimate'),'Estimated 12–20 min left at this pace','4 minutes for 2 companies, 8 to go');
  const nine=await open(t,list({kept:9,receipts:[receipt('page_read','https://a.example/',269)]}),270);
- assert.equal(nine.part('estimate'),'About 1 minute left at this pace','never less than a minute');
+ assert.equal(nine.part('estimate'),'Estimated 1–2 min left at this pace','never less than a minute');
  const one=await open(t,list({kept:1,receipts:[receipt('page_read','https://a.example/',239)]}),240);
  assert.equal(one.part('estimate'),'Time left appears after the first two matches','one match is not a pace');
 });
@@ -126,7 +126,7 @@ test('after "continue" the clock counts the run that was just started, not the t
 });
 
 // Live, 25 Nov 2026, release 1088435a: two seconds after "Keep searching" the line said "Now: assessing steelinfo.dk ·
-// 18 min ago · About 1 minute left at this pace" — the last operation of the earlier run, and a pace worked out from
+// 18 min ago · Estimated 1–2 min left at this pace" — the last operation of the earlier run, and a pace worked out from
 // the two companies that run had found.
 test('right after "continue" the line does not show the earlier run\'s last operation or its pace',async t=>{
  const before=[receipt('analysis','https://steelinfo.dk/',700)];
@@ -145,5 +145,29 @@ test('after "continue" the time left follows the matches of the run that is goin
  await h.click('resume');h.second(240);
  assert.equal(h.part('clock'),'Running 4:00');
  assert.equal(h.part('now'),'Now: reading new.example · 5 s ago');
- assert.equal(h.part('estimate'),'About 12 minutes left at this pace','2 new companies in 4 minutes, 6 to go');
+ assert.equal(h.part('estimate'),'Estimated 9–15 min left at this pace','2 new companies in 4 minutes, 6 to go');
+});
+
+test('restoring the workspace reads the remembered active run without a new start',async t=>{
+ const h=await open(t,list(),60);
+ const bridge=h.w.LeadIntelServerBridge;
+ const reads=[];
+ h.w.fetch=async(url,request)=>{
+  reads.push([request.method,new URL(url).searchParams.get('workspace_id')]);
+  return {ok:true,json:async()=>({list:list()})};
+ };
+ bridge.workspace.id='other';
+ h.w.dispatchEvent(new h.w.Event('leadintel:account-changed'));await settle();
+ assert.equal(h.live(),null);
+ bridge.workspace.id='workspace';
+ h.w.dispatchEvent(new h.w.Event('leadintel:account-changed'));await settle();
+ assert.equal(h.part('clock'),'Running 1:00');
+ assert.deepEqual(reads,[['GET','workspace']]);
+});
+
+test('a scheduled retry counts down locally',async t=>{
+ const h=await open(t,list({progress:{phase:'retrying',nextAttemptAt:T0+90000}}),60);
+ assert.equal(h.part('estimate'),'Next retry in 0:30');
+ h.second(3);
+ assert.equal(h.part('estimate'),'Next retry in 0:27');
 });
