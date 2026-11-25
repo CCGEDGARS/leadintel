@@ -51,9 +51,9 @@ async function terminal(f,job,services){
  assert.fail('Durable research did not reach a terminal state within 30 bounded slices');
 }
 for(const config of variants)test(`durable phase journey uses real source and qualification policies for ${config.industry}`,async t=>{
- const f=await buyerJobsFixture(t),s=scenario(config),job=await startScenario(f,s);
+ const f=await buyerJobsFixture(t),s=scenario(config),job=await startScenario(f,s,{peopleFirst:config.supportedOpportunity});
  const {row,phases}=await terminal(f,job,s.services),candidate=JSON.parse(row.result_json),quality=D.buyerQualityAssessment(candidate,{confirmedEmail:p=>D.acceptedOfficialBuyerEmail(candidate,p)});
- assert.deepEqual([...new Set(phases)],['official','dossier','identities','contacts','review']);assert.equal(row.phase,'done');assert.ok(['complete','needs_review'].includes(row.status));
+ assert.deepEqual([...new Set(phases)],config.supportedOpportunity?['official','identities','contacts','dossier','review']:['official','dossier','identities','contacts','review']);assert.equal(row.phase,'done');assert.ok(['complete','needs_review'].includes(row.status));
  t.diagnostic(JSON.stringify({industry:config.industry,status:row.status,researchPassed:quality.researchPassed,aiReviewStatus:quality.aiReviewStatus,priorityCount:quality.priorityCount,confirmedPriorityEmails:quality.confirmedPriorityEmails,gaps:quality.gaps,agentStatus:candidate.publicResearch.buyerAgent?.status}));
  assert.equal(s.counters.dossier,1);assert.equal(s.counters.review,1);assert.equal(quality.priorityCount,4,JSON.stringify({quality,people:candidate.people}));assert.equal(quality.confirmedPriorityEmails,2,JSON.stringify({quality,people:candidate.people}));
  assert.equal(candidate.people.filter(p=>D.qualifyBuyer(p,{decisionMakers:s.candidate.buyerRoles},candidate).eligible).length,4);

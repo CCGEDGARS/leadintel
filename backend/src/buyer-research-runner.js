@@ -18,7 +18,7 @@ const phaseBudget={official:180000,dossier:360000,identities:90000,contacts:1800
 // The public engine's 180s deadline bounds one pass. Scheduler slices resume
 // that same finite task plan; their accumulated wall time is not completion.
 const phaseExhausted=(phase,ms,runs)=>runs>=18||(!['official','contacts'].includes(phase)&&ms>=phaseBudget[phase]);
-const nextPhase={official:'dossier',dossier:'identities',identities:'contacts',contacts:'review',review:'paid',paid:'done'};
+const standardPhaseOrder={official:'dossier',dossier:'identities',identities:'contacts',contacts:'review',review:'paid',paid:'done'};
 const errorReason=(error,phase)=>`${phase}: ${error?.name==='TimeoutError'?'provider deadline reached':/\((?:4|5)\d{2}\)/.test(error?.message||'')?'provider HTTP '+error.message.match(/\((\d{3})\)/)[1]:error?.code==='TIME_BUDGET'||error?.name==='AbortError'?'time budget reached':error?.status===401||error?.status===403?'authorization changed':/limit|budget/i.test(error?.message||'')?'bounded work limit reached':'provider or source unavailable'}`;
 const jsonSize=value=>new TextEncoder().encode(JSON.stringify(value)).byteLength;
 const resultRows=result=>Array.isArray(result)?result:result?.results||[];
@@ -35,6 +35,10 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
   if(!row&&await recoverInterruptedContactJob(env,{jobId}))row=await claim();
   if(!row)break;
   const input=parse(row.input_json),originalCandidate=parse(row.result_json,input.candidate),reconciledCandidate=D.reconcileBuyerEvidence(originalCandidate,{trustedAgentSources:true});
+  const adoptPendingDossier=input.peopleFirst==null&&!input.taskId&&!input.paidResearch&&!input.recheck&&input.scope==='all_buyers'&&row.phase==='dossier';
+  if(adoptPendingDossier)input.peopleFirst=true;
+  const peopleFirst=input.peopleFirst&&!input.taskId&&!input.recheck&&input.scope==='all_buyers';
+  const nextPhase=peopleFirst?{...standardPhaseOrder,official:'identities',identities:'contacts',contacts:input.dossierPassFinished?'review':'dossier',dossier:'review'}:standardPhaseOrder;
   const {contactOptions}=await loadBuyerContactContext(env,{workspaceId:row.workspace_id},reconciledCandidate);
   // A stale legacy paid slice first settles through the existing paid evidence
   // gate. Keep it eligible for terminal recovery, which captures its original
@@ -43,6 +47,7 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
   const deferSemanticStamp=row.phase==='paid'&&(sourceScopeChanged||Number(input.executionContinuationVersion||0)<4&&(originalCandidate.publicResearch?.aiReview?.inputSignature!==D.buyerReviewSignature(reconciledCandidate)||!D.buyerResearchCoveragePassed(reconciledCandidate,{contactOptions})));
   const candidate=deferSemanticStamp?originalCandidate:reconciledCandidate,controller=new AbortController();let invocationExhausted=false,activeTaskReservations=0,accepting=true,phase=row.phase,phaseMs=row.phase_ms,phaseRuns=row.phase_runs,changed=0,contextVersion=-1;
   const rescopeOfficial=sourceScopeChanged&&!deferSemanticStamp&&!input.recheck;
+  if(adoptPendingDossier){phase=row.phase='identities';phaseMs=0;phaseRuns=0;}
   if(rescopeOfficial){phase=row.phase='official';phaseMs=0;phaseRuns=0;}
   const runWindow=buyerRunWindow(row,input,clock()),windowPause=()=>Object.assign(Error(BUYER_RUN_WINDOW_REASON),{code:'RUN_WINDOW'});
   const timer=setTimeout(()=>controller.abort(runWindow.remainingMs<=windowMs?windowPause():Object.assign(Error('Job processing slice ended'),{code:'TIME_BUDGET'})),Math.max(1,Math.min(windowMs,runWindow.remainingMs)));
@@ -194,7 +199,7 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
     }
    }
    if(phase==='official'){
-    await D.runOfficialContactResearch(candidate,{rows,search,readPage:read,signal:controller.signal,guard,force:false,maxDurationMs:Math.min(remaining,180000),seedUrls:(candidate.people||[]).flatMap(p=>[p.publicNameUrl,p.publicEmailUrl,p.publicPhoneUrl]).filter(url=>D.canonicalDomain(url)===candidate.domain),onCheckpoint:acquirePeople});acquiredRows=(await allRows()).filter(r=>r.sourceRead===true);acquirePeople();
+    await D.runOfficialContactResearch(candidate,{rows,search,readPage:read,signal:controller.signal,guard,peopleFirst,force:false,maxDurationMs:Math.min(remaining,180000),seedUrls:(candidate.people||[]).flatMap(p=>[p.publicNameUrl,p.publicEmailUrl,p.publicPhoneUrl]).filter(url=>D.canonicalDomain(url)===candidate.domain),onCheckpoint:acquirePeople});acquiredRows=(await allRows()).filter(r=>r.sourceRead===true);acquirePeople();
     if(D.officialContactCoveragePassed(candidate)||Number(phaseRuns)>=2&&!changed)phase=nextPhase[phase];
    }else if(phase==='dossier'){
     if(candidate.buyerDiscovery?.companyDossier?.status==='complete'){phase=nextPhase[phase];}
@@ -265,6 +270,12 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
    report.officialPageReads=[...new Map([...(report.officialPageReads||[]),...completedReads.map(r=>({url:r.url,sourceRead:true,checkedAt:r.extractedAt}))].map(r=>[r.url,r])).values()].slice(0,120);
    report.officialPages=report.officialPageReads.length;
    candidate.publicResearch.accountability=report;candidate.publicResearch.officialPages=report.officialPages;
+   if(peopleFirst&&row.phase==='dossier'&&phase==='review'){
+    input.dossierPassFinished=true;
+    // A dossier can supply another named manager. Reuse completed checks when researching that person.
+    const before=new Set((originalCandidate.people||[]).map(D.buyerIdentity));
+    if((candidate.people||[]).some(person=>!before.has(D.buyerIdentity(person))))phase='contacts';
+   }
    if(input.taskId&&status!=='canceled'&&phase!==row.phase){
     const requiredGap=row.phase==='official'&&!D.officialContactCoveragePassed(candidate)?'Official website checks are incomplete':row.phase==='dossier'&&candidate.buyerDiscovery?.companyDossier?.status!=='complete'?'Required company dossier is incomplete':row.phase==='identities'&&!candidate.people?.length?'No supported decision-maker identities were found':row.phase==='contacts'&&!D.buyerResearchCoveragePassed(candidate,{contactOptions})?'Mandatory contact checks are incomplete':row.phase==='review'&&candidate.publicResearch?.aiReview?.status!=='complete'?'AI evidence review is incomplete':'';
     if(requiredGap){phase=row.phase;status='needs_review';diagnostics.push({phase,code:'task_required_check',reason:requiredGap,at:new Date().toISOString()});}
@@ -274,7 +285,7 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
    candidate.publicContactStatus=['queued','running'].includes(status)?'loading':status==='complete'?'complete':'error';
    candidate.publicContactVersion='20261021-adaptive-depth-v3';
    let updated;
-   try{updated=await scopedWrite(args=>stmt(env,`UPDATE buyer_research_jobs SET input_json=json_set(input_json,'$.executionContinuationVersion',?,'$.contactSchedulingVersion',?,'$.apolloIdentityVersion',?,'$.apolloIdentityReceipts',json(?),'$.paidResearch',json(?)),status=?,phase=?,phase_ms=?,phase_runs=?,result_json=?,diagnostic_json=?,last_error='',lease_token=NULL,lease_until=0,next_at=?,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND lease_token=? AND lease_until>? AND status='running' AND ${authoritySql} AND COALESCE((SELECT version FROM customer_workspace_state WHERE workspace_id=buyer_research_jobs.workspace_id),0)=?${paidContinuation?' AND EXISTS(SELECT 1 FROM crm_intelligence WHERE workspace_id=? AND company_id=? AND research_snapshot_json=? AND evidence_json=?)':''}`,deferSemanticStamp?Number(input.executionContinuationVersion||0):4,scheduledContactWork?1:Number(input.contactSchedulingVersion||0),apolloIdentityChecked?1:0,JSON.stringify(input.apolloIdentityReceipts),JSON.stringify(input.paidResearch||null),status,phase,phaseMs,phaseRuns,JSON.stringify(candidate),JSON.stringify(diagnostics.slice(-20)),clock(),...args,...(paidContinuation?[row.workspace_id,input.paidResearch.companyId,paidContinuation.row.research_snapshot_json,paidContinuation.row.evidence_json]:[])),true);}
+   try{updated=await scopedWrite(args=>stmt(env,`UPDATE buyer_research_jobs SET input_json=json_set(input_json,'$.peopleFirst',json(?),'$.dossierPassFinished',?,'$.executionContinuationVersion',?,'$.contactSchedulingVersion',?,'$.apolloIdentityVersion',?,'$.apolloIdentityReceipts',json(?),'$.paidResearch',json(?)),status=?,phase=?,phase_ms=?,phase_runs=?,result_json=?,diagnostic_json=?,last_error='',lease_token=NULL,lease_until=0,next_at=?,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND lease_token=? AND lease_until>? AND status='running' AND ${authoritySql} AND COALESCE((SELECT version FROM customer_workspace_state WHERE workspace_id=buyer_research_jobs.workspace_id),0)=?${paidContinuation?' AND EXISTS(SELECT 1 FROM crm_intelligence WHERE workspace_id=? AND company_id=? AND research_snapshot_json=? AND evidence_json=?)':''}`,JSON.stringify(input.peopleFirst??null),input.dossierPassFinished?1:0,deferSemanticStamp?Number(input.executionContinuationVersion||0):4,scheduledContactWork?1:Number(input.contactSchedulingVersion||0),apolloIdentityChecked?1:0,JSON.stringify(input.apolloIdentityReceipts),JSON.stringify(input.paidResearch||null),status,phase,phaseMs,phaseRuns,JSON.stringify(candidate),JSON.stringify(diagnostics.slice(-20)),clock(),...args,...(paidContinuation?[row.workspace_id,input.paidResearch.companyId,paidContinuation.row.research_snapshot_json,paidContinuation.row.evidence_json]:[])),true);}
    catch(error){
     updated={meta:{changes:0}};
     if(storageFailure(error)){status='needs_review';updated=await stmt(env,`UPDATE buyer_research_jobs SET status='needs_review',last_error='Workspace storage is full. Completed evidence is preserved; free space and resume.',lease_token=NULL,lease_until=0,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND lease_token=? AND status='running'`,row.id,lease).run();}

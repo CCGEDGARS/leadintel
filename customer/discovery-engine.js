@@ -2873,7 +2873,7 @@
     const shared=/^(?:ir|media|sustainability|info|sales|support|contact|office|hello|team|press|procurement|purchasing|reception|enquiries|inquiries|accounts|accounting|invoice|invoices|web)(?:[._+-]|$)/i;
     const emailValid=value=>/^[a-z0-9]+(?:[._+-][a-z0-9]+)*@[a-z0-9.-]+\.[a-z]{2,}$/i.test(value)&&value.length<=254&&!/@(?:gmail|googlemail|outlook|hotmail|yahoo)\./i.test(value);
     const nameValid=name=>hasFullBuyerName(name)&&/^\p{Lu}[\p{L}’'.-]+(?:[ \t]+\p{Lu}[\p{L}’'.-]+){1,4}$/u.test(name)&&!/(?:contact|relations|president|manager|officer|director|group|board|organization|management|team|privacy|sustainability|media|governance|business)/i.test(name);
-    const roleValid=role=>namedStaffRole(role)&&/\b(?:CEO|CFO|COO|CTO|CIO|CMO|CHRO)\b|president|officer|manager|director|chief|head|engineer|owner|founder|partner|consultant|specialist|chef|direktör|vadītāj/i.test(role);
+    const roleValid=role=>namedStaffRole(role)&&/\b(?:CEO|CFO|COO|CTO|CIO|CMO|CHRO)\b|president|officer|manager|director|chief|head|engineer|owner|founder|partner|consultant|specialist|chef|direktör|direktør|værkfører|projektled(?:er|else)|vadītāj/i.test(role);
     for(const row of rows){
       const url=normalizeUrl(row.url||row.metadata?.sourceURL);
       const provenance=companyContactSource(row,candidate);if(!provenance)continue;
@@ -2883,7 +2883,14 @@
       const roleStart=/\b(?:Senior(?: Executive)? (?:Vice )?President|Vice President|President|Chief|CEO|CFO|COO|CTO|CIO|CMO|CHRO|General Counsel|Head of|Managing Director|Director|Manager)\b/i;
       const headings=[];
       for(let index=0;index<lines.length;index++){
-        if(!/^\s*(?:#{2,5}\s+|\*\*)/.test(lines[index]))continue;
+        if(!/^\s*(?:#{2,5}\s+|\*\*)/.test(lines[index])){
+          if(provenance.kind==='official'&&/medarbejdere|ledelse|team|staff/i.test(new URL(url).pathname)&&nameValid(plain(lines[index]))){
+            let next=index+1;
+            while(next<lines.length&&!lines[next].trim())next++;
+            if(roleValid(plain(lines[next]||'')))headings.push({index,endIndex:index,name:plain(lines[index])});
+          }
+          continue;
+        }
         const bold=lines[index].match(/^\s*(?:#{2,5}\s+)?\*\*([^*]+)\*\*\s+(.+)$/u);
         if(bold&&nameValid(clean(bold[1]))&&roleValid(clean(bold[2]))){headings.push({index,endIndex:index,name:clean(bold[1]),inlineTitle:clean(bold[2])});continue;}
         const label=clean(plain(lines[index])),at=label.search(roleStart),inlineName=at>0?label.slice(0,at).trim():'',inlineTitle=at>0?label.slice(at).trim():'';
@@ -2906,11 +2913,11 @@
       for(let i=0;i<cards.length;i++){
         const card=cards[i],next=cards[i+1];
         let end=next?(roleBefore?next.roleIndex:next.index):lines.length;
-        for(let at=card.index+1;at<end;at++)if((/^\s*\[\s*$/.test(lines[at])&&/^\s*\]\(https?:\/\/[^/]+\/(?:[a-z]{2}\/?)?\)/i.test(lines[at+1]||''))||/^\s*#{1,6}\s+/.test(lines[at])||/^(?:footer|contact reception|switchboard|general enquiries|privacy policy)\b/i.test(plain(lines[at]))){end=at;break;}
+        for(let at=card.index+1;at<end;at++)if((/^\s*\[\s*$/.test(lines[at])&&/^\s*\]\(https?:\/\/[^/]+\/(?:[a-z]{2}\/?)?\)/i.test(lines[at+1]||''))||/^\s*(?:#{1,6}\s+|!\[)/.test(lines[at])||at>card.roleIndex&&nameValid(plain(lines[at]))||/^(?:footer|contact reception|switchboard|general enquiries|privacy policy)\b/i.test(plain(lines[at]))){end=at;break;}
         const block=lines.slice(card.index,end).join('\n').slice(0,1200),emails=[...new Set((block.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi)||[]).map(value=>value.toLowerCase()))];
         const companyChannels=emails.map(email=>addChannel(email,card.name,card.name+' '+card.title+' '+block)).filter(Boolean);
         const phoneText=block.split('\n').filter(line=>!/reception|switchboard|general (?:enquiries|contact)|head\s*office/i.test(line)).join('\n');
-        const phoneLink=phoneText.match(/\[([^\]]*)\]\(tel:([+\d][\d(). -]*)\)/i),phone=(phoneLink?.[1]?.replace(/\(0\)/g,'').trim()||phoneLink?.[2]?.replace(/\(0\)/g,'')||phoneText.match(/\+\d[\d\s().-]{7,25}/)?.[0]||'').trim();
+        const phoneLink=phoneText.match(/\[([^\]]*)\]\(tel:([+\d][\d(). -]*)\)/i),phone=(phoneLink?.[1]?.replace(/\(0\)/g,'').trim()||phoneLink?.[2]?.replace(/\(0\)/g,'')||phoneText.match(/\+\d[\d ().-]{7,25}/)?.[0]||phoneText.match(/(?:^|\n)\s*Tlf\.?\s*:?\s*(\d{4} \d{4})\s*(?:\n|$)/i)?.[1]||'').trim();
         const identity=text=>text.normalize('NFKD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z]/gi,'').toLowerCase(),nameParts=card.name.split(/\s+/).map(identity);
         const profile=[...block.matchAll(/\[([^\]]*)\]\((https?:\/\/(?:www\.)?linkedin\.com\/in\/[^\s)]+)\)/gi)].filter(match=>{let path;try{path=identity(decodeURIComponent(new URL(match[2]).pathname));}catch{return false;}return identity(match[1]).includes(nameParts[0])||nameParts.every(part=>path.includes(part));}).map(match=>normalizeLinkedInUrl(match[2])).find(Boolean)||'';
         const person={id:'public-'+slug(url+'|'+card.name.toLowerCase()),name:card.name,publicName:card.name,title:card.title,organization:candidate.company,companyContactSource:'official_staff',publicNameUrl:url,publicPhone:phone,publicPhoneUrl:phone?url:'',publicLinkedinUrl:profile,companyChannels};
@@ -2997,7 +3004,7 @@
     const inventory=safeOfficialContactInventory(candidate.buyerDiscovery?.officialContactInventory,candidate.domain),research=inventory?.research,age=Date.parse(options.now||new Date().toISOString())-Date.parse(inventory?.checkedAt||''),queries=officialContactResearchQueries(candidate);
     return Boolean(research?.policyVersion===OFFICIAL_CONTACT_RESEARCH_POLICY.version&&research.status==='complete'&&age>=0&&age<30*86400000&&!research.failures.length&&!research.pendingUrls.length&&!research.discoveryTruncated&&research.queries.length===queries.length&&queries.every(query=>research.queries.some(row=>row.query===query&&row.status==='complete'))&&research.completedUrls.length>0&&inventory.sourcePages.some(url=>research.completedUrls.includes(url))&&research.reads.every(row=>row.status==='complete'));
   }
-  async function runOfficialContactResearch(candidate,{rows=[],search,readPage,signal,guard=()=>{},onProgress=()=>{},onSignal=()=>{},onCheckpoint=()=>{},force=false,seedUrls=[],maxDurationMs=OFFICIAL_CONTACT_RESEARCH_POLICY.maxDurationMs}={}){
+  async function runOfficialContactResearch(candidate,{rows=[],search,readPage,signal,guard=()=>{},onProgress=()=>{},onSignal=()=>{},onCheckpoint=()=>{},force=false,seedUrls=[],peopleFirst=false,maxDurationMs=OFFICIAL_CONTACT_RESEARCH_POLICY.maxDurationMs}={}){
     const policy=OFFICIAL_CONTACT_RESEARCH_POLICY,previous=safeOfficialContactInventory(candidate.buyerDiscovery?.officialContactInventory,candidate.domain),ledgerAt=previous?.research?.status==='complete'?previous.checkedAt:previous?.research?.startedAt||previous?.checkedAt,reusable=!force&&!(previous?.research&&previous.research.status!=='complete'&&previous.research.discoveryScope!==policy.scopeVersion)&&previous?.research?.policyVersion===policy.version&&Date.now()-Date.parse(ledgerAt)>=0&&Date.now()-Date.parse(ledgerAt)<30*86400000,startedAt=reusable?previous.research.startedAt||previous.checkedAt:new Date().toISOString(),fresh=reusable&&officialContactCoveragePassed(candidate)&&Boolean(previous.contacts.length||previous.channels.length||previous.routes.length);
     if(fresh&&!force)return {inventory:previous,rows,freshRows:[]};
     const controller=new AbortController();onSignal(controller.signal);const cancel=()=>controller.abort(),timer=setTimeout(cancel,maxDurationMs);signal?.addEventListener('abort',cancel,{once:true});if(signal?.aborted)cancel();
@@ -3005,10 +3012,10 @@
     const bounded=async operation=>{await ensure();let abort;const stopped=new Promise((_,reject)=>{abort=()=>reject(new Error('Company contact research stopped'));controller.signal.addEventListener('abort',abort,{once:true});});try{const result=await Promise.race([operation(),stopped]);await ensure();return result;}finally{controller.signal.removeEventListener('abort',abort);}};
     const domain=companyIdentityDomain(candidate.domain),official=url=>Boolean(contactResearchUrl(url)&&companyIdentityDomain(url)===domain),read=new Map(),queue=new Map(),attempted=new Set(),failures=[],receipts=[],reads=[],freshRows=[],planned=new Map((reusable?previous.research.plannedUrls||[]:[]).map(url=>[canonicalBuyerSource(url),url])),completed=new Set(reusable?(previous.research.completedUrls||previous.sourcePages):[]),readKeys=new Set(),completedKeys=new Set([...completed].map(canonicalBuyerSource));let sourceLimit=reusable&&previous.research.discoveryTruncated===true,checkpointInventory=previous;
     // Reach actionable company channels before spending the bounded pass on policy documents.
-    const priority=url=>/invoice|invoicing|payment|accounting|\/finance\//i.test(url)?0:/\.pdf(?:$|\?)/i.test(url)?4:/contact|kontakt|get-in-touch|supplier|procurement|privacy/i.test(url)?1:companyPublicationUrl(url,candidate)?2:/management|leadership|team|investor/i.test(url)?3:5;
+    const priority=url=>peopleFirst&&/kontakt|contact|team|ledelse|medarbejder|management|leadership/i.test(url)?-1:/invoice|invoicing|payment|accounting|\/finance\//i.test(url)?0:/\.pdf(?:$|\?)/i.test(url)?4:/contact|kontakt|get-in-touch|supplier|procurement|privacy/i.test(url)?1:companyPublicationUrl(url,candidate)?2:/management|leadership|team|investor/i.test(url)?3:5;
     const legacyArchive=previous?.research&&previous.research.status!=='complete'&&previous.research.discoveryScope!==policy.scopeVersion;
     const financialArchive=(url,label='')=>{const u=new URL(url);return (/annual[-_ ]?report|interim[-_ ]?report|quarterly[-_ ]?report|financial[-_ ]?report|year[-_ ]?end[-_ ]?report|årsredovisning|arsredovisning|%c3%a5rsredovisning|del[aå]rsrapport|kvartalsrapport|q[1-4][-_ ]*20\d{2}|20\d{2}[-_ ]*q[1-4]/i.test(u.pathname+' '+label)||u.searchParams.has('year')||u.searchParams.has('y')||/investor|financial|report/i.test(u.pathname)&&/reports?(?:[-/]|$)/i.test(u.pathname))&&!/contact|kontakt|supplier|procurement|invoice|e-mail|email|phone|e-post/i.test(label);};
-    const contactIntent=/\b(?:contacts?|kontakt(?:er)?|get[- ]in[- ]touch|teams?|people|staff|management|leadership|ledning|suppliers?|procurement|inkop|privacy|invoices?|invoicing|payments?|accounting|e-mails?|emails?|phones?|e-post)\b/i;
+    const contactIntent=/\b(?:contacts?|kontakt(?:er)?|get[- ]in[- ]touch|teams?|people|staff|management|leadership|ledning|ledelse|medarbejdere?|direktion|suppliers?|procurement|inkop|privacy|invoices?|invoicing|payments?|accounting|e-mails?|emails?|phones?|e-post)\b/i;
     const normalizeIntent=value=>clean(value).normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
     const navigationPath=value=>{try{return decodeURI(value);}catch{return value;}};
     const contactDestination=(url,label='')=>{
@@ -3064,6 +3071,10 @@
     try{
       await ensure();finish(true,true);
       if(!read.size){const first=[...queue.values()].sort((a,b)=>a.priority-b.priority)[0];if(first)await fetchOne(first);}
+      if(peopleFirst){
+        const peoplePages=[...queue.values()].filter(entry=>entry.priority<0&&!attempted.has(canonicalBuyerSource(entry.url))).slice(0,policy.concurrency);
+        await bounded(()=>Promise.all(peoplePages.map(fetchOne)));
+      }
       await discover(queries);let followed=false;
       while(attempted.size<policy.maxPages){
         const inventory=officialCompanyContactInventory([...read.values()],candidate);
