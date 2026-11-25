@@ -142,7 +142,7 @@
   const profiles=options.profiles||[],signals=options.buyingSignals||[],trigger=profiles.some(p=>p.type==='trigger-led'&&p.active&&p.ready);
   $('company-list-content').innerHTML=`<form id="company-list-form">
    <div class="cl-grid"><label>List name<input name="name" maxlength="120" required value="My company list"></label>
-    <label>Companies to find<select name="preset"><option>10</option><option>20</option><option>50</option><option>100</option><option>200</option><option value="custom">Custom</option></select><input name="count" type="number" min="1" max="200" value="10" aria-label="Custom company count" hidden></label>
+    <label>Companies to find<select name="preset"><option>5</option><option selected>10</option><option>20</option><option>50</option><option>100</option><option>200</option><option value="custom">Custom</option></select><input name="count" type="number" min="1" max="200" value="10" aria-label="Custom company count" hidden></label>
     <label>Target countries or markets<textarea name="markets" rows="2" required>${esc(options.markets.join('\n'))}</textarea><small>One per line. These countries apply to this list; references may be elsewhere.</small></label></div>
    <fieldset><legend>1. Targeting profiles</legend><p>Choose one or combine active profiles. Manage their definitions and switches in Strategy. Off profiles have no influence on this list.</p>
     <div class="cl-choices cl-profiles">${profiles.map(p=>`<label><input type="checkbox" name="profile" value="${esc(p.id)}" ${p.active&&p.ready?'checked':'disabled'}><strong>${esc(p.name)}</strong><small>${esc(p.status)}</small><span>${esc(p.description)}</span></label>`).join('')}</div>
