@@ -38,11 +38,10 @@
   if(industries.length>MAX_INDUSTRIES)fail('Select at most '+MAX_INDUSTRIES+' industry divisions.');
   const hasEmployees=employees.min!==null||employees.max!==null;
   const hasRevenue=revenue.min!==null||revenue.idealMin!==null||revenue.idealMax!==null;
-  if(!hasEmployees&&!hasRevenue&&!industries.length&&raw.registryOnly!==true)return null;
-  return {version:1,employees:hasEmployees?employees:null,revenue:hasRevenue?revenue:null,industries,registryOnly:raw.registryOnly!==false};
+  if(!hasEmployees&&!hasRevenue&&!industries.length&&raw.registryOnly!==true&&!raw.collectSizeEvidence)return null;
+  return {version:1,...(raw.collectSizeEvidence?{collectSizeEvidence:true}:{}),employees:hasEmployees?employees:null,revenue:hasRevenue?revenue:null,industries,registryOnly:raw.registryOnly!==false};
  }
 
- const range=(min,max)=>min!==null&&max!==null?min+'–'+max:min!==null?'at least '+min:'at most '+max;
  const industryCode=code=>{const digits=String(code||'').replace(/\D/g,'');return digits.length>=4?digits.slice(0,2)+'.'+digits.slice(2,4):digits;};
 
  function registryCheck(criteria,facts){
@@ -68,30 +67,17 @@
   return {key:'industry',status:'mismatch',detail:label+' is outside the selected industries'};
  }
 
- function employeesCheck(criteria,facts){
-  const wanted=criteria.employees,low=wanted.min??0,high=wanted.max??Infinity,e=facts?.employees||{};
-  const count=present(e.count)&&Number.isFinite(Number(e.count))?Number(e.count):null;
-  if(count!==null){
-   const inside=count>=low&&count<=high;
-   return {key:'employees',status:inside?'match':'mismatch',detail:number(count)+' employees ('+(inside?'within':'outside')+' '+range(wanted.min,wanted.max)+')'};
-  }
-  const from=present(e.min)&&Number.isFinite(Number(e.min))?Number(e.min):null,to=present(e.max)&&Number.isFinite(Number(e.max))?Number(e.max):null;
-  if(from===null)return {key:'employees',status:'unknown',detail:'Employee count not stated in the register'};
-  const band=to===null?number(from)+'+':number(from)+'–'+number(to),top=to??Infinity;
-  if(top<low||from>high)return {key:'employees',status:'mismatch',detail:band+' employees (outside '+range(wanted.min,wanted.max)+')'};
-  if(from>=low&&top<=high)return {key:'employees',status:'match',detail:band+' employees (within '+range(wanted.min,wanted.max)+')'};
-  return {key:'employees',status:'unknown',detail:band+' employees (the register band overlaps '+range(wanted.min,wanted.max)+')'};
+ function employeesCheck(facts){
+  const e=facts?.employees||{};
+  const count=present(e.count)?number(e.count):null;
+  const band=present(e.min)?number(e.min)+(present(e.max)?'–'+number(e.max):'+'):null;
+  const value=count||band;
+  return {key:'employees',status:value?'reported':'unknown',detail:value?value+' employees'+(facts.group?' (largest registered member)':''):'Headcount unavailable'};
  }
 
- function revenueCheck(criteria,facts){
-  const wanted=criteria.revenue,r=facts?.revenue;
-  const amount=r&&present(r.amount)&&Number.isFinite(Number(r.amount))?Number(r.amount):null;
-  if(amount===null)return {key:'revenue',status:'unknown',detail:'Revenue not published in the register'};
-  const currency=String(r.currency||'').toUpperCase(),stated=number(amount)+' '+currency+(r.year?' ('+r.year+')':'');
-  if(currency!==wanted.currency)return {key:'revenue',status:'unknown',detail:stated+'; published in '+currency+', not compared with the '+wanted.currency+' rule'};
-  if(wanted.min!==null&&amount<wanted.min)return {key:'revenue',status:'mismatch',detail:stated+' is below the '+number(wanted.min)+' '+currency+' minimum'};
-  const preferred=(wanted.idealMin!==null||wanted.idealMax!==null)&&amount>=(wanted.idealMin??0)&&amount<=(wanted.idealMax??Infinity);
-  return {key:'revenue',status:'match',detail:stated+(preferred?', within the ideal range':'')};
+ function revenueCheck(r){
+  const available=present(r?.amount)&&Number.isFinite(Number(r.amount))&&r.currency;
+  return {key:'revenue',status:available?'reported':'unknown',detail:available?number(r.amount)+' '+r.currency+(r.year?' ('+r.year+')':''):'Annual turnover unavailable'};
  }
 
  // A register code describes the legal entity and can differ from what the
@@ -114,8 +100,7 @@
    const code=known?String(facts.industry?.code||'').replace(/\D/g,''):'';
    checks.push(stated?{key:'industry',status:'match',detail:(code?'Register code '+[industryCode(code),facts.industry.label].filter(Boolean).join(' ')+'; ':'')+'the company website states an activity in division '+stated.division+': “'+stated.quote+'”',evidence:{url:stated.url,quote:stated.quote}}:registered);
   }
-  if(criteria.employees)checks.push(known?employeesCheck(criteria,facts):pending('employees','Employee count not checked without a register entry'));
-  if(criteria.revenue)checks.push(known?revenueCheck(criteria,facts):pending('revenue','Revenue not checked without a register entry'));
+  checks.push(employeesCheck(known?facts:null),revenueCheck((known?facts.revenue:null)||options.disclosure));
   const excludedBy=checks.filter(c=>c.status==='mismatch').map(c=>c.key);
   return {decision:excludedBy.length?'exclude':'pass',checks,excludedBy};
  }
@@ -123,11 +108,7 @@
  function describe(criteria){
   if(!criteria)return '';
   const parts=[criteria.registryOnly?'Only companies found in the business register':'Business register checked when available'];
-  if(criteria.employees)parts.push(range(criteria.employees.min,criteria.employees.max)+' employees');
-  if(criteria.revenue){
-   const r=criteria.revenue,ideal=r.idealMin!==null||r.idealMax!==null?'ideal '+[r.idealMin!==null?number(r.idealMin):'',r.idealMax!==null?number(r.idealMax):''].join('–')+' '+r.currency:'';
-   parts.push(r.min!==null?'revenue from '+number(r.min)+' '+r.currency+(ideal?' ('+ideal+')':''):'revenue '+ideal);
-  }
+  parts.push('Headcount and annual turnover are recorded as evidence when available');
   if(criteria.industries.length)parts.push('industry divisions '+criteria.industries.join(', '));
   return parts.join(' · ');
  }

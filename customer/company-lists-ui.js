@@ -127,7 +127,7 @@
   // search, its saved companies and the known targets, more than a screen down, and was not found. It stays inside
   // the card because the card is what the page hides on the Buyers stage, which shares this section.
   const search=searchContext.closest('.discovery-panel'),anchor=$('event-discovery-panel')||searchContext;
-  const panel=document.createElement('section');panel.id='company-list-panel';panel.className='panel company-list-panel';panel.innerHTML='<div class="cl-heading"><div><span class="eyebrow">Company lists</span><h3>Find companies that match your profiles</h3><p>Build up to 200 companies from active profiles, with optional buying signals. Every match receives the same evidence checks.</p></div><button type="button" class="primary-btn" data-cl="new">Build company list</button></div><div class="cl-toolbar"><button type="button" class="secondary-btn" data-cl="lists">Open saved lists</button></div><p id="company-list-notice" role="status" aria-live="polite"></p><div id="company-list-content"></div>';if(search)search.prepend(panel);else anchor.before(panel);panel.addEventListener('click',click);panel.addEventListener('change',change);panel.addEventListener('input',e=>{if(e.target.closest('#company-list-form')){invalidateReview();if(['budget','count','employeesMin','employeesMax','revenueMin','revenueIdealMin','revenueIdealMax','industry'].includes(e.target.name))syncCriteriaFields();}});
+  const panel=document.createElement('section');panel.id='company-list-panel';panel.className='panel company-list-panel';panel.innerHTML='<div class="cl-heading"><div><span class="eyebrow">Company lists</span><h3>Find companies that match your profiles</h3><p>Build up to 200 companies from active profiles, with optional buying signals. Every match receives the same evidence checks.</p></div><button type="button" class="primary-btn" data-cl="new">Build company list</button></div><div class="cl-toolbar"><button type="button" class="secondary-btn" data-cl="lists">Open saved lists</button></div><p id="company-list-notice" role="status" aria-live="polite"></p><div id="company-list-content"></div>';if(search)search.prepend(panel);else anchor.before(panel);panel.addEventListener('click',click);panel.addEventListener('change',change);panel.addEventListener('input',e=>{if(e.target.closest('#company-list-form')){invalidateReview();if(['budget','count','industry'].includes(e.target.name))syncCriteriaFields();}});
   mountCrm();
  }
  function mountCrm(){  const crm=document.querySelector('#crm-workspace .crm-header');if(crm&&!$('crm-company-lists')){const b=document.createElement('button');b.id='crm-company-lists';b.type='button';b.className='secondary-btn';b.textContent='Company lists';b.onclick=()=>{document.querySelector('#crm-workspace [data-crm-close]')?.click();root.LeadIntelDiscoveryUI?.open({focus:'companies'});$('company-list-panel')?.scrollIntoView({block:'start'});action(showLists);};crm.append(b);}
@@ -164,18 +164,12 @@
     <label>Choose references<select name="referenceGroup"><option value="active">All active references</option><option value="custom">Choose individual references</option>${options.groups.map(g=>`<option value="${esc(g.id)}">${esc(g.name)}</option>`).join('')}</select></label>
     <div class="cl-choices cl-references">${options.references.map(r=>`<label><input type="checkbox" name="reference" value="${esc(r.id)}" ${r.active&&r.ready?'checked':''} ${r.ready?'':'disabled'}>${esc(r.name)}<small>${esc(r.group)}${r.ready?'':' · Analyze website in Profile first'}</small></label>`).join('')}</div>
    </fieldset>
-   ${T?`<fieldset id="company-list-target-fields"><legend>4. Company size and industry (optional)</legend>
-    <p>These rules are checked against the national business register where one is connected. A company with a known mismatch is left out. A company counts toward your target once its required size and revenue checks are verified. Missing figures appear in incomplete checks.</p>
-    <div class="cl-grid"><label>Employees from<input type="number" name="employeesMin" min="0" step="1" inputmode="numeric"></label>
-     <label>Employees to<input type="number" name="employeesMax" min="0" step="1" inputmode="numeric"></label>
-     <label>Revenue minimum, millions<input type="number" name="revenueMin" min="0" step="0.1" inputmode="decimal"></label>
-     <label>Ideal revenue from, millions<input type="number" name="revenueIdealMin" min="0" step="0.1" inputmode="decimal"></label>
-     <label>Ideal revenue to, millions<input type="number" name="revenueIdealMax" min="0" step="0.1" inputmode="decimal"></label>
-     <label>Revenue currency<select name="revenueCurrency">${['EUR','DKK','SEK','NOK','GBP','USD'].map(c=>`<option>${c}</option>`).join('')}</select></label></div>
+   ${T?`<fieldset id="company-list-target-fields"><legend>4. Industry and business register</legend>
+    <p>Research records published employee counts and annual turnover when available. Both are for reference and have no effect on eligibility or score.</p>
     <details><summary>Industries</summary><p>Tick every industry division a company may belong to. Leave all empty to accept any industry.</p>
      <div class="cl-choices cl-industries">${T.DIVISIONS.map(d=>`<label><input type="checkbox" name="industry" value="${esc(d.code)}">${esc(d.code+' '+d.label)}</label>`).join('')}</div></details>
-    <label><input type="checkbox" name="registryOnly" checked>Leave out companies the business register does not hold</label>
-    <small>Applies when a size, revenue or industry rule is set. Revenue needs a register figure or a verifiable annual turnover disclosure in the selected currency. Danish kroner can be compared to euros using the ECB average for a completed calendar year. Danish CVR base records omit turnover. An ideal range alone is optional.</small>
+    <label><input type="checkbox" name="registryOnly">Leave out companies the business register does not hold</label>
+
    </fieldset>`:''}
    <div class="cl-grid"><label>Research operation limit for this run<input type="number" name="budget" min="10" max="5000" value="${M.recommendedBudget(10)}" aria-describedby="company-list-allowance-note"><small>Searches, page reads, analysis, evidence reviews and retries use this allowance. Providers may bill several requests per operation.</small></label></div>
    <p id="company-list-allowance-note" role="status" hidden></p>
@@ -203,20 +197,15 @@
   prepared=null;$('company-list-preview')?.replaceChildren();
   const error=$('company-list-form-error');if(error){error.hidden=true;error.textContent='';}
  }
- // Structured rules are sent only when at least one is set; an untouched form builds the same list as before.
  function targetValue(data){
   if(!T||!$('company-list-target-fields'))return null;
-  const number=name=>{const value=String(data.get(name)??'').trim();return value===''?null:Number(value);};
-  const millions=name=>{const value=number(name);return value===null?null:Math.round(value*1e6);};
-  const target={employees:{min:number('employeesMin'),max:number('employeesMax')},revenue:{min:millions('revenueMin'),idealMin:millions('revenueIdealMin'),idealMax:millions('revenueIdealMax'),currency:data.get('revenueCurrency')||'EUR'},industries:data.getAll('industry'),registryOnly:data.has('registryOnly')};
-  const set=[target.employees.min,target.employees.max,target.revenue.min,target.revenue.idealMin,target.revenue.idealMax].some(value=>value!==null)||target.industries.length>0;
-  return set?target:null;
+  return {collectSizeEvidence:true,industries:data.getAll('industry'),registryOnly:data.has('registryOnly')};
  }
  const targetLabels={registry:'Business register',industry:'Industry',employees:'Employees',revenue:'Revenue'};
  function targetHtml(r){
   const t=r.target;if(!t||!Array.isArray(t.checks))return '';
   const entry=M.url(t.register?.source?.url);
-  return '<div class="cl-target"><p><strong>Target criteria</strong>'+(entry?' · <a target="_blank" rel="noopener noreferrer" href="'+esc(entry)+'">Register entry ↗</a>':'')+'</p><ul>'+t.checks.map(c=>'<li data-target-status="'+esc(c.status)+'">'+(c.status==='match'?'Confirmed':'Not confirmed')+' · '+esc(targetLabels[c.key]||c.key)+': '+esc(c.detail)+(M.url(c.evidence?.url)?' · <a target="_blank" rel="noopener noreferrer" href="'+esc(M.url(c.evidence.url))+'">Source ↗</a>':'')+(M.url(c.exchangeRateSource)?' · <a target="_blank" rel="noopener noreferrer" href="'+esc(M.url(c.exchangeRateSource))+'">ECB rate ↗</a>':'')+'</li>').join('')+'</ul>'+(t.register?.marketingProtected===true?'<p>This company has registered marketing protection in the business register. Check the rules for direct marketing before contacting it.</p>':'')+'</div>';
+  return '<div class="cl-target"><p><strong>Company evidence</strong>'+(entry?' · <a target="_blank" rel="noopener noreferrer" href="'+esc(entry)+'">Register entry ↗</a>':'')+'</p><ul>'+t.checks.map(c=>'<li data-target-status="'+esc(c.status)+'">'+(c.status==='reported'?'Reported':c.status==='match'?'Confirmed':'Not confirmed')+' · '+esc(targetLabels[c.key]||c.key)+': '+esc(c.detail)+(M.url(c.evidence?.url)?' · <a target="_blank" rel="noopener noreferrer" href="'+esc(M.url(c.evidence.url))+'">Source ↗</a>':'')+(M.url(c.exchangeRateSource)?' · <a target="_blank" rel="noopener noreferrer" href="'+esc(M.url(c.exchangeRateSource))+'">ECB rate ↗</a>':'')+'</li>').join('')+'</ul>'+(t.register?.marketingProtected===true?'<p>This company has registered marketing protection in the business register. Check the rules for direct marketing before contacting it.</p>':'')+'</div>';
  }
  function formValue(){const f=$('company-list-form'),data=new FormData(f),target=targetValue(data);return {minimumScore:80,name:data.get('name'),count:Number(data.get('preset')==='custom'?data.get('count'):data.get('preset')),markets:String(data.get('markets')).split('\n').map(s=>s.trim()).filter(Boolean),profileIds:data.getAll('profile'),profileMode:data.get('profileMode'),signalMode:data.get('signalMode'),signalIds:data.getAll('signal'),referenceIds:data.getAll('reference'),mode:data.get('mode')||'any',budget:Number(data.get('budget')),weights:Object.fromEntries((options.buyingSignals||[]).filter(s=>data.has('weight:'+s.id)).map(s=>[s.id,Number(data.get('weight:'+s.id))])),contextFingerprint:options.contextFingerprint,...(target?{target}:{})};}
  function review(){

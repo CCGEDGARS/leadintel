@@ -68,7 +68,7 @@ export async function startCompanyList(env,workspaceId,user,raw,trusted=null){
  const count=await sql(env,'SELECT COUNT(*) n FROM company_lists WHERE workspace_id=?',workspaceId).first();if(count.n>=50)throw fail('Keep up to 50 company lists. Delete an unused list before creating another.');
  const existing=await sql(env,"SELECT id FROM company_lists WHERE workspace_id=? AND status IN ('queued','running')",workspaceId).first();if(existing)throw fail('A company list is already building. Open it or pause it first.');
  if(trusted?.taskId&&!await sql(env,"SELECT id FROM copilot_research_tasks WHERE id=? AND workspace_id=? AND status='running'",trusted.taskId,workspaceId).first())throw fail('Task research authorization changed.',403);
- const id=trusted?.id||crypto.randomUUID(),state={registerRecoveryApplied:true,run:{startedAt:Date.now(),baseline:0,milestones:{}},phase:'planning',results:[],partial:{},queries:[],queryIndex:0,round:0,pending:[],seen:[],checked:0,operations:0,allowance:criteria.budget,receipts:[],reason:'Preparing the selected criteria'};
+ const id=trusted?.id||crypto.randomUUID(),state={sizeEvidenceRecoveryApplied:true,registerRecoveryApplied:true,run:{startedAt:Date.now(),baseline:0,milestones:{}},phase:'planning',results:[],partial:{},queries:[],queryIndex:0,round:0,pending:[],seen:[],checked:0,operations:0,allowance:criteria.budget,receipts:[],reason:'Preparing the selected criteria'};
  await sql(env,`INSERT INTO company_lists(id,workspace_id,requested_by,session_hash,input_json,state_json) SELECT ?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM sessions s JOIN workspace_members m ON m.user_id=s.user_id WHERE s.token_hash=? AND s.expires_at>datetime('now') AND m.user_id=? AND m.workspace_id=? AND m.role IN ('owner','researcher','sales'))`,id,workspaceId,user.id,user.hash,JSON.stringify(criteria),JSON.stringify(state),user.hash,user.id,workspaceId).run();
  const saved=await readCompanyList(env,workspaceId,id);if(!saved)throw fail('Research authorization changed.',403);return saved;
 }
@@ -152,6 +152,16 @@ export async function handleCompanyListsRoute(request,env,cors={},ctx){
      }
      s.pending.unshift(...recover);
      s.registerRecoveryApplied=true;
+    }
+    if(body.action==='resume'&&criteria.target&&!s.sizeEvidenceRecoveryApplied){
+     const queued=new Set([...s.pending.map(task=>M.domain(task.url)),...s.results.map(match=>match.domain)]);
+     for(const review of s.reviews||[]){
+      const url=M.url(review.url),domain=M.domain(url);
+      if(!domain||queued.has(domain)||!review.company)continue;
+      if(!/^(?:Required evidence missing|Outside the target criteria):.*(?:employees?|revenue|turnover|minimum)/i.test(review.reason))continue;
+      queued.add(domain);s.pending.push({url});
+     }
+     s.sizeEvidenceRecoveryApplied=true;
     }
     if(body.action==='resume'||extending){s.recoveryProbe=Boolean(s.failureCause?.status>=500||s.failureCode==='registry_offline');s.run={startedAt:Date.now(),baseline:s.results.length,milestones:{}};const other=await sql(env,"SELECT id FROM company_lists WHERE workspace_id=? AND status IN ('queued','running') AND id<>?",workspaceId,row.id).first();if(other)throw fail('Pause the other running list first.');if(s.operations>=s.allowance)s.allowance=s.operations+criteria.budget;s.nextAttemptAt=0;s.retryKey='';s.failures=0;s.failureCode='';s.modelStreak=0;s.searchStreak=0;s.reason='Continuing saved research';if(s.phase==='exhausted'){s.phase='planning';s.round=0;s.noProgressRounds=0;s.roundStart=null;}}
     else s.reason='Paused by you; completed research is retained';

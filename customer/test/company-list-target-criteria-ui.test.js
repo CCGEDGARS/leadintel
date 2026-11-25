@@ -30,38 +30,30 @@ function setup(t,respond,{withCriteria=true}={}){
 }
 const started=body=>({list:{id:'one',name:'Sized',criteria:M.configuration(body,options),status:'queued',revision:1,results:[],receipts:[],progress:{count:0,target:10,checked:0,operations:0,allowance:200}}});
 
-test('the form offers size, revenue and industry rules and sends them with the list',async t=>{
+test('the form collects size evidence and filters only by selected industry and registry settings',async t=>{
  let request;const h=setup(t,(_p,body)=>{request=body;return started(body);});
  await h.click('new');
- assert.match(h.find('#company-list-target-fields legend').textContent,/size and industry/i);
- assert.equal(h.find('[name="registryOnly"]').checked,true);
+ assert.match(h.find('#company-list-target-fields legend').textContent,/industry and business register/i);
+ assert.equal(h.find('[name="registryOnly"]').checked,false);
  assert.match(h.find('[name="industry"][value="25"]').closest('label').textContent,/Fabricated metal products/);
  assert.equal(h.w.document.querySelectorAll('[name="industry"]').length,T.DIVISIONS.length);
 
- h.type('budget','10');h.type('employeesMin','25');h.type('employeesMax','250');h.type('revenueMin','3');h.type('revenueIdealMin','10');h.type('revenueIdealMax','100');
+ h.type('budget','10');h.tick('[name="registryOnly"]');
  h.tick('[name="industry"][value="25"]');h.tick('[name="industry"][value="24"]');
  assert.match(h.find('#company-list-allowance-note').textContent,/10 companies takes at least 42 operations/,'one register check per company is counted');
  await h.click('review');
  const preview=h.find('#company-list-preview').textContent;
- assert.match(preview,/25–250 employees/);assert.match(preview,/revenue from 3,000,000 EUR \(ideal 10,000,000–100,000,000 EUR\)/);assert.match(preview,/industry divisions 24, 25/);
+ assert.match(preview,/turnover.*evidence/i);assert.match(preview,/industry divisions 24, 25/);
  await h.click('start');
- assert.deepEqual(request.target,{employees:{min:25,max:250},revenue:{min:3000000,idealMin:10000000,idealMax:100000000,currency:'EUR'},industries:['24','25'],registryOnly:true});
+ assert.deepEqual(request.target,{collectSizeEvidence:true,industries:['24','25'],registryOnly:true});
  assert.equal(request.budget,10);
 });
 
-test('an untouched form sends no structured criteria and keeps the original allowance arithmetic',async t=>{
+test('the default collects evidence without requiring register membership or size thresholds',async t=>{
  let request;const h=setup(t,(_p,body)=>{request=body;return started(body);});
- await h.click('new');h.type('budget','10');
- assert.match(h.find('#company-list-allowance-note').textContent,/10 companies takes at least 32 operations/);
- await h.click('review');assert.doesNotMatch(h.find('#company-list-preview').textContent,/employees|register/i);
- await h.click('start');assert.equal(Object.hasOwn(request,'target'),false);
-});
-
-test('an impossible range is reported at Review and nothing can be started',async t=>{
- const h=setup(t,()=>assert.fail('must not start'));
- await h.click('new');h.type('employeesMin','300');h.type('employeesMax','25');await h.click('review');
- const error=h.find('#company-list-form-error');
- assert.equal(error.hidden,false);assert.match(error.textContent,/Employee minimum cannot exceed the maximum/);assert.equal(h.find('[data-cl="start"]'),null);
+ await h.click('new');assert.equal(h.find('[name="employeesMin"]'),null);assert.equal(h.find('[name="revenueMin"]'),null);
+ await h.click('review');await h.click('start');
+ assert.deepEqual(request.target,{collectSizeEvidence:true,industries:[],registryOnly:false});
 });
 
 test('without the criteria module the form stays as it was',async t=>{
@@ -81,7 +73,7 @@ test('each kept company shows the register entry and one reason per criterion',a
  await h.w.LeadIntelCompanyListUI.open('one');await tick();
  const block=domain=>h.find('[data-detail="company:'+domain+'"] .cl-target');
  const registered=block('registered.example');
- assert.match(registered.textContent,/Target criteria/);
+ assert.match(registered.textContent,/Company evidence/);
  assert.deepEqual([...registered.querySelectorAll('li')].map(li=>[li.dataset.targetStatus,li.textContent]),[
   ['match','Confirmed · Business register: Registered: REGISTERED A/S (DK-CVR 11111111) Give'],
   ['match','Confirmed · Industry: 25.11 Manufacture of metal structures'],

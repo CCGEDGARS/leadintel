@@ -18,7 +18,7 @@ const stateOf=(f,id)=>JSON.parse(f.DB.raw.prepare('SELECT state_json FROM compan
 const found=(company,employees)=>({status:'found',registry:'SE-TEST',country:'SE',id:'55'+company.replace(/\D/g,'').padStart(6,'0'),name:company.toUpperCase()+' AB',city:'Stockholm',active:true,statusLabel:'ACTIVE',industry:{code:'289900',label:'Manufacture of special-purpose machinery'},employees:{count:employees},revenue:null,marketingProtected:false,source:{name:'Test register',url:'https://register.example/'+company,checkedAt:'2026-11-20T12:00:00.000Z'}});
 const target={employees:{min:25,max:250},industries:['28'],registryOnly:true};
 
-test('a known register mismatch is dropped before the evidence review; unknown facts keep the company flagged',async t=>{
+test('an out-of-range headcount still reaches evidence review and receives the same fit score',async t=>{
  const f=await setup(t),prompts=[],asked=[];
  f.env.COMPANY_LIST_TEST_SERVICES={...profileServices({count:3,observe:p=>prompts.push(p)}),registry:async(query,options)=>{
   asked.push({...query,pages:query.pages.map(p=>p.url),hasSignal:Boolean(options?.signal)});
@@ -28,16 +28,16 @@ test('a known register mismatch is dropped before the evidence review; unknown f
  }};
  const first=await start(f,{target}),list=await finish(f,first.id);
  assert.deepEqual(list.criteria.target,{version:1,employees:{min:25,max:250},revenue:null,industries:['28'],registryOnly:true});
- assert.deepEqual(list.results.map(r=>r.company).sort(),['Factory0','Factory2']);
+ assert.deepEqual(list.results.map(r=>r.company).sort(),['Factory0','Factory1','Factory2']);
  const kept=Object.fromEntries(list.results.map(r=>[r.company,r]));
- assert.deepEqual(kept.Factory0.target.checks.map(c=>[c.key,c.status]),[['registry','match'],['industry','match'],['employees','match']]);
+ assert.deepEqual(kept.Factory0.target.checks.map(c=>[c.key,c.status]),[['registry','match'],['industry','match'],['employees','reported'],['revenue','unknown']]);
  assert.equal(kept.Factory0.target.register.id,'55000000');assert.equal(kept.Factory0.score,90);
  assert.equal(kept.Factory2.target.register,null);assert.ok(kept.Factory2.target.checks.every(c=>c.status==='unknown'));
  assert.equal(kept.Factory0.quality.status,'reviewed');assert.equal(kept.Factory2.quality.status,'reviewed');
 
  const state=stateOf(f,first.id),dropped=state.reviews.filter(r=>r.company==='Factory1');
- assert.deepEqual(dropped.map(r=>[r.status,r.reason]),[['rejected','Outside the target criteria: 833 employees (outside 25–250)']]);
- assert.equal(prompts.filter(p=>p.stage==='review'&&p.candidate.company==='Factory1').length,0,'no paid review for a company the register excludes');
+ assert.deepEqual(dropped,[]);assert.equal(kept.Factory1.score,kept.Factory0.score);
+ assert.equal(prompts.filter(p=>p.stage==='review'&&p.candidate.company==='Factory1').length,1);
  assert.deepEqual(asked.map(a=>a.company).sort(),['Factory0','Factory1','Factory2']);
  assert.deepEqual(asked.find(a=>a.company==='Factory0'),{market:'Sweden',company:'Factory0',website:'https://factory0.example/',pages:['https://factory0.example/'],hasSignal:true});
  assert.equal(state.receipts.filter(r=>r.operation==='register_check'&&r.status==='complete').length,3);
@@ -77,24 +77,27 @@ test('the assessment prompt asks for a quoted industry statement only when indus
  });
 });
 
-test('annual disclosure needs a literal source and independent confirmation before a strict financial match counts',async t=>{
+test('annual disclosure needs a literal source and independent confirmation to display a figure while every qualified match counts',async t=>{
  for(const [label,confirmed,literal,expected] of [['verified',true,true,1],['unreviewed',false,true,0],['invented',true,false,0]]){
   await t.test(label,async t=>{
    const f=await setup(t),base=profileServices({count:1}),year=new Date().getUTCFullYear()-1;
    const quote='Factory0 reported net revenue of DKK 30 million for calendar year '+year+'.';
-   f.env.COMPANY_LIST_TEST_SERVICES={...base,registry:async()=>found('Factory0',100),annualEuroRate:async()=>({rate:7.5,url:'https://data-api.ecb.europa.eu/example'}),
-    read:async url=>{const page=await base.read(url);return {...page,markdown:page.markdown+(literal?' '+quote:'')};},
+   f.env.COMPANY_LIST_TEST_SERVICES={...base,registry:async()=>found('Factory0',null),
+    read:async url=>{const page=await base.read(url);return {...page,markdown:page.markdown+(literal?' '+quote+' Factory0 has 927 employees.':'')};},
     generate:async prompt=>{
      const answer=await base.generate(prompt);
-     if(prompt.stage==='assess')answer.annualRevenue={url:prompt.pages[0].url,quote};
-     if(prompt.stage==='review')answer.annualRevenueConfirmed=confirmed;
+     if(prompt.stage==='assess'){answer.annualRevenue={url:prompt.pages[0].url,quote};answer.headcount={url:prompt.pages[0].url,quote:'Factory0 has 927 employees.'};}
+     if(prompt.stage==='review'){answer.annualRevenueConfirmed=confirmed;answer.headcountConfirmed=confirmed;}
      return answer;
     }};
    const list=await finish(f,(await start(f,{count:1,minimumScore:80,target:{...target,revenue:{min:3000000,currency:'EUR'}}})).id);
-   assert.equal(list.results.length,expected,list.progress.reason);
+   assert.equal(list.results.length,1,list.progress.reason);
+   const headcount=list.results[0].target.checks.find(c=>c.key==='employees');
+   assert.equal(headcount.status,expected?'reported':'unknown');if(expected)assert.equal(headcount.detail,'927 employees');
+   if(!expected)assert.equal(list.results[0].target.checks.find(c=>c.key==='revenue').status,'unknown');
    if(expected){
     const check=list.results[0].target.checks.find(c=>c.key==='revenue');
-    assert.equal(check.evidence.quote,quote);assert.match(check.detail,/4,000,000 EUR/);
+    assert.equal(check.evidence.quote,quote);assert.match(check.detail,/30,000,000 DKK/);
    }
   });
  }
