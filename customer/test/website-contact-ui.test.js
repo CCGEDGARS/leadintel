@@ -64,3 +64,30 @@ test('authoritative per-person identity outcome enables both paid actions while 
  try{await w.LeadIntelWebsiteContacts.open([{crmId:'c',name:'Finance Group',website:'https://finance.example/'}]);for(const action of ['paid-email','paid-phone']){const control=w.document.querySelector('[data-contact-action='+action+']');assert.equal(control.disabled,false);control.click();await tick();}assert.deepEqual(posts,[]);assert.equal(w.document.querySelectorAll('[data-contact-action=check-identity]').length,1);assert.match(w.document.body.textContent,/Identity confirmed · paid searches available on approval/);assert.match(w.document.body.textContent,/incomplete/);assert.equal(w.document.querySelector('.website-contact-block'),null);
  }finally{w.LeadIntelWebsiteContacts.close();w.close();}
 });
+
+test('paid email shows progress and the provider outcome beside the approved person',async t=>{
+ const w=new JSDOM('<div id="website-scanning-workspace"></div>',{url:'https://app.fixture.test/',runScripts:'outside-only'}).window;
+ t.after(()=>w.close());
+ w.LeadIntelWebsiteScanning=require('../website-scanning.js');
+ w.LeadIntelServerBridge={workspace:{id:'w'},session:{authenticated:true,user:{id:'owner'}}};
+ w.LeadIntelDialogs={confirm:async()=>true};
+ const people=['Jesper','Jan'].map(name=>({name,id:name,paidReadiness:{eligible:true}}));
+ const job={id:'j',companyId:'c',company:'Steel',domain:'steel.example',revision:7,status:'incomplete',people,counts:{discovered:2},sources:[],routes:[],channels:[],gaps:[],coverage:{}};
+ let finish,requests=0;
+ w.fetch=async(_url,options)=>{
+  if(options.method==='GET')return {ok:true,json:async()=>({job,paidPolicy:{provider:'treg',enabled:true}})};
+  requests++;assert.equal(JSON.parse(options.body).personId,'Jesper');
+  return new Promise(resolve=>{finish=resolve;});
+ };
+ w.eval(fs.readFileSync(require.resolve('../website-contact-ui.js'),'utf8'));
+ await w.LeadIntelWebsiteContacts.open([{crmId:'c',name:'Steel',website:'https://steel.example/'}]);
+ const press=()=>w.document.querySelector('[data-contact-action="paid-email"][data-person="Jesper"]').click();
+ const cards=()=>[...w.document.querySelectorAll('.website-contact-person')];
+ press();await tick();assert.match(cards()[0].textContent,/Looking up email with treg/);press();assert.equal(requests,1);
+ finish({ok:true,json:async()=>({job,result:{reason:'No verified work email found.'}})});await tick();
+ assert.match(cards()[0].querySelector('dd').textContent,/No verified work email found/);assert.doesNotMatch(cards()[1].textContent,/No verified/);
+ press();await tick();finish({ok:false,json:async()=>({error:'Provider credits exhausted.'})});await tick();
+ assert.match(cards()[0].querySelector('dd').textContent,/Provider credits exhausted/);
+ press();await tick();finish({ok:true,json:async()=>({job,result:{contact:{work_email:'jesper@steel.example'},reason:'Work email verified.'}})});await tick();
+ assert.match(cards()[0].querySelector('dd').textContent,/jesper@steel.example/);
+});
