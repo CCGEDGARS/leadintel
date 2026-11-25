@@ -147,6 +147,14 @@
    history.append(document.createElement('summary'));panel.append(history);
   }
   const summary=history.querySelector('summary');
+  if(summary.nextElementSibling){
+   const previous=document.createElement('details');
+   previous.id='cl-previous-search';
+   const label=document.createElement('summary');label.textContent='Previous search dashboard';
+   previous.append(label);
+   while(summary.nextSibling)previous.append(summary.nextSibling);
+   history.append(previous);
+  }
   summary.textContent='Saved lists and search history';summary.dataset.cl='lists';
   const saved=document.createElement('section');saved.id='cl-history-lists';summary.after(saved);
   let loadedOnOpen=false;
@@ -156,7 +164,7 @@
   };
   summary.addEventListener('click',event=>{
    crmHistory=false;
-   event.preventDefault();synchronize();history.open=!history.open;updateHistory();
+   event.preventDefault();synchronize();history.open=!history.open;if(!history.open&&$('cl-previous-search'))$('cl-previous-search').open=false;updateHistory();
   });
   history.addEventListener('toggle',updateHistory);
   if(!panel.contains(saved))saved.addEventListener('click',click);
@@ -173,10 +181,34 @@
   try{
    const data=await api();
    if(version!==historyRead||identity()!==owner||!saved.isConnected)return;
-   const lists=crmHistory?data.lists.filter(l=>l.crmList||l.saved||l.kind==='search_snapshot'):data.lists;
-   saved.innerHTML='<h4>'+(crmHistory?'CRM company lists':'Saved lists and drafts')+'</h4>'+(lists.length?'<div class="cl-saved">'+lists.map(l=>'<button type="button" class="secondary-btn" data-cl="open" data-id="'+esc(l.id)+'"><strong>'+esc(l.name)+'</strong><span>'+l.progress.count+' / '+l.progress.target+' · '+esc(l.kind==='search_snapshot'?'Saved search results':statusLabel(l.status))+(l.saved?' · Saved to CRM':l.crmList?' · Changes to save':l.kind==='search_snapshot'?'':' · Draft')+'</span></button>').join('')+'</div>':'<p>No lists yet. Build your first list using active profiles and optional buying signals.</p>');
+   const savedLists=[],drafts=[],snapshots=[];
+   for(const list of data.lists){
+    if(list.kind==='search_snapshot')snapshots.push(list);
+    else if(list.saved||list.crmList)savedLists.push(list);
+    else drafts.push(list);
+   }
+   const parts=[];
+   if(savedLists.length)parts.push(historyGroup('Saved lists',savedLists,false));
+   if(!crmHistory&&drafts.length)parts.push(historyGroup('Drafts',drafts,savedLists.length>0));
+   if(snapshots.length)parts.push(historyGroup('Saved search copies',snapshots,parts.length>0));
+   saved.innerHTML=parts.join('')||'<p>No saved lists yet.</p>';
+   const previous=$('cl-previous-search');
+   if(previous){previous.hidden=crmHistory;if(crmHistory)previous.open=false;}
   }catch(error){if(version===historyRead&&owner===identity())saved.textContent=error.message;}
   finally{if(version===historyRead)saved.removeAttribute('aria-busy');}
+ }
+ function historyGroup(title,lists,collapsed){
+  const rows=lists.map(list=>{
+   const when=utcTime(list.updatedAt);
+   const time=Number.isFinite(when)?new Date(when).toLocaleString(undefined,{dateStyle:'medium',timeStyle:'short'}):'';
+   const draft=!list.saved&&!list.crmList&&list.kind!=='search_snapshot';
+   const name=draft&&/^My company list(?:[-–]\d+)?$/i.test(list.name)?'Untitled draft':list.name;
+   const count=Number(list.progress.count)||0;
+   const status=liveActive(list)?'Research in progress':list.crmList&&!list.saved?'Changes to save':'';
+   return '<button type="button" class="secondary-btn" data-cl="open" data-id="'+esc(list.id)+'"><strong>'+esc(name)+'</strong><span>'+esc([count+' '+(count===1?'company':'companies'),status,time].filter(Boolean).join(' · '))+'</span></button>';
+  }).join('');
+  const label=esc(title)+' ('+lists.length+')',body='<div class="cl-saved">'+rows+'</div>';
+  return collapsed?'<details class="cl-history-group"><summary>'+label+'</summary>'+body+'</details>':'<section class="cl-history-group"><h4>'+label+'</h4>'+body+'</section>';
  }
  function showLists(onlyCrm=false){
   crmHistory=onlyCrm;
@@ -186,6 +218,7 @@
  }
  async function newList(){
   const bridge=root.LeadIntelServerBridge,owner=scope;
+  if($('prior-company-search'))$('prior-company-search').open=false;
   if(bridge?.conflict)throw Error('Resolve workspace sync before choosing criteria.');
   if(bridge?.saveNow&&!root.LeadIntelWorkspacePersistence?.reuseAcknowledgedSave?.()){const saved=await bridge.saveNow({saveIntent:true,explicitSave:true});if(!saved?.saved)throw Error('Save your workspace before building a list.');}
   if(owner!==identity())return;

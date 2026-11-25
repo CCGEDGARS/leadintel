@@ -2024,7 +2024,10 @@ function renderCandidates(){void window.LeadIntelCompanyListUI?.refreshSearch?.(
     target.innerHTML=`${selectedNotice}${previousNotice}${recovery}`;
     return;
   }
-  if(discovery.status==="running"&&$("prior-company-search"))$("prior-company-search").open=true;
+  if(discovery.status==="running"&&$("prior-company-search")){
+    $("prior-company-search").open=true;
+    if($("cl-previous-search"))$("cl-previous-search").open=true;
+  }
   if(discovery.status==="running"&&window.LeadIntelCompanySearchProgress&&$("company-search-progress")&&!$("company-search-progress").hidden){target.innerHTML=`${selectedNotice}${previousNotice}`;return;}
   const unfinished=typeof companySearchOutcome==="function"?companySearchOutcome():null;
   const message=unfinished?.pendingCount&&discovery.status!=="running"?`${unfinished.note} ${unfinished.pendingCount} saved companies still need evidence review.`:discovery.needsRefresh?(savedReviewCount?"Saved company records are retained in Research review below. Review Strategy before updating their evidence and scores.":"No retained company shortlist is available in this workspace state. Review Strategy before starting company research."):discovery.status==="running"?companySearchProgressText():discovery.status==="error"?"Search stopped before verification finished. This is not a confirmed no-match; review the search status before retrying.":discovery.lastRunAt?"Research is preserved, but no company meets the current qualification rules. Recheck existing companies to refresh the evidence.":"Run discovery to create a ranked shortlist of direct company domains.";

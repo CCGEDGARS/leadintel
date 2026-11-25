@@ -70,3 +70,18 @@ test('review and edit are local and only the explicit start sends research',asyn
  p.press('start');p.press('start');await settle();
  assert.equal(p.waiting.length,1);
 });
+
+test('history opens on CRM lists and keeps drafts and archived searches folded',async t=>{
+ const page=setup(t);await settle();page.press('lists');await settle();
+ const base={progress:{count:0,target:10},name:'My company list',updatedAt:'2026-11-25 09:00:00'};
+ page.waiting.shift().answer({lists:[
+  {...base,id:'a',saved:true,progress:{count:7,target:10}},
+  {...base,id:'b',status:'incomplete'},
+  {...base,id:'c',kind:'search_snapshot',name:'Company search'}
+ ]});await settle();
+ const groups=[...page.w.document.querySelectorAll('.cl-history-group')];
+ assert.deepEqual(groups.map(g=>g.firstElementChild.textContent),['Saved lists (1)','Drafts (1)','Saved search copies (1)']);
+ assert.equal(groups[1].open,false);assert.equal(groups[2].open,false);
+ assert.match(groups[1].textContent,/Untitled draft/);
+ assert.match(groups[0].textContent,/7 companies/);
+});

@@ -80,7 +80,9 @@ test('one header action and one read-only history disclosure preserve the active
  assert.equal(history.open,true);
  assert.equal(history.children[1].id,'cl-history-lists');
  assert.match(history.children[1].textContent,/Steel prospects/);
- assert.equal(history.children[2].id,'previous-results');
+ assert.equal(history.children[2].id,'cl-previous-search');
+ assert.equal(history.children[2].open,false);
+ assert.ok(history.children[2].contains(document.getElementById('previous-results')));
  assert.equal(content.textContent,'Criteria under review');
  assert.deepEqual(requests,['GET']);
  history.querySelector('summary').click();
