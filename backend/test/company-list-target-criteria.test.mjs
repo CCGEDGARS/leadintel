@@ -76,3 +76,42 @@ test('the assessment prompt asks for a quoted industry statement only when indus
   assert.equal(/industry:\{division,url,quote\}/.test(assess.instructions),expected);
  });
 });
+
+test('annual disclosure needs a literal source and independent confirmation before a strict financial match counts',async t=>{
+ for(const [label,confirmed,literal,expected] of [['verified',true,true,1],['unreviewed',false,true,0],['invented',true,false,0]]){
+  await t.test(label,async t=>{
+   const f=await setup(t),base=profileServices({count:1}),year=new Date().getUTCFullYear()-1;
+   const quote='Factory0 reported net revenue of DKK 30 million for calendar year '+year+'.';
+   f.env.COMPANY_LIST_TEST_SERVICES={...base,registry:async()=>found('Factory0',100),annualEuroRate:async()=>({rate:7.5,url:'https://data-api.ecb.europa.eu/example'}),
+    read:async url=>{const page=await base.read(url);return {...page,markdown:page.markdown+(literal?' '+quote:'')};},
+    generate:async prompt=>{
+     const answer=await base.generate(prompt);
+     if(prompt.stage==='assess')answer.annualRevenue={url:prompt.pages[0].url,quote};
+     if(prompt.stage==='review')answer.annualRevenueConfirmed=confirmed;
+     return answer;
+    }};
+   const list=await finish(f,(await start(f,{count:1,minimumScore:80,target:{...target,revenue:{min:3000000,currency:'EUR'}}})).id);
+   assert.equal(list.results.length,expected,list.progress.reason);
+   if(expected){
+    const check=list.results[0].target.checks.find(c=>c.key==='revenue');
+    assert.equal(check.evidence.quote,quote);assert.match(check.detail,/4,000,000 EUR/);
+   }
+  });
+ }
+});
+
+test('register outage retains a qualified candidate and resumes at its register check',async t=>{
+ const f=await setup(t),base=profileServices({count:1});let available=false,reads=0;
+ f.env.COMPANY_LIST_TEST_SERVICES={...base,read:async url=>{reads++;return base.read(url);},
+  registry:async()=>available?found('Factory0',100):{status:'unavailable'}};
+ const first=await start(f,{count:1,minimumScore:80,target});
+ let list=await readCompanyList(f.env,workspaceId,first.id);
+ for(let i=0;i<5&&!list.progress.nextAttemptAt;i++){await tick(f);list=await readCompanyList(f.env,workspaceId,first.id);}
+ assert.equal(list.failureCode,'registry_offline');
+ assert.equal(list.incompleteChecks.length,0);
+ const before=reads;available=true;
+ await runCompanyListJobs(f.env,{jobId:first.id,now:list.progress.nextAttemptAt+1});
+ list=await finish(f,first.id);
+ assert.equal(list.results.length,1);
+ assert.equal(reads,before);
+});

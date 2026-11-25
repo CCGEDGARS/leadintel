@@ -636,3 +636,21 @@ test('a slice with several lanes records where its time went: per operation, per
  assert.equal(next.laneTime.slices,2);assert.equal(next.laneTime.laneMs,8*(slice.ms+next.slice.ms));assert.equal(next.laneTime.workMs,slice.workMs+next.slice.workMs);assert.equal(next.laneTime.tailMs,slice.tailMs+next.slice.tailMs);
  assert.equal(Object.values(next.operationTime).reduce((sum,k)=>sum+k.n,0),next.operationTotals.complete+next.operationTotals.failed);
 });
+
+test('a reported OpenAI 502 gets one assessment per recovery attempt',async t=>{
+ const f=await setup(t,8),base=profileServices({count:8});let failed=0;
+ f.env.COMPANY_LIST_TEST_SERVICES={...base,generate:async p=>{
+  if(p.stage==='plan')return base.generate(p);
+  failed++;throw new Error('OpenAI request failed (502)');
+ }};
+ const list=await startBare(f,{count:8});
+ await runCompanyListJobs(f.env,{jobId:list.id});
+ for(let i=0;i<2;i++){
+  const state=stateOf(f,list.id),before=failed;
+  assert.ok(state.nextAttemptAt);
+  await runCompanyListJobs(f.env,{jobId:list.id,now:state.nextAttemptAt+1});
+  assert.equal(failed-before,1);
+ }
+ assert.equal(statusOf(f,list.id),'incomplete');
+ assert.equal(stateOf(f,list.id).pending.length,8);
+});
