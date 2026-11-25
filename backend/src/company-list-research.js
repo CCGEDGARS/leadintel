@@ -63,7 +63,7 @@ function refusal(cause={},traces=[]){
 }
 function failure(cause,events=[],operation=''){
  const issue=classify(cause,events,operation),seen=refusal(cause,[...(cause.researchTrace||[]),...events]);
- const kind=!PROVIDER_NAMES[seen.id]?'':issue.code==='funds'?(/billing_hard_limit_reached/.test(seen.text)?'spending_limit':'credits'):issue.code==='connection'?'key'
+ const kind=!PROVIDER_NAMES[seen.id]?'':issue.code==='funds'?(/billing_hard_limit_reached/.test(seen.text)?'spending_limit':'credits'):issue.code==='connection'?'key':issue.code==='provider_refused'?'refused'
   :issue.code==='rate_limit'?'rate_limit':issue.code==='provider_temporary'?([400,404,413,422].includes(seen.status)?'refused':'unavailable'):'';
  return kind?{...issue,cause:{provider:PROVIDER_NAMES[seen.id],kind,...(seen.status&&{status:seen.status}),...(seen.code&&{code:seen.code})}}:issue;
 }
@@ -80,6 +80,10 @@ function classify(cause,events=[],operation=''){
  // unreadable source. A 401, a missing provider, and a 403 outside a page read remain a connection to check.
  if(operation==='page_read'&&providerStatuses.includes(403)&&!providerStatuses.includes(401)&&cause.code!=='provider_missing')return {code:'source_unreadable',retry:false,skip:true,reason:'Source is unavailable or does not provide readable evidence.'};
  if(providerStatuses.includes(401)||providerStatuses.includes(403)||cause.code==='provider_missing')return {code:'connection',retry:false,reason:'A required research connection is unavailable. Check connections in Settings, then resume.'};
+ const reasoning=operation==='analysis'||operation==='evidence_review';
+ if(reasoning&&/code: (?:invalid_api_key|authentication_error|permission_denied)\b/i.test(message))return {code:'connection',retry:false,reason:'The reasoning provider rejected the workspace credentials.'};
+ if(reasoning&&(providerStatuses.some(status=>[400,404,413,422].includes(status))||/code: (?:invalid_request_error|invalid_prompt|unsupported_parameter|unsupported_value|model_not_found|context_length_exceeded)\b/i.test(message)))return {code:'provider_refused',retry:false,reason:'The reasoning provider rejected the request. Check the configured model and request settings.'};
+ if(reasoning&&/code: (?:rate_limit_exceeded|rate_limit_error)\b/i.test(message))return {code:'rate_limit',retry:true,reason:'The reasoning provider rate limit was reached.'};
  if(cause.code==='source_unreadable'||traces.some(t=>t.provider==='direct'&&[404,410].includes(t.httpStatus)))return {code:'source_unreadable',retry:false,skip:true,reason:'Source is unavailable or does not provide readable evidence.'};
  // The service answered, but the answer cannot be used: not an outage and not a connection problem.
  if(cause.code==='invalid_response')return {code:'invalid_response',retry:true,unusable:true,reason:(operation==='search'?'The search service':'The reasoning service')+' returned an answer that could not be used. Completed work is retained.'};
@@ -189,7 +193,20 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
    else{
     const provider=await productionProvider(env,row.workspace_id);if(!provider)throw error('Connect a reasoning provider.','provider_missing');
     // A streamed answer frees the Worker's outgoing-connection slot as soon as its headers arrive.
-    const result=await provider.generate({system,prompt:JSON.stringify(prompt),maxOutputTokens:3500,reasoningEffort:'low',signal,...(streamed?{onDelta(){}}:{})});
+    const [name,model]=provider.key.split(':');
+    receipt.provider=name;receipt.model=model;receipt.stage=prompt.stage;
+    // A resumed legacy run can have only an HTTP code on its previous receipt.
+    const prior=s.receipts.findLast(r=>r.id<receipt.id&&r.operation===receipt.operation&&r.target===receipt.target&&r.provider===name);
+    const retryWithoutStream=name==='openai'&&prior?.status==='failed'&&(prior.http>=500||prior.transport==='stream');
+    const stream=streamed&&!retryWithoutStream&&!(name==='openai'&&s.openAiJsonModel===model);
+    receipt.transport=stream?'stream':'json';
+    let result;
+    try{
+     result=await provider.generate({system,prompt:JSON.stringify(prompt),maxOutputTokens:3500,reasoningEffort:'low',signal,...(stream?{onDelta(){}}:{})});
+    }catch(cause){
+     if(stream&&name==='openai'&&failure(cause,[],receipt.operation).code==='provider_temporary')s.openAiJsonModel=model;
+     throw cause;
+    }
     receipt.provider=clean(result.provider,40);receipt.model=clean(result.model,100);
     // What the call used, as the provider reported it: on its receipt, and summed per model for the whole list, because
     // only the last 250 receipts are kept. An answer that turns out unusable below was still paid for.
@@ -213,6 +230,17 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
    if(facts?.status==='unavailable'&&criteria.minimumScore&&criteria.target?.registryOnly)throw error('Required business register unavailable.','registry_offline');
    return facts;
   }
+  // On the first planning outage a selected industry and market already give
+  // us real search terms. Assessments and independent reviews still run normally.
+  const recoverInitialPlan=cause=>{
+   if(!profilePolicy||s.queries.length||!criteria.target?.industries?.length)throw cause;
+   const issue=failure(cause,[],'analysis');
+   if(issue.code!=='provider_temporary'||issue.cause?.provider!=='OpenAI'||controller.signal.aborted)throw cause;
+   const labels=T.DIVISIONS.filter(d=>criteria.target.industries.includes(d.code)).map(d=>d.label);
+   const queries=labels.flatMap(label=>criteria.markets.map(market=>label+' companies '+market)).slice(0,8);
+   if(!queries.length)throw cause;
+   return {queries};
+  };
   const generate=async prompt=>operation(prompt.stage==='review'?'evidence_review':'analysis',prompt.stage==='plan'?'search plan':s.pending[0]?.url||prompt.stage,(signal,receipt)=>ask(prompt,signal,receipt));
   const recordGap=(task,reason,status='needs_evidence')=>{s.reviews.push({url:task.url,company:clean(task.candidate?.company,180),status,reason:clean(reason,700),at:new Date().toISOString()});s.reviews=s.reviews.slice(-500);s.lastGaps=clean(reason,700);};
   const followup=(task,raw,pages)=>{
@@ -417,7 +445,7 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
     if(s.round>=maxRounds||s.noProgressRounds>=3||s.seen.length>=4000){drained={end:'incomplete',code:'search_exhausted',phase:'exhausted',reason:'The bounded search plan finished below target. Saved matches passed their checks; no weaker matches were added to fill the list.'};return;}
     try{
      const prompt={stage:'plan',criteria:modelCriteria(criteria),previousQueries:s.queries,alreadyMatched:s.results.map(r=>r.company),gaps:s.reviews.slice(-12),round:s.round,instructions:profilePlanning+targetPlanning(criteria)};
-     const plan=await laneOperation(me,'analysis','search plan',(signal,receipt)=>ask(prompt,signal,receipt,true));
+     const plan=await laneOperation(me,'analysis','search plan',(signal,receipt)=>ask(prompt,signal,receipt,true)).catch(recoverInitialPlan);
      const queries=[...new Set((Array.isArray(plan.queries)?plan.queries:[]).map(q=>clean(q,350)).filter(q=>q&&!s.queries.some(old=>old.toLowerCase()===q.toLowerCase())))].slice(0,8);
      s.round++;s.roundStart={seen:s.seen.length,matches:s.results.length};s.queries.push(...queries);
      if(!queries.length)drained={end:'incomplete',code:'search_exhausted',phase:'exhausted',reason:'No further useful queries. Completed matches are retained; review the criteria.'};
@@ -549,7 +577,7 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
      if(s.roundStart){s.noProgressRounds=(s.seen.length===s.roundStart.seen&&s.results.length===s.roundStart.matches)?(s.noProgressRounds||0)+1:0;s.roundStart=null;}
      const maxRounds=Math.max(10,Math.ceil(criteria.count/5));
      if(s.round>=maxRounds||s.noProgressRounds>=3||s.seen.length>=4000){s.failureCode='search_exhausted';s.phase='exhausted';s.reason='The bounded search plan finished below target. Saved matches passed their checks; no weaker matches were added to fill the list.';await checkpoint('incomplete');return [row.id];}
-     const plan=await generate({stage:'plan',criteria:modelCriteria(criteria),previousQueries:s.queries,alreadyMatched:s.results.map(r=>r.company),gaps:s.reviews.slice(-12),round:s.round,instructions:profilePolicy?profilePlanning+targetPlanning(criteria):'Return {queries:[strings]}. Plan at most eight distinct company searches for ONLY selected signals and target markets. For Lookalike, use selected reference source-backed operations, products and relevant purchasing applications; no unrelated hiring, investment or tender requirement. Reference countries are not target markets. Use local business language and English. Diversify relevant industry subsegments and official company sites, trade associations and specialist sources. Avoid previous queries and matched companies. Resolve the supplied evidence gaps where useful. Never invent company names. Empty queries only when no further useful research is justified.'});
+     const plan=await generate({stage:'plan',criteria:modelCriteria(criteria),previousQueries:s.queries,alreadyMatched:s.results.map(r=>r.company),gaps:s.reviews.slice(-12),round:s.round,instructions:profilePolicy?profilePlanning+targetPlanning(criteria):'Return {queries:[strings]}. Plan at most eight distinct company searches for ONLY selected signals and target markets. For Lookalike, use selected reference source-backed operations, products and relevant purchasing applications; no unrelated hiring, investment or tender requirement. Reference countries are not target markets. Use local business language and English. Diversify relevant industry subsegments and official company sites, trade associations and specialist sources. Avoid previous queries and matched companies. Resolve the supplied evidence gaps where useful. Never invent company names. Empty queries only when no further useful research is justified.'}).catch(recoverInitialPlan);
      const queries=[...new Set((Array.isArray(plan.queries)?plan.queries:[]).map(q=>clean(q,350)).filter(q=>q&&!s.queries.some(old=>old.toLowerCase()===q.toLowerCase())))].slice(0,8);
      s.round++;s.roundStart={seen:s.seen.length,matches:s.results.length};s.queries.push(...queries);s.phase=queries.length?'researching':'exhausted';s.reason=queries.length?(profilePolicy?'Researching your selected profiles and buying signals':'Researching your selected signals'):'No further useful queries. Completed matches are retained; review the criteria.';
      if(!queries.length)s.failureCode='search_exhausted';await checkpoint(queries.length?'running':'incomplete');if(!queries.length)return [row.id];

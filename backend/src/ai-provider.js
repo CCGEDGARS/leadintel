@@ -257,15 +257,23 @@ function providerFailure(error,options,signal){
   if(error?.name==='AbortError'||error?.name==='TimeoutError'||signal?.aborted)return new Error(`${PROVIDER_LABELS[options.provider]} request timed out`);
   const message=String(error?.message||'');
   if(/request failed \(\d+\)/.test(message)||/returned no text$/.test(message)||/^(Gemini response exceeded output token limit|Unsupported AI provider|AI provider API key is required|AI provider model is invalid|AI prompt is required)$/.test(message))return error;
+  if(options.provider==='openai'){
+    if(error?.code==='openai_stream_error')return error;
+    return new Error('OpenAI connection interrupted before the response completed');
+  }
   return new Error(`${PROVIDER_LABELS[options.provider]} request failed (502)`);
 }
 async function openAiStream(options,fetchImpl,onDelta){
   const response=await fetchImpl('https://api.openai.com/v1/responses',{method:'POST',signal:options.signal,headers:{'Content-Type':'application/json','Accept':'text/event-stream',Authorization:`Bearer ${options.apiKey}`},body:JSON.stringify({model:options.model,instructions:options.system||undefined,input:options.prompt,max_output_tokens:options.maxOutputTokens,...(options.reasoningEffort?{reasoning:{effort:options.reasoningEffort}}:{}),store:false,stream:true})});
   if(!response.ok){const payload=await parseJson(response);throw sanitizedUpstreamError('openai',response.status,payload);}
   if(!isEventStream(response)||!response.body){const payload=await parseJson(response);const text=textFromOpenAi(payload);if(!text)throw new Error('OpenAI returned no text');onDelta(text);return {provider:'openai',model:options.model,text,usage:usage(payload?.usage?.input_tokens,payload?.usage?.output_tokens)};}
-  let text='',used=usage(),failed=false;
-  await readSse(response,(event,payload)=>{const type=String(payload?.type||event);if(type==='response.output_text.delta'){const delta=String(payload?.delta||'');if(delta){text+=delta;onDelta(delta);}}else if(type==='response.completed'||type==='response.incomplete'){used=usage(payload?.response?.usage?.input_tokens,payload?.response?.usage?.output_tokens);}else if(type==='response.failed'||type==='error')failed=true;});
-  if(failed)throw new Error('OpenAI request failed (502)');if(!text.trim())throw new Error('OpenAI returned no text');
+  let text='',used=usage(),failure=null;
+  await readSse(response,(event,payload)=>{const type=String(payload?.type||event);if(type==='response.output_text.delta'){const delta=String(payload?.delta||'');if(delta){text+=delta;onDelta(delta);}}else if(type==='response.completed'||type==='response.incomplete'){used=usage(payload?.response?.usage?.input_tokens,payload?.response?.usage?.output_tokens);}else if(type==='response.failed'||type==='error'){
+    const detail=payload?.response?.error||payload?.error||payload;
+    const code=safeDiagnosticToken(detail?.code)||'stream_failed';
+    failure=Object.assign(new Error('OpenAI response stream failed · code: '+code),{code:'openai_stream_error'});
+  }});
+  if(failure)throw failure;if(!text.trim())throw new Error('OpenAI returned no text');
   return {provider:'openai',model:options.model,text:text.trim(),usage:used};
 }
 async function anthropicStream(options,fetchImpl,onDelta){
@@ -310,11 +318,7 @@ export async function generateText({provider,apiKey,model,system='',prompt,maxOu
     if(options.provider==='openai')return await openAiRequest(options,fetchImpl);
     if(options.provider==='anthropic')return await anthropicRequest(options,fetchImpl);
     return await geminiRequest(options,fetchImpl);
-  }catch(error){
-    if(error?.name==='AbortError'||error?.name==='TimeoutError'||signal?.aborted)throw new Error(`${PROVIDER_LABELS[options.provider]} request timed out`);
-    if(/request failed \(\d+\)/.test(String(error?.message||''))||/returned no text$/.test(String(error?.message||''))||/^(Gemini response exceeded output token limit|Unsupported AI provider|AI provider API key is required|AI provider model is invalid|AI prompt is required)$/.test(String(error?.message||'')))throw error;
-    throw new Error(`${PROVIDER_LABELS[options.provider]} request failed (502)`);
-  }
+  }catch(error){throw providerFailure(error,options,signal);}
 }
 
 export async function verifyProviderCredential({provider,apiKey,model,fetchImpl=fetch}){

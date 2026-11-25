@@ -33,7 +33,7 @@ function clean(value,max=8000){return String(value??'').replace(/[\u0000-\u001f\
 function array(value,limit=50){return Array.isArray(value)?value.slice(0,limit):[];}
 function safeUrl(value){try{const url=new URL(String(value||''));return ['http:','https:'].includes(url.protocol)&&!url.username&&!url.password?url.href:'';}catch{return '';}}
 function zeroUsage(){return {input_tokens:0,output_tokens:0};}
-function boundedFetch(fetchImpl,timeoutMs){return async(url,init={})=>{const controller=new AbortController();const timer=setTimeout(()=>controller.abort(new Error('Copilot provider timeout')),timeoutMs);const upstream=init.signal;if(upstream?.addEventListener)upstream.addEventListener('abort',()=>controller.abort(),{once:true});try{return await fetchImpl(url,{...init,signal:controller.signal});}finally{clearTimeout(timer);}};}
+function boundedFetch(fetchImpl,timeoutMs){return async(url,init={})=>{const controller=new AbortController();const timer=setTimeout(()=>controller.abort(new DOMException('Provider request timed out','TimeoutError')),timeoutMs);const upstream=init.signal;if(upstream?.addEventListener)upstream.addEventListener('abort',()=>controller.abort(),{once:true});try{return await fetchImpl(url,{...init,signal:controller.signal});}finally{clearTimeout(timer);}};}
 
 export function shouldUseExternalResearch({question,skillIds=[],knowledge}={}){
   if(searchForbidden(question)||isFirecrawlUsageQuestion(question)||workspaceQuestionTopic(question))return false;
