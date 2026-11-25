@@ -160,6 +160,7 @@
   history.addEventListener('toggle',updateHistory);
   if(!panel.contains(saved))saved.addEventListener('click',click);
   updateHistory();
+  restoreActive();
   mountCrm();
  }
  function mountCrm(){  const crm=document.querySelector('#crm-workspace .crm-header');if(crm&&!$('crm-company-lists')){const b=document.createElement('button');b.id='crm-company-lists';b.type='button';b.className='secondary-btn';b.textContent='Company lists';b.onclick=()=>{document.querySelector('#crm-workspace [data-crm-close]')?.click();root.LeadIntelDiscoveryUI?.open({focus:'companies'});$('company-list-panel')?.scrollIntoView({block:'start'});action(showLists);};crm.append(b);}
@@ -188,7 +189,7 @@
   options=(await api({options:'1'})).options;current=null;prepared=null;showAll=false;sort='score';descending=true;
   const profiles=options.profiles||[],signals=options.buyingSignals||[],trigger=profiles.some(p=>p.type==='trigger-led'&&p.active&&p.ready);
   $('company-list-content').innerHTML=`<form id="company-list-form">
-   <div class="cl-grid"><label>List name<input name="name" maxlength="120" required value="My company list"></label>
+   <div id="cl-edit-fields"><div class="cl-grid"><label>List name<input name="name" maxlength="120" required value="My company list"></label>
     <label>Companies to find<select name="preset"><option>5</option><option selected>10</option><option>20</option><option>50</option><option>100</option><option>200</option><option value="custom">Custom</option></select><input name="count" type="number" min="1" max="200" value="10" aria-label="Custom company count" hidden></label>
     <label>Target countries or markets<textarea name="markets" rows="2" required>${esc(options.markets.join('\n'))}</textarea><small>One per line. These countries apply to this list; references may be elsewhere.</small></label></div>
    <fieldset><legend>1. Targeting profiles</legend><p>Choose one or combine active profiles. Manage their definitions and switches in Strategy. Off profiles have no influence on this list.</p>
@@ -221,7 +222,7 @@
    <div class="cl-grid"><label>Research operation limit for this run<input type="number" name="budget" min="10" max="5000" value="${M.recommendedBudget(10)}" aria-describedby="company-list-allowance-note"><small>Searches, page reads, analysis, evidence reviews and retries use this allowance. AI planning, assessment and review start with a $1 estimated budget. Up to three AI web-search queries can use a fallback provider. Search and data fees are separate.</small></label></div>
    <p id="company-list-allowance-note" role="status" hidden></p>
    <p>The same evidence checks apply at every list size. You can close the app while research continues. A target is not a guarantee. Saved lists keep their original criteria; changed profiles or signals apply when you build a new list.</p>
-   <button type="button" class="primary-btn" data-cl="review">Review criteria</button><div id="company-list-preview"></div>
+   <button type="button" class="primary-btn" data-cl="review">Review criteria</button></div><div id="company-list-preview"></div>
    <p id="company-list-form-error" class="cl-blocker" role="alert" tabindex="-1" hidden></p></form>`;
   syncCriteriaFields();
  }
@@ -241,6 +242,7 @@
   note.textContent=note.hidden?'':`Verifying ${count} companies takes at least ${minimum} operations for planning, discovery, page reads, assessments${perCompany===4?', register checks':''} and evidence reviews. With a limit of ${budget}, this run can only return a partial list.`;
  }
  function invalidateReview(){
+  if($('cl-edit-fields'))$('cl-edit-fields').hidden=false;
   prepared=null;$('company-list-preview')?.replaceChildren();
   const error=$('company-list-form-error');if(error){error.hidden=true;error.textContent='';}
  }
@@ -256,8 +258,8 @@
  }
  function formValue(){const f=$('company-list-form'),data=new FormData(f),target=targetValue(data);return {minimumScore:80,name:data.get('name'),count:Number(data.get('preset')==='custom'?data.get('count'):data.get('preset')),markets:String(data.get('markets')).split('\n').map(s=>s.trim()).filter(Boolean),profileIds:data.getAll('profile'),profileMode:data.get('profileMode'),signalMode:data.get('signalMode'),signalIds:data.getAll('signal'),referenceIds:data.getAll('reference'),mode:data.get('mode')||'any',budget:Number(data.get('budget')),weights:Object.fromEntries((options.buyingSignals||[]).filter(s=>data.has('weight:'+s.id)).map(s=>[s.id,Number(data.get('weight:'+s.id))])),contextFingerprint:options.contextFingerprint,...(target?{target}:{})};}
  function review(){
-  invalidateReview();const raw=formValue(),c=M.configuration(raw,options);prepared=raw;
-  $('company-list-preview').innerHTML='<div class="cl-preview"><h4 tabindex="-1">'+esc(c.name)+' · '+c.count+' companies</h4><p>'+esc(c.markets.join(', '))+'</p><p>'+esc(M.criteriaSummary(c))+'</p>'+c.profiles.map(p=>'<details><summary>'+esc(p.name)+'</summary><p>'+esc(p.description)+'</p><p>Offer: '+esc(p.offers)+'</p><p>Exclusions: '+esc(p.exclusions||'Workspace exclusions apply')+'</p></details>').join('')+c.references.map(r=>'<details><summary>'+esc(r.name)+'</summary>'+r.evidence.slice(0,4).map(e=>'<blockquote>'+esc(e.quote)+' <a target="_blank" rel="noopener noreferrer" href="'+esc(e.url)+'">Source ↗</a></blockquote>').join('')+'</details>').join('')+'<p><strong>Up to '+c.budget+' research operations for this run.</strong> Provider charges vary. Research stops at the approved limit.</p><p>Each counted company needs a reviewed score of 80 or higher and evidence for required criteria. Profile fit and signal priority are shown separately. Buying intent remains unconfirmed.</p><button type="button" class="primary-btn" data-cl="start">Start research</button></div>';
+  invalidateReview();const raw=formValue(),c=M.configuration(raw,options);prepared=raw;$('cl-edit-fields').hidden=true;
+  $('company-list-preview').innerHTML='<div class="cl-preview"><h4 tabindex="-1">'+esc(c.name)+' · '+c.count+' companies</h4><p>'+esc(c.markets.join(', '))+'</p><p>'+esc(M.criteriaSummary(c))+'</p>'+c.profiles.map(p=>'<details><summary>'+esc(p.name)+'</summary><p>'+esc(p.description)+'</p><p>Offer: '+esc(p.offers)+'</p><p>Exclusions: '+esc(p.exclusions||'Workspace exclusions apply')+'</p></details>').join('')+c.references.map(r=>'<details><summary>'+esc(r.name)+'</summary>'+r.evidence.slice(0,4).map(e=>'<blockquote>'+esc(e.quote)+' <a target="_blank" rel="noopener noreferrer" href="'+esc(e.url)+'">Source ↗</a></blockquote>').join('')+'</details>').join('')+'<p><strong>Up to '+c.budget+' research operations for this run.</strong> Estimated AI reasoning allowance: $1. Search and data fees are separate.</p><p>Each counted company needs a reviewed score of 80 or higher and evidence for required criteria. Profile fit and signal priority are shown separately. Buying intent remains unconfirmed.</p><button type="button" class="primary-btn" data-cl="start">Start research for '+c.count+' '+(c.count===1?'company':'companies')+'</button> <button type="button" class="secondary-btn" data-cl="edit">Edit criteria</button></div>';
   $('company-list-preview').querySelector('h4').focus();
  }
  function change(e){if(e.target.closest('#company-list-form')){invalidateReview();const f=$('company-list-form');if(e.target.name==='budget')f.elements.budget.dataset.custom='true';if(e.target.name==='preset')f.elements.count.hidden=e.target.value!=='custom';if(['preset','count'].includes(e.target.name)&&!f.elements.budget.dataset.custom)f.elements.budget.value=M.recommendedBudget(f.elements.preset.value==='custom'?f.elements.count.value:f.elements.preset.value);if(e.target.name==='referenceGroup'){const v=e.target.value;if(v!=='custom')for(const box of f.querySelectorAll('[name="reference"]')){const r=options.references.find(r=>r.id===box.value);box.checked=r.ready&&(v==='active'?r.active:r.groupId===v);}}if(e.target.name==='reference')f.elements.referenceGroup.value='custom';syncCriteriaFields();}}
@@ -280,6 +282,23 @@
  // is read from the list itself (its receipts and counts); nothing extra is asked from the server. The clock counts
  // from Start or continue when that was pressed in this page, otherwise from the moment the list was created.
  const LIVE_WORK={page_read:'reading',analysis:'assessing',evidence_review:'reviewing the evidence of',register_check:'checking the business register for'};
+ const activeKey=()=> 'leadintel:company-list:active:'+scope;
+ let restoring='';
+ async function restoreActive(){
+  synchronize();
+  if(!root.LeadIntelServerBridge?.session?.authenticated||current||pending||$('company-list-form')||!$('company-list-content'))return;
+  let id;try{id=root.localStorage.getItem(activeKey());}catch{return;}
+  const owner=scope,token=owner+id;
+  if(!id||restoring===token)return;
+  restoring=token;
+  try{
+   const {list}=await api({id});
+   if(scope!==owner||pending||current||$('company-list-form'))return;
+   if(list){current=list;render();poll();}
+   else root.localStorage.removeItem(activeKey());
+  }catch{/* A saved list remains accessible from history if the status read fails. */}
+  finally{if(restoring===token)restoring='';}
+ }
  const startedHere=new Map();let liveTimer=null;
  const liveActive=l=>Boolean(l&&['queued','running'].includes(l.status));
  const utcTime=value=>{const text=String(value||'');return Date.parse(/[zZ]$|[+-]\d\d:?\d\d$/.test(text)?text:text.replace(' ','T')+'Z');};
@@ -297,9 +316,10 @@
    if(Number.isFinite(seconds))ago=' · '+(seconds<60?seconds+' s':Math.floor(seconds/60)+' min')+' ago';}
   }
   // Estimate from this run only, once two distinct matches have passed review.
+  const retryMs=Number(l.progress.nextAttemptAt)-now;
   const minutes=kept>=2&&left>0?Math.max(1,Math.round(elapsed/kept*left/60000)):0;
   return {waiting,head:waiting?'Waiting to retry…':'Researching…',clock:'Running '+minutesSeconds(elapsed),now:waiting?'':'Now: '+doing+ago,
-   estimate:minutes?'About '+minutes+' minute'+(minutes===1?'':'s')+' left at this pace':'Time left appears after the first two matches'};
+   estimate:waiting?(retryMs>0?'Next retry in '+minutesSeconds(Math.ceil(retryMs/1000)*1000):'Waiting for the research service'):minutes?'Estimated '+Math.max(1,Math.floor(minutes*0.75))+'–'+Math.max(2,Math.ceil(minutes*1.25))+' min left at this pace':'Time left appears after the first two matches'};
  }
  function liveHtml(l){const v=liveText(l);return '<p class="cl-live'+(v.waiting?' cl-live-waiting':'')+'" data-cl-live><span class="cl-live-dot" aria-hidden="true"></span><strong data-live="head">'+esc(v.head)+'</strong><span data-live="clock">'+esc(v.clock)+'</span><span data-live="now">'+esc(v.now)+'</span><span data-live="estimate">'+esc(v.estimate)+'</span></p>';}
  function syncLive(){
@@ -359,6 +379,10 @@
   const expanded=new Set(content.dataset.listId===l.id?[...content.querySelectorAll('details[open]')].map(el=>el.dataset.detail):[]);
   content.dataset.listId=l.id;
   const active=['queued','running'].includes(l.status);
+  try{
+   if(active)root.localStorage.setItem(activeKey(),l.id);
+   else if(root.localStorage.getItem(activeKey())===l.id)root.localStorage.removeItem(activeKey());
+  }catch{/* Storage may be disabled. */}
   // A list that used its allowance is paused, not broken: it says what it found and offers to go on.
   const paused=l.status==='incomplete'&&l.progress.operations>=l.progress.allowance;
   const rows=[...l.results].sort((a,b)=>{
@@ -367,6 +391,14 @@
   });
   const firstLabel=sort==='score'&&descending?'top':'first';
   $('company-list-content').innerHTML='<div class="cl-result-heading"><h4>'+esc(l.name)+'</h4><span>'+esc(statusLabel(l.status))+(l.saved?' · Saved to CRM':'')+'</span></div>'+(active?liveHtml(l):'')+'<p><strong>'+l.results.length+' of '+l.criteria.count+' matching companies</strong> · '+l.progress.checked+' sources assessed · '+l.progress.operations+' / '+l.progress.allowance+' research operations</p><progress max="'+l.criteria.count+'" value="'+l.results.length+'" aria-label="Matching companies"></progress><p role="status" class="'+(paused?'cl-paused':l.status==='incomplete'?'cl-blocker':'')+'">'+esc(paused?'The search paused: '+l.results.length+' of '+l.criteria.count+' companies found so far, '+l.progress.checked+' page'+(l.progress.checked===1?'':'s')+' checked. Your results are kept.':causeText(l,active)||l.progress.reason)+'</p><details data-detail="criteria"><summary>List criteria and research receipts</summary><p>'+esc(M.criteriaSummary(l.criteria))+' · '+esc(l.criteria.markets.join(', '))+'</p><p>References: '+esc(l.criteria.references.map(r=>r.name).join(', ')||'None')+'</p><p>Importance: '+esc(l.criteria.signals.map(s=>s.name+' '+l.criteria.weights[s.id]).join(', '))+'</p><p>Criteria are frozen when research starts. New lists check selected profiles first; optional verified buying signals add priority or become required filters. Off criteria have no influence. Earlier lists retain their saved policy. Buying intent is unconfirmed.</p><p>'+esc(l.progress.operationTotals?'Measured attempts: '+l.progress.operationTotals.complete+' completed, '+l.progress.operationTotals.failed+' failed, '+l.progress.operationTotals.interrupted+' interrupted. Showing recent receipts; each match retains its own evidence review.':'Earlier accounting retained; detailed receipts were not recorded for every historical operation.')+'</p><ul>'+l.receipts.slice(-20).map(r=>'<li>'+esc([r.provider,r.stage||r.operation,r.status,r.providerCode,r.http&&'HTTP '+r.http,r.at].filter(Boolean).join(' · '))+'</li>').join('')+'</ul></details><div class="cl-toolbar"><button type="button" class="secondary-btn" data-cl="refresh">Refresh status</button>'+(active?'<button type="button" class="secondary-btn" data-cl="pause">Pause research</button>':l.status!=='complete'?'<button type="button" class="primary-btn" data-cl="resume">'+(l.failureCode==='search_budget'?'Approve 3 more AI searches':l.failureCode==='research_spend'?'Approve $1 more and resume':paused?'Keep searching':'Resume within remaining allowance')+'</button>':'')+'<button type="button" class="primary-btn" data-cl="save" '+(active||!rows.length?'disabled':'')+'>Save list to CRM</button><button type="button" class="secondary-btn" data-cl="csv" '+(!rows.length?'disabled':'')+'>Download CSV</button><button type="button" class="secondary-btn" data-cl="xlsx" '+(!rows.length?'disabled':'')+'>Download Excel</button><button type="button" class="text-btn" data-cl="delete" '+(active?'disabled':'')+'>Delete list</button></div>'+(paused?'<p class="cl-continue-note">Continues for up to '+l.criteria.budget+' more research steps.</p>':'')+(l.incompleteChecks?.length?'<details data-detail="incomplete"><summary>Incomplete or rejected source checks ('+l.incompleteChecks.length+')</summary>'+l.incompleteChecks.slice(-30).map(r=>'<p><a href="'+esc(r.url)+'" target="_blank" rel="noopener noreferrer">'+esc(r.company||M.domain(r.url))+'</a> · '+esc(r.reason)+'</p>').join('')+'</details>':'')+(rows.length?'<p>'+rows.length+' matching companies · Showing '+(showAll?'all companies':firstLabel+' '+Math.min(10,rows.length))+'</p>'+(active?'<p class="cl-buyers-wait" role="note">'+esc(BUYERS_WAIT)+'</p>':'')+(rows.length>10?'<button type="button" class="secondary-btn" data-cl="show-all">'+(showAll?'Show '+firstLabel+' 10':'Show all '+rows.length+' companies')+'</button>':'')+'<div class="cl-table-wrap"><table><thead><tr>'+[['company','Company'],['location','Location'],['score','Relevance']].map(([k,v])=>'<th'+(sort===k?' aria-sort="'+(descending?'descending':'ascending')+'"':'')+'><button type="button" data-cl="sort" data-sort="'+k+'">'+v+(sort===k?(descending?' ↓':' ↑'):'')+'</button></th>').join('')+'<th>Profiles, signals and evidence</th><th>Next step</th></tr></thead><tbody>'+(showAll?rows:rows.slice(0,10)).map(r=>'<tr><td><strong>'+esc(r.company)+'</strong><a href="'+esc(r.website)+'" target="_blank" rel="noopener noreferrer">'+esc(r.domain)+' ↗</a></td><td>'+esc(r.location)+'</td><td><strong>'+r.score+'</strong>'+(r.fitScore!==undefined?'<small>Profile fit '+esc(r.fitScore)+'/90 · Signal bonus +'+esc(r.signalBonus)+'/10</small>':'')+'<small>Buying intent unconfirmed</small></td><td><details data-detail="company:'+esc(r.domain)+'"><summary>'+esc(r.matches.map(m=>m.name).join(', '))+'</summary>'+r.matches.map(m=>'<p><strong>'+esc((m.kind==='profile'?'Profile: ':m.kind==='signal'?'Buying signal: ':'')+m.name)+'</strong>'+matchScore(m)+'</p><p>'+esc(m.reason)+'</p><blockquote>'+esc(m.quote)+'</blockquote><a href="'+esc(m.url)+'" target="_blank" rel="noopener noreferrer">Source'+(m.date?' · '+esc(m.date):'')+' ↗</a>'+(m.referenceName?'<p>Similar to '+esc(m.referenceName)+': '+esc(m.referenceQuote)+(m.referenceUrl?' <a href="'+esc(m.referenceUrl)+'" target="_blank" rel="noopener noreferrer">Reference source ↗</a>':'')+'</p>':'')).join('')+(r.profileMatches?.some(m=>m.opportunityUrl)?r.profileMatches.filter(m=>m.opportunityUrl).map(m=>'<p>Opportunity: '+esc(m.opportunityTitle)+' <a href="'+esc(m.opportunityUrl)+'" target="_blank" rel="noopener noreferrer">Saved opportunity source ↗</a></p>').join(''):'')+(r.quality?'<p>Evidence review: '+esc(r.quality.reason)+'</p>':'<p>Earlier evidence policy; no separate review was recorded.</p>')+(r.commercialFit?'<p>Commercial fit: '+esc(r.commercialFit.reason)+'</p>':'')+targetHtml(r)+'<p>Checked '+esc(new Date(r.checkedAt).toLocaleString())+'</p></details></td><td><button type="button" class="secondary-btn" data-cl="buyer" data-domain="'+esc(r.domain)+'" '+(active?'disabled title="'+esc(BUYERS_WAIT)+'"':'')+'>Find buyers →</button></td></tr>').join('')+'</tbody></table></div>':'<p>No verified matches yet. Incomplete research does not mean no matching companies exist.</p>');for(const detail of content.querySelectorAll('details'))detail.open=expanded.has(detail.dataset.detail);
+  if(active){
+   const last=l.receipts.slice().reverse().find(r=>r.status==='complete'&&utcTime(r.at)>=(l.progress.run?.startedAt||0));
+   if(last){
+    const completed=document.createElement('small');
+    completed.textContent='Last completed check · '+new Date(utcTime(last.at)).toLocaleTimeString();
+    content.querySelector('[data-cl-live]').append(completed);
+   }
+  }
   if(l.progress.reasoningSpend){
    const usage=document.createElement('p'),ledger=l.progress.reasoningSpend;
    usage.textContent='AI reasoning budget used or reserved: $'+(ledger.used/1000000).toFixed(2)+' of $'+(ledger.limit/1000000).toFixed(2)+'. Search provider charges are separate.';
@@ -408,6 +440,7 @@
     return;
    }
    if(command==='review')return review();
+   if(command==='edit'){invalidateReview();$('company-list-form').elements.name.focus();return;}
    if(command==='start'){
     if(!prepared||JSON.stringify(prepared)!==JSON.stringify(formValue()))throw Error('Review the current criteria first.');
     current=(await api({}, {action:'start',...prepared})).list;if(current)startedHere.set(current.id,Date.now());render();
@@ -466,6 +499,6 @@
   root.addEventListener('leadintel:journey-focus-changed',e=>{const panel=$('company-list-panel');if(panel)panel.hidden=!panel.closest('.discovery-panel')&&e.detail?.focus==='buyers';});
  root.LeadIntelCompanyListUI={mount,refreshSearch,open: id=>action(()=>id?open(id):showLists())};
  const init=()=>{mount();mountSearch();const observer=new MutationObserver(()=>{if(!$('company-list-panel'))mount();mountCrm();mountSearch();});observer.observe(document.body,{childList:true,subtree:true});};
- for(const type of ['leadintel:server-ready','leadintel:session-changed','leadintel:account-changed','storage'])root.addEventListener(type,()=>{synchronize();void refreshSearch();});
+ for(const type of ['leadintel:server-ready','leadintel:session-changed','leadintel:account-changed','storage'])root.addEventListener(type,()=>{synchronize();void restoreActive();void refreshSearch();});
  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
 })(window);

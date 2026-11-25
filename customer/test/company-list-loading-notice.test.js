@@ -52,3 +52,21 @@ test('a failed request replaces the loading line with the error and keeps it',as
  page.waiting.shift().answer({error:'Company lists are temporarily unavailable.'});await settle();
  assert.equal(page.w.document.getElementById('cl-history-lists').textContent,'Company lists are temporarily unavailable.');
 });
+
+test('review and edit are local and only the explicit start sends research',async t=>{
+ const p=setup(t);await settle();
+ p.press('new');await settle();p.waiting.shift().answer({options});await settle();
+ const form=p.w.document.querySelector('#company-list-form');
+ p.press('review');await settle();
+ assert.equal(form.querySelector('#cl-edit-fields').hidden,true);
+ assert.equal(form.querySelector('[data-cl="start"]').textContent,'Start research for 10 companies');
+ p.press('edit');await settle();
+ assert.equal(form.querySelector('#cl-edit-fields').hidden,false);
+ form.elements.preset.value='5';
+ form.elements.preset.dispatchEvent(new p.w.Event('change',{bubbles:true}));
+ p.press('review');await settle();
+ assert.equal(form.querySelector('[data-cl="start"]').textContent,'Start research for 5 companies');
+ assert.equal(p.waiting.length,0);
+ p.press('start');p.press('start');await settle();
+ assert.equal(p.waiting.length,1);
+});

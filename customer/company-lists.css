@@ -76,3 +76,13 @@
 
 #cl-history-lists { padding: 16px 0; }
 #cl-history-lists .cl-saved { margin-bottom: 12px; }
+
+#company-list-panel .cl-live {
+ display: flex;
+ flex-wrap: wrap;
+ align-items: center;
+ gap: .55rem 1rem;
+ padding: 1rem;
+}
+.cl-live [data-live="clock"] { font-variant-numeric: tabular-nums; font-weight: 700; }
+#cl-edit-fields[hidden] { display: none; }
