@@ -55,8 +55,8 @@ export async function journeyFixture({durableWebsite=false,durableCopilot=false,
     const chunks=[];for await(const chunk of req)chunks.push(chunk);
     const body=Buffer.concat(chunks),request=new Request(url,{method:req.method,headers:req.headers,...(body.length?{body}:{})});
     const call={method:req.method,path:url.pathname,workspaceId:url.searchParams.get('workspace_id')};calls.push(call);
-    if(url.pathname==='/api/buyers/research'&&req.method==='POST'){call.action=JSON.parse(body).action;call.payloadBytes=body.byteLength;}
-    const response=durableWebsite&&url.pathname==='/api/websites/contacts'?await handleWebsiteContactRoute(request,env,{},undefined):durableCopilot&&url.pathname.startsWith('/api/copilot/')?await handleCopilotRoute(request,env,{},undefined):url.pathname==='/api/buyers/research'?await handleBuyerResearchRoute(request,env,{},undefined):await app.fetch(request,env,{waitUntil(promise){pending.add(promise);promise.finally(()=>pending.delete(promise));}});
+    if(['/api/buyers/research','/api/buyers/research/free'].includes(url.pathname)&&req.method==='POST'){call.action=JSON.parse(body).action;call.payloadBytes=body.byteLength;}
+    const response=durableWebsite&&url.pathname==='/api/websites/contacts'?await handleWebsiteContactRoute(request,env,{},undefined):durableCopilot&&url.pathname.startsWith('/api/copilot/')?await handleCopilotRoute(request,env,{},undefined):['/api/buyers/research','/api/buyers/research/free'].includes(url.pathname)?await handleBuyerResearchRoute(request,env,{},undefined):await app.fetch(request,env,{waitUntil(promise){pending.add(promise);promise.finally(()=>pending.delete(promise));}});
     call.status=response.status;const out=Buffer.from(await response.arrayBuffer());
     if(url.pathname==='/api/customer/state'&&req.method==='PUT'){try{call.version=JSON.parse(body).version;call.result=JSON.parse(out);}catch{}}
     res.writeHead(response.status,Object.fromEntries(response.headers));res.end(out);return;

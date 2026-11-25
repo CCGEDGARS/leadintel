@@ -12,7 +12,7 @@ async function access(request,env,workspaceId,write=false){
  return {user:{...user,sessionTokenHash,role:member.role}};
 }
 export async function handleBuyerResearchRoute(request,env,cors={},ctx){
- const url=new URL(request.url);if(url.pathname!=='/api/buyers/research')return null;
+ const url=new URL(request.url),free=url.pathname==='/api/buyers/research/free';if(!free&&url.pathname!=='/api/buyers/research')return null;
  const workspaceId=url.searchParams.get('workspace_id')||'';
  if(!workspaceId||workspaceId.length>160)return json({error:'Workspace is required'},400,cors);
  if(!['GET','POST'].includes(request.method))return json({error:'Method not allowed'},405,cors);
@@ -28,6 +28,10 @@ export async function handleBuyerResearchRoute(request,env,cors={},ctx){
   const body=await request.json().catch(()=>null);
   if(!body||typeof body!=='object'||Array.isArray(body)||new TextEncoder().encode(JSON.stringify(body)).byteLength>262144)return json({error:'A bounded buyer context is required'},400,cors);
   if(!['start','resume','cancel'].includes(body.action||'start'))return json({error:'Unknown buyer research command'},400,cors);
+  if(free){
+   if(body.action!=='start'||body.personIds?.length||body.paidResearch)return json({error:'Free discovery is a company-wide public search'},400,cors);
+   body.freeDiscovery=true;body.peopleFirst=true;
+  }
   const current=await access(request,env,workspaceId,true);if(current.error)return json({error:current.error},current.status,cors);
   if(body.jobId){const existing=await readBuyerJob(env,workspaceId,{id:body.jobId});if(existing&&JSON.parse(existing.input_json).taskId)return json({error:'Use the research task controls in Ask LeadIntel.'},409,cors);}
   const row=(body.action||'start')==='start'?await startBuyerJob(env,workspaceId,current.user,body):await commandBuyerJob(env,workspaceId,current.user,body);
