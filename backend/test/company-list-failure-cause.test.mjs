@@ -44,7 +44,7 @@ async function setup(t,provider,answer){
 }
 async function request(f,body,params={},waits=[]){return app.fetch(new Request('https://app.fixture.test/api/company-lists?'+new URLSearchParams({workspace_id:workspaceId,...params}),{method:body?'POST':'GET',headers:{Cookie:'leadintel_session='+f.users.owner.token,Origin:f.env.APP_ORIGIN,'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})}),f.env,{waitUntil:p=>waits.push(p)});}
 const input={action:'start',name:'Refused list',count:1,budget:100,profileIds:['icp-core'],profileMode:'any',signalMode:'off',markets:['Sweden']};
-async function start(f){const fingerprint=(await (await request(f,null,{options:'1'})).json()).options.contextFingerprint,waits=[],r=await request(f,{...input,contextFingerprint:fingerprint},{},waits);assert.equal(r.status,200,await r.clone().text());const body=await r.json();await Promise.all(waits);return body.list;}
+async function start(f,overrides={}){const fingerprint=(await (await request(f,null,{options:'1'})).json()).options.contextFingerprint,waits=[],r=await request(f,{...input,...overrides,contextFingerprint:fingerprint},{},waits);assert.equal(r.status,200,await r.clone().text());const body=await r.json();await Promise.all(waits);return body.list;}
 async function tick(f,now=Date.now()){const waits=[],noop=async()=>{};await app.scheduled({cron:'* * * * *',scheduledTime:now},f.env,{waitUntil:p=>waits.push(p)},{runCompanyListJobs,runWritingReferenceJobs:noop,runWorkspaceSkillJobs:noop,runCompanyMaterialJobs:noop,runLanguagePackJobs:noop});await Promise.all(waits);}
 async function finish(f,id,seen=()=>{}){for(let i=0;i<14;i++){const list=await readCompanyList(f.env,workspaceId,id);seen(list);if(['complete','incomplete'].includes(list.status))return list;await tick(f,list.progress.nextAttemptAt?list.progress.nextAttemptAt+1:Date.now());}assert.fail('Company-list scheduler did not finish');}
 const stateOf=(f,id)=>JSON.parse(f.DB.raw.prepare('SELECT state_json FROM company_lists WHERE id=?').get(id).state_json);
@@ -91,4 +91,43 @@ test('Anthropic\'s wording for a reached spending limit is recognised as a billi
   await assert.rejects(generateText({provider:'anthropic',apiKey:'k',model:'claude-sonnet-5-5',prompt:'p',maxOutputTokens:10,fetchImpl:async()=>new Response(JSON.stringify(body),{status,headers:{'Content-Type':'application/json'}})}),
    error=>{assert.match(error.message,/^Anthropic request failed \(400\) · code: billing_hard_limit_reached/);assert.doesNotMatch(error.message,/regain access|2026-12-01/,'the provider\'s own sentence is not passed on');return true;});
  }
+});
+
+
+test('a first OpenAI planning outage can discover from the selected industry and finish independent review',async t=>{
+ for(const lanes of [1,4])await t.test('lanes '+lanes,async t=>{
+  const f=await setup(t,'openai',(i,p)=>i===0&&p.stage==='plan'?[502,{}]:null);
+  f.env.COMPANY_LIST_LANES=lanes;
+  const services=f.env.COMPANY_LIST_TEST_SERVICES,queries=[];
+  f.env.COMPANY_LIST_TEST_SERVICES={...services,search:async(q,o)=>{queries.push(q);return services.search(q,o);},registry:async()=>({status:'found',active:true,industry:{code:'2511'}})};
+  const list=await finish(f,(await start(f,{target:{industries:['25'],registryOnly:false}})).id);
+  assert.equal(list.status,'complete',list.progress.reason);assert.equal(list.results.length,1);
+  assert.match(queries[0],/Fabricated metal products companies Sweden/);
+  assert.equal(list.results[0].quality.status,'reviewed');
+  assert.ok(list.receipts.some(r=>r.stage==='plan'&&r.status==='failed'&&r.http===502));
+ });
+});
+
+test('an interrupted planning stream recovers using a single ordinary request on the next attempt',async t=>{
+ const f=await setup(t,'openai',()=>null);f.env.COMPANY_LIST_LANES=4;
+ const original=f.env.COPILOT_FETCH_IMPL,transports=[];
+ f.env.COPILOT_FETCH_IMPL=async(url,init)=>{
+  const body=JSON.parse(init.body);
+  if(JSON.parse(body.input).stage==='plan'){
+   transports.push(Boolean(body.stream));
+   if(transports.length===1)return new Response('data: {"type":"response.failed","response":{"error":{"code":"server_error"}}}\n\n',{headers:{'Content-Type':'text/event-stream'}});
+  }
+  return original(url,init);
+ };
+ const list=await finish(f,(await start(f)).id);
+ assert.equal(list.status,'complete',list.progress.reason);assert.deepEqual(transports.slice(0,2),[true,false]);
+ const failed=list.receipts.find(r=>r.status==='failed');
+ assert.equal(failed.providerCode,'server_error');assert.equal(failed.http,undefined);
+});
+
+test('a streamed quota error stops after one attempt even with industry discovery available',async t=>{
+ const f=await setup(t,'openai',()=>null);f.env.COMPANY_LIST_LANES=4;
+ f.env.COPILOT_FETCH_IMPL=async()=>new Response('data: {"type":"error","code":"insufficient_quota","message":"private provider message"}\n\n',{headers:{'Content-Type':'text/event-stream'}});
+ const list=await finish(f,(await start(f,{target:{industries:['25']}})).id);
+ assert.equal(list.failureCode,'funds');assert.equal(list.progress.operations,1);assert.equal(list.failureCause.code,'insufficient_quota');assert.doesNotMatch(JSON.stringify(list),/private provider message/);
 });
