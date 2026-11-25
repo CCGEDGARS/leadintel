@@ -104,11 +104,14 @@ test('reopening and resuming a saved job hides publication artifacts, retains va
  await commandWebsiteContacts(f.env,f.context,{action:'resume',jobId:job.id,revision:row.revision});await runWebsiteContactJobs(f.env,{jobId:job.id,windowMs:3000,services:{checkPerson:async()=>({complete:true}),search:()=>assert.fail('Saved source receipts must not trigger another discovery pass')}});
  row=await readWebsiteContacts(f.env,workspaceId,{id:job.id});const saved=JSON.parse(row.state_json);assert.equal(saved.people.length,1);assert.equal(saved.people[0].id,'valid-eoin');assert.equal(saved.excludedIdentities[0].id,'post-artifact');assert.deepEqual(saved.tasks[0].result,source);
 });
-for(const failure of ['deep','independent'])test('failed '+failure+' public research keeps paid contact reveal locked',async t=>{
+for(const failure of ['deep','independent'])test('failed '+failure+' public research retains official identity and requires separate paid approval',async t=>{
  const f=await fixture(t),job=await startWebsiteContacts(f.env,f.context,{companyId:f.company.id}),text='# Finance Group\nFinance Group provides financial services.\n### Anna Andersson\nChief Executive Officer';
  const services={read:async url=>({url,markdown:text,links:[]}),search:async query=>{if(failure==='deep'&&query.includes('supplier OR association OR industry'))throw Error('Controlled deep search failure');return [];},apollo:async()=>({people:[]}),independent:async()=>{if(failure==='independent')throw Error('Controlled configured independent failure');return {status:'not_configured'};}};
  for(let i=0;i<12;i++){const row=await readWebsiteContacts(f.env,workspaceId,{id:job.id});if(!['queued','running'].includes(row.status))break;await runWebsiteContactJobs(f.env,{jobId:job.id,windowMs:3000,services});}
- const row=await readWebsiteContacts(f.env,workspaceId,{id:job.id}),view=publicWebsiteContacts(row);assert.equal(view.people[0].freeResearchStatus,'needs_review');assert.equal(view.status,'incomplete');await assert.rejects(websitePaidScope(f.env,f.context,{jobId:job.id,revision:row.revision,personId:view.people[0].id,channel:'email',provider:'apollo',approved:true}));assert.equal(f.DB.raw.prepare('SELECT count(*) n FROM additional_contact_attempts').get().n,0);
+ const row=await readWebsiteContacts(f.env,workspaceId,{id:job.id}),view=publicWebsiteContacts(row);assert.equal(view.people[0].freeResearchStatus,'needs_review');assert.equal(view.status,'incomplete');assert.equal(view.people[0].identityCheck.status,'confirmed');assert.equal(view.people[0].paidReadiness.eligible,true);
+ const approval={jobId:job.id,revision:row.revision,personId:view.people[0].id,channel:'email',provider:'apollo'};
+ await assert.rejects(websitePaidScope(f.env,f.context,{...approval,approved:false}),/Approve/);
+ await websitePaidScope(f.env,f.context,{...approval,approved:true});assert.equal(f.DB.raw.prepare('SELECT count(*) n FROM additional_contact_attempts').get().n,0);
 });
 test('same-name staff with different roles and profiles retain separate identities and never share completion',async t=>{
  const f=await fixture(t),job=await startWebsiteContacts(f.env,f.context,{companyId:f.company.id});

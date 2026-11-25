@@ -22,7 +22,7 @@ test('a uniquely sourced professional profile permits optional paid lookup only 
  const queries=[],services={search:async q=>{queries.push(q);return q.startsWith('site:linkedin.com/in/')?[result]:[];},read:async url=>({url,markdown:'# Finance Group\nFinance Group provides financial services.',links:[]}),independent:async()=>({status:'not_configured'})};
  let row;for(let i=0;i<7;i++){row=await tick(f,services);if(!['queued','running'].includes(row.status))break;}
  const p=publicWebsiteContacts(row).people[0],body={jobId:row.id,revision:row.revision,personId:p.id,provider:'treg',channel:'email',approved:true};
- assert.equal(p.publicLinkedinUrl,profile);assert.equal(p.freeResearchStatus,'complete');const scoped=await websitePaidScope(f.env,f.context,body);assert.equal((await scoped.scope.readiness({},p)).eligible,true);
+ assert.equal(p.publicLinkedinUrl,profile);assert.equal(p.identityCheck.status,'confirmed');assert.equal(p.freeResearchStatus,'complete');const scoped=await websitePaidScope(f.env,f.context,body);assert.equal((await scoped.scope.readiness({},p)).eligible,true);
  await assert.rejects(websitePaidScope(f.env,f.context,{...body,approved:false}),/Approve/);assert.equal(f.DB.raw.prepare('SELECT count(*) n FROM additional_contact_attempts').get().n,0);
  const saved=JSON.parse(row.state_json);delete saved.people[0].linkedinIdentityEvidence;f.DB.raw.prepare('UPDATE website_contact_jobs SET state_json=? WHERE id=?').run(JSON.stringify(saved),row.id);await assert.rejects(websitePaidScope(f.env,f.context,body),/mandatory free|public identity|Confirm this person/i,'a bare profile cannot replace verified matching evidence');
  f.DB.raw.prepare('UPDATE website_contact_jobs SET state_json=? WHERE id=?').run(row.state_json,row.id);queries.length=0;
@@ -113,4 +113,15 @@ for(const present of [true,false])test('focused official identity fallback requi
  state.people=[p];state.phase='contacts';f.DB.raw.prepare("UPDATE website_contact_jobs SET state_json=?,status='incomplete' WHERE id=?").run(JSON.stringify(state),f.job.id);
  const response=await handleWebsiteContactRoute(new Request('https://app.fixture.test/api/websites/contacts?workspace_id='+workspaceId,{method:'POST',headers:{Cookie:'leadintel_session='+f.users.owner.token,'Content-Type':'application/json'},body:JSON.stringify({action:'check-identity',jobId:f.job.id,revision:f.job.revision,personId:p.id})}),f.env,{},{});assert.equal(response.status,200);
  const reads=[],row=await tick(f,{search:async()=>[],read:async url=>{reads.push(url);return {url,markdown:'# Finance Group\nFinance Group provides financial services.\n### '+(present?'Anna Andersson':'Another Person')+'\nChief Financial Officer\n',links:[]};}}),view=publicWebsiteContacts(row);assert.deepEqual(reads,[p.publicNameUrl]);assert.equal(view.people[0].paidReadiness.eligible,present);assert.equal(view.people[0].identityCheck.status,present?'confirmed':'needs_review');assert.equal(view.people[0].freeResearchStatus,'needs_review');
+});
+
+test('free indexed searches resolve a Danish CEO profile with its published Unicode URL',async()=>{
+ const {reviewWebsiteLinkedIn}=await import('../src/website-linkedin-review.js');
+ const url='https://www.linkedin.com/in/jan-s%C3%B8rensen-82859046/',candidate={company:'Nordisk Staal',domain:'nordisk-staal.dk'};
+ const queries=[],person={name:'Jan Sørensen',title:'CEO',organization:candidate.company,identityOrigin:'official',publicNameUrl:'https://nordisk-staal.dk/kontakt/'};
+ const review=await reviewWebsiteLinkedIn(candidate,person,{search:async query=>{queries.push(query);return [{url,title:'Jan Sørensen - CEO at Nordisk Staal A/S',description:'CEO at Nordisk Staal A/S'}];}});
+ assert.equal(review.matchStatus,'double_checked');assert.equal(review.profileUrl.replace(/\/$/,''),url.slice(0,-1));
+ assert.ok(queries.some(q=>q.includes('Jan Sorensen')));
+ const wrong=await reviewWebsiteLinkedIn(candidate,person,{search:async()=>[{url,title:'Jan Sørensen - CEO at Other Metals A/S',description:'Former supplier to Nordisk Staal'}]});
+ assert.equal(wrong.profileUrl,'');
 });

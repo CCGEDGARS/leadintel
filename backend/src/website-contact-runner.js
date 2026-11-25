@@ -149,6 +149,17 @@ export async function runWebsiteContactJobs(env,{jobId,now=Date.now(),windowMs=4
   const pending=state.people.filter(p=>!p.freeResearchStatus),finished=state.people.length-pending.length,allowed=pending.slice(0,Math.max(0,state.batchLimit-finished)),last=state.people.findIndex(p=>p.id===state.contactCursor);
   return [...allowed.filter(p=>state.people.indexOf(p)>last),...allowed.filter(p=>state.people.indexOf(p)<=last)].slice(0,3);
  };
+ const recordIdentity=(candidate,person,review,page)=>{
+  const official=page&&person.identityOrigin==='official'&&sameHost(page.url,input.domain)&&page.url===person.publicNameUrl&&[...D.discoverCompanyContacts([page],candidate,[]),...localStaffCards(page,input)].some(p=>websiteNameKey(p.publicName||p.name)===websiteNameKey(person.publicName||person.name)&&websiteContactRole(p.title)===websiteContactRole(person.title));
+  const confirmed=websiteLinkedInReviewCurrent(candidate,person)&&websiteIdentitySupport(candidate,person).eligible&&(review.matchStatus==='double_checked'||official);
+  person.identityCheck={version:1,status:confirmed?'confirmed':'needs_review',checkedAt:new Date().toISOString(),identityKey:websiteIdentityCheckKey(candidate,person),evidenceKind:official?'official':'professional_profile',...(official?{sourceUrl:page.url,sourceCheckedAt:state.tasks.find(t=>t.kind==='read'&&t.value===page.url&&!t.archived)?.checkedAt}:{})};
+  return confirmed;
+ };
+ const applyProfile=(candidate,person,review)=>{
+  const indexed=websiteLinkedInMatchRows(person,review.queries.flatMap(q=>q.rows||[]),candidate);
+  const matched=D.matchPublicLinkedInProfiles([{...person,identitySource:'public',linkedinIdentityEvidence:null,linkedinConfirmedUrl:'',linkedinConfirmationMethod:'automatic'}],indexed,input.company)[0];
+  Object.assign(person,matched,{linkedinReview:review});
+ };
  const checkContacts=async()=>{
   const selected=waitingPeople();if(!selected.length)return;
   state.contactCursor=selected.at(-1).id;state.label='Check public email, phone and profiles · '+selected.map(p=>p.name).join(', ');
@@ -157,6 +168,9 @@ export async function runWebsiteContactJobs(env,{jobId,now=Date.now(),windowMs=4
     if(services.checkPerson){complete=(await services.checkPerson(candidate,person,{search,read,guard,signal:controller.signal})).complete===true;}
     else{
      if(!websiteLinkedInReviewCurrent(candidate,person)){person.linkedinReview=await reviewWebsiteLinkedIn(candidate,person,{search,guard,receipt:query=>state.tasks.find(t=>t.kind==='search'&&t.value===query&&!t.archived)});if(person.contactResearch?.checks?.linkedin)person.contactResearch.checks.linkedin.profileMatchVersion=0;}
+     applyProfile(candidate,person,person.linkedinReview);
+     recordIdentity(candidate,person,person.linkedinReview,reads(state).find(page=>page.url===person.publicNameUrl));
+     await checkpoint();
      const linkedinQuery=D.buyerResearchQueryPlan(candidate,person).linkedin[0],profileRows=websiteLinkedInMatchRows(person,person.linkedinReview.queries.flatMap(q=>q.rows||[]),candidate);
      const report=await D.runMandatoryBuyerResearch(candidate,{search:query=>query===linkedinQuery?Promise.resolve(profileRows):search(query),readPage:read,rows:reads(state),guard,signal:controller.signal,maxDurationMs:Math.max(1000,windowMs-(clock()-start)-1000),observeTools:false,crossCheck:async p=>task('independent',String(p.id),signal=>services.independent?services.independent(p,{signal}):searchWorkspaceBuyerContact(env,row.workspace_id,{company:input.company,domain:input.domain,person:p,signal}))});
      Object.assign(person,candidate.people[0]);state.linkedinReviewVersion=WEBSITE_LINKEDIN_REVIEW_VERSION;complete=websiteFreeResearchComplete(candidate,person);
@@ -174,15 +188,9 @@ export async function runWebsiteContactJobs(env,{jobId,now=Date.now(),windowMs=4
   const review=await reviewWebsiteLinkedIn(candidate,person,{search,guard,receipt:query=>state.tasks.find(t=>t.kind==='search'&&t.value===query&&!t.archived)});
   // Fresh matching may clear an older derived profile hold; a namesake/role
   // conflict in the saved roster remains authoritative and is never overridden.
-  const matched=D.matchPublicLinkedInProfiles([{...person,identitySource:'public',linkedinIdentityEvidence:null,linkedinConfirmedUrl:'',linkedinConfirmationMethod:'automatic'}],websiteLinkedInMatchRows(person,review.queries.flatMap(q=>q.rows||[]),candidate),input.company)[0];
-  Object.assign(person,matched,{linkedinReview:review});
-  let official=false;
-  if(review.matchStatus!=='double_checked'&&person.identityOrigin==='official'&&sameHost(person.publicNameUrl,input.domain)){
-   const page=await optional(()=>read(person.publicNameUrl));
-   official=Boolean(page&&[...D.discoverCompanyContacts([page],candidate,[]),...localStaffCards(page,input)].some(p=>websiteNameKey(p.publicName||p.name)===websiteNameKey(person.publicName||person.name)&&websiteContactRole(p.title)===websiteContactRole(person.title)));
-  }
-  await guard();const confirmed=websiteLinkedInReviewCurrent(candidate,person)&&websiteIdentitySupport(candidate,person).eligible&&(review.matchStatus==='double_checked'||official);
-  person.identityCheck={...person.identityCheck,version:1,status:confirmed?'confirmed':'needs_review',checkedAt:new Date().toISOString(),identityKey:websiteIdentityCheckKey(candidate,person),evidenceKind:official?'official':'professional_profile',...(official?{sourceUrl:person.publicNameUrl,sourceCheckedAt:state.tasks.find(t=>t.kind==='read'&&t.value===person.publicNameUrl&&!t.archived)?.checkedAt}:{})};
+  applyProfile(candidate,person,review);
+  const page=review.matchStatus!=='double_checked'&&person.identityOrigin==='official'&&sameHost(person.publicNameUrl,input.domain)?await optional(()=>read(person.publicNameUrl)):null;
+  await guard();const confirmed=recordIdentity(candidate,person,review,page);
   state.freeRevision=(state.freeRevision||1)+1;delete state.personCheck;
   status=state.phase==='contacts'&&state.people.every(p=>p.freeResearchStatus==='complete')?'complete':'incomplete';
   state.stopReason='identity_checked';state.label=confirmed?'Identity confirmed. Paid email and phone research are ready for separate approval.':'Identity check saved. The person or current company still needs review.';
