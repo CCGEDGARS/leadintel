@@ -17,8 +17,8 @@ const criteria=M.configuration({profileIds:['core'],signalMode:'off',count:10,ma
 const T0=Date.parse('2026-11-25T07:18:18Z');   // the list's created_at below, as the server writes it (UTC, no zone)
 const receipt=(operation,target,secondsAfterStart,status='complete')=>({id:1,operation,target,status,at:new Date(T0+secondsAfterStart*1000).toISOString()});
 function list(change={}){
- const {kept=0,receipts=[],status='running',progress={},...rest}=change;
- const results=Array.from({length:kept},(_,i)=>({company:'Works '+i,domain:'works'+i+'.example',website:'https://works'+i+'.example/',score:80-i,fitScore:80-i,signalBonus:0,matches:[{name:'Core',kind:'profile',strength:80,score:80,url:'https://source.example/'}],checkedAt:'2026-11-25T07:20:00Z'}));
+ const {kept=0,receipts=[],status='running',progress={},keptAt=()=>102,...rest}=change;
+ const results=Array.from({length:kept},(_,i)=>({company:'Works '+i,domain:'works'+i+'.example',website:'https://works'+i+'.example/',score:80-i,fitScore:80-i,signalBonus:0,matches:[{name:'Core',kind:'profile',strength:80,score:80,url:'https://source.example/'}],checkedAt:new Date(T0+keptAt(i)*1000).toISOString()}));
  return {id:'one',name:'Steel',criteria,status,revision:1,results,receipts,createdAt:'2026-11-25 07:18:18',updatedAt:'2026-11-25 07:20:00',progress:{count:kept,target:10,checked:kept+3,operations:40,allowance:400,reason:'',phase:'reviewing',nextAttemptAt:0,...progress},...rest};
 }
 // Opens the panel on the given list at the given moment. `now` can be moved; `second()` lets one second's tick run.
@@ -123,4 +123,27 @@ test('after "continue" the clock counts the run that was just started, not the t
  await h.click('resume');
  assert.equal(h.part('clock'),'Running 0:00');
  h.second(7);assert.equal(h.part('clock'),'Running 0:07');
+});
+
+// Live, 25 Nov 2026, release 1088435a: two seconds after "Keep searching" the line said "Now: assessing steelinfo.dk ·
+// 18 min ago · About 1 minute left at this pace" — the last operation of the earlier run, and a pace worked out from
+// the two companies that run had found.
+test('right after "continue" the line does not show the earlier run\'s last operation or its pace',async t=>{
+ const before=[receipt('analysis','https://steelinfo.dk/',700)];
+ const h=await open(t,list({status:'incomplete',kept:2,receipts:before,progress:{operations:200,allowance:200}}),1800,()=>({list:list({status:'queued',kept:2,receipts:before,progress:{operations:200,allowance:400}})}));
+ await h.click('resume');
+ assert.equal(h.part('now'),'Now: continuing the search');
+ assert.equal(h.part('estimate'),'A list of 10 usually takes 3–10 minutes','two matches of the earlier run are not this run\'s pace');
+ h.second(5);
+ assert.equal(h.part('clock'),'Running 0:05');assert.equal(h.part('now'),'Now: continuing the search');
+});
+
+test('after "continue" the time left follows the matches of the run that is going on',async t=>{
+ const during=[receipt('analysis','https://steelinfo.dk/',700),receipt('page_read','https://new.example/',2035)];
+ const h=await open(t,list({status:'incomplete',kept:2,progress:{operations:200,allowance:200}}),1800,
+  ()=>({list:list({status:'running',kept:4,keptAt:i=>i<2?102:1800+60*(i-1),receipts:during,progress:{operations:260,allowance:400}})}));
+ await h.click('resume');h.second(240);
+ assert.equal(h.part('clock'),'Running 4:00');
+ assert.equal(h.part('now'),'Now: reading new.example · 5 s ago');
+ assert.equal(h.part('estimate'),'About 12 minutes left at this pace','2 new companies in 4 minutes, 6 to go');
 });

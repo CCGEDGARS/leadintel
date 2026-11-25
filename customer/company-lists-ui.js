@@ -235,13 +235,16 @@
  const utcTime=value=>{const text=String(value||'');return Date.parse(/[zZ]$|[+-]\d\d:?\d\d$/.test(text)?text:text.replace(' ','T')+'Z');};
  const minutesSeconds=ms=>{const seconds=Math.max(0,Math.floor(ms/1000));return Math.floor(seconds/60)+':'+String(seconds%60).padStart(2,'0');};
  function liveText(l,now=Date.now()){
-  const began=startedHere.get(l.id)||utcTime(l.createdAt)||now,elapsed=Math.max(0,now-began),kept=l.results.length,left=l.criteria.count-kept;
+  const pressed=startedHere.get(l.id),began=pressed||utcTime(l.createdAt)||now,elapsed=Math.max(0,now-began),left=l.criteria.count-l.results.length;
+  // After Start or continue in this page only this run counts: its own operations and the companies it has kept.
+  const kept=pressed?l.results.filter(r=>utcTime(r.checkedAt)>=pressed).length:l.results.length;
   const waiting=l.progress.phase==='retrying'||Number(l.progress.nextAttemptAt)>now,last=l.receipts[l.receipts.length-1];
   let doing='preparing the search',ago='';
   if(last){
-   const target=String(last.target||''),seconds=Math.max(0,Math.floor((now-utcTime(last.at))/1000));
-   doing=last.operation==='search'?'searching the web':target==='search plan'?'planning the searches':(LIVE_WORK[last.operation]||'working on')+' '+(/^https?:/i.test(target)?M.domain(target):target);
-   if(Number.isFinite(seconds))ago=' · '+(seconds<60?seconds+' s':Math.floor(seconds/60)+' min')+' ago';
+   const target=String(last.target||''),at=utcTime(last.at),seconds=Math.max(0,Math.floor((now-at)/1000));
+   if(pressed&&at<pressed)doing='continuing the search';
+   else{doing=last.operation==='search'?'searching the web':target==='search plan'?'planning the searches':(LIVE_WORK[last.operation]||'working on')+' '+(/^https?:/i.test(target)?M.domain(target):target);
+   if(Number.isFinite(seconds))ago=' · '+(seconds<60?seconds+' s':Math.floor(seconds/60)+' min')+' ago';}
   }
   // One match is not a pace. The figure for ten is what lists of ten took when measured (23–25 Nov 2026).
   const minutes=kept>=2&&left>0?Math.max(1,Math.round(elapsed/kept*left/60000)):0;
