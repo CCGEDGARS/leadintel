@@ -9826,7 +9826,7 @@
       "contains": [
         "Build company list",
         "Download Excel",
-        "Open saved lists",
+        "Saved lists and search history",
         "Resume within remaining allowance"
       ],
       "url": "/customer/company-lists-ui.js",

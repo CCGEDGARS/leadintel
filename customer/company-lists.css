@@ -73,3 +73,6 @@
   .cl-entry-actions { width: 100%; }
   .cl-entry-actions button { flex: 1 1 10rem; }
 }
+
+#cl-history-lists { padding: 16px 0; }
+#cl-history-lists .cl-saved { margin-bottom: 12px; }
