@@ -3,7 +3,6 @@ import {createBuyerSourceSearch} from './buyer-source-search.js';
 import {readPublicBuyerPage} from './service-integrations.js';
 import {productionProvider} from './copilot-service.js';
 import {creditFailure} from './provider-credit-health.js';
-import {annualEuroRate} from './company-revenue-fx.js';
 import {lookupCompanyFacts} from './company-registry.js';
 
 const M=globalThis.LeadIntelCompanyLists;
@@ -34,20 +33,20 @@ const profilePlanning='Return {queries:[strings]}. Plan at most eight distinct s
 // to prove it and kept none. The model only supplies a quoted statement of the
 // company's activity, which can confirm the industry when the register code says otherwise.
 const industryStatement=' Also return industry:{division,url,quote}: the two-digit NACE division of the company\'s main activity and an exact quote from a supplied page on the company\'s own website stating that activity. Omit industry when no supplied page states the activity; never infer it from the company name.';
-const registerInstructions=' Size, industry codes, employee counts, business registration and turnover limits mentioned in profile or reference prose are evaluated separately. Never exclude a candidate or report gaps solely because its website lacks those figures. Do not invent a currency, threshold or upper limit.';
-const revenueInstructions=' If available, return annualRevenue:{url,quote} with an exact statement of this legal entity’s actual full-year net revenue, company name, fiscal year, amount and currency from its own website. Omit projections, quarterly figures, group figures and other entities. If missing, suggest linked annual accounts.';
-const financialReview=' When the candidate carries revenueEvidence, set annualRevenueConfirmed:true only if the source establishes that exact annual turnover for this legal entity, period and original currency; for a DKK amount converted to EUR the period must be a completed calendar year; check for forecasts, other entities and newer contradictory figures.';
+const registerInstructions=' Employee count and annual turnover are descriptive evidence only. Ignore all size and revenue preferences, limits and exclusions in profile or reference prose when planning, deciding eligibility, identifying gaps or scoring fit. Business registration and industry codes are checked separately.';
+const headcountReview=' Set headcountConfirmed:true only if the quoted employee count is current and explicitly refers to this legal entity. An unsupported figure has no effect on the decision.';
+const revenueInstructions=' If available, return headcount:{url,quote} for a current exact employee count with the company name on its own website. If available, return annualRevenue:{url,quote} with an exact statement of this legal entity’s actual full-year net revenue, company name, fiscal year, amount and currency from its own website. Omit projections, quarterly figures, group figures and other entities. If unavailable, omit the field and continue.';
+const financialReview=' When the candidate carries revenueEvidence, set annualRevenueConfirmed:true only if the source establishes that exact annual turnover for this legal entity, period and original currency; check for forecasts, other entities and newer contradictory figures. If unsupported, omit the figure and assess the company on its other evidence.';
 const modelCriteria=criteria=>{if(!criteria.target)return criteria;const {target,...rest}=criteria;return rest;};
 const modelCandidate=candidate=>{if(!candidate?.target)return candidate;const {target,...rest}=candidate;return rest;};
-// The planner gets industry names and a size word, never the numbers or the word
+// The planner gets industry names, never the numbers or the word
 // "register": a live plan (20 Nov 2026) pasted "CVR ... 25-250 ansatte" into every
 // query and searched a company directory instead of companies.
 const targetPlanning=criteria=>{
- const target=criteria.target;if(!target)return '';
- const labels=new Map(T.DIVISIONS.map(d=>[d.code,d.label])),industries=target.industries.map(code=>labels.get(code)).filter(Boolean),max=target.employees?.max;
- return ' This list also has size and industry rules that the application checks by itself after discovery. Never put employee counts, revenue figures, company-number or register terms into a query, and do not search company registers or business directories: search for the companies\' own websites.'
-  +(industries.length?' Industries that qualify: '+industries.join('; ')+'.':'')
-  +(Number.isInteger(max)&&max<=1000?' Look for small and mid-sized companies; do not search for large corporations or groups.':'');
+ const target=criteria.target;if(!target)return registerInstructions;
+ const labels=new Map(T.DIVISIONS.map(d=>[d.code,d.label])),industries=target.industries.map(code=>labels.get(code)).filter(Boolean);
+ return registerInstructions+' This list also has industry rules that the application checks by itself after discovery. Never put employee counts, revenue figures, company-number or register terms into a query, and do not search company registers or business directories: search for the companies\' own websites.'
+  +(industries.length?' Industries that qualify: '+industries.join('; ')+'.':'');
 };
 
 // Which provider refused, and how. Read from the sanitized error text the reasoning adapters build ("Anthropic request
@@ -212,11 +211,6 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
    try{facts=await (services.registry||lookupCompanyFacts)({market:candidate.market,company:candidate.company,website:candidate.website,pages:pages.map(p=>({url:p.url,text:p.text}))},{signal});}
    catch(cause){if(signal.aborted)throw cause;facts={status:'unavailable'};}
    if(facts?.status==='unavailable'&&criteria.minimumScore&&criteria.target?.registryOnly)throw error('Required business register unavailable.','registry_offline');
-   const revenue=candidate.revenueEvidence;
-   if(facts?.status==='found'&&!facts.revenue&&!facts.group&&revenue?.currency==='DKK'&&criteria.target?.revenue?.currency==='EUR'&&revenue.year<new Date().getUTCFullYear()){
-    const conversion=await (services.annualEuroRate||annualEuroRate)(revenue.year,{signal});
-    if(conversion)facts={...facts,annualEuroRate:conversion};
-   }
    return facts;
   }
   const generate=async prompt=>operation(prompt.stage==='review'?'evidence_review':'analysis',prompt.stage==='plan'?'search plan':s.pending[0]?.url||prompt.stage,(signal,receipt)=>ask(prompt,signal,receipt));
@@ -237,14 +231,6 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
    }
    s.pending.splice(s.pending.indexOf(task)+1,0,...additions);return additions.length>0;
   };
-  function finishPending(task,outcome,pages){
-   if(criteria.target?.revenue?.min!=null&&!task.candidate.revenueEvidence){
-    const host=M.domain(task.candidate.website);
-    const reports=pages.flatMap(page=>page.links||[]).filter(link=>M.domain(link)===host&&/(?:annual[-_/ ]?(?:report|accounts)|financial[-_/ ]?(?:report|results)|årsrapport|aarsrapport|regnskab)/i.test(link));
-    followup(task,{followupUrls:reports},pages);
-   }
-   finishTask(task,outcome.reason,'needs_evidence');
-  }
   const drop=task=>{const at=s.pending.indexOf(task);if(at>=0)s.pending.splice(at,1);};
   const finishTask=(task,reason,status)=>{if(reason)recordGap(task,reason,status);s.checked++;drop(task);s.reason=`${s.results.length} of ${criteria.count} companies matched`;};
   const allowance=async()=>{s.failureCode='allowance';s.reason='Research allowance reached. Completed matches are retained. Resume grants the displayed additional allowance.';await checkpoint('incomplete');};
@@ -313,11 +299,11 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
      const candidate=task.candidate;
      const facts=await laneOperation(lane,'register_check',candidate.company,signal=>registerFacts(candidate,pages,signal));
      const outcome=M.targetOutcome(candidate,facts,criteria);
-     if(outcome.pending)finishPending(task,outcome,pages);
+     if(outcome.pending)finishTask(task,outcome.reason,'needs_evidence');
      else if(outcome.excluded)finishTask(task,outcome.reason,'rejected');
      else{task.candidate=outcome.candidate;task.registerChecked=true;}
     }else if(task.candidate){
-     const review=await laneAsk(lane,{stage:'review',criteria:modelCriteria(criteria),pages,candidate:modelCandidate(task.candidate),instructions:profileReview+(criteria.target?registerInstructions:'')+(task.candidate.revenueEvidence?financialReview:'')},task);
+     const review=await laneAsk(lane,{stage:'review',criteria:modelCriteria(criteria),pages,candidate:modelCandidate(task.candidate),instructions:profileReview+registerInstructions+(task.candidate.revenueEvidence?financialReview:'')+(task.candidate.headcountEvidence?headcountReview:'')},task);
      const result=M.reviewResult(task.candidate,review,criteria);
      if(result&&criteria.minimumScore&&result.score<criteria.minimumScore){
       finishTask(task,'Reviewed score '+result.score+' is below the required '+criteria.minimumScore+'.','rejected');
@@ -337,7 +323,7 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
      if(review.decision!=='reject')followup(task,review,pages);
      finishTask(task,(review.gaps||[]).map(g=>clean(g)).join(' · ')||clean(review.reason)||'Required evidence review did not pass.',review.decision==='reject'?'rejected':'needs_evidence');
     }else{
-     const raw=await laneAsk(lane,{stage:'assess',criteria:modelCriteria(criteria),pages,instructions:profileAssessment+(criteria.target?registerInstructions:'')+(criteria.target?.revenue?revenueInstructions:'')+(criteria.target?.industries?.length?industryStatement:'')},task);
+     const raw=await laneAsk(lane,{stage:'assess',criteria:modelCriteria(criteria),pages,instructions:profileAssessment+registerInstructions+(criteria.target?revenueInstructions:'')+(criteria.target?.industries?.length?industryStatement:'')},task);
      const result=M.assess(raw,criteria,pages);
      if(result&&result.commercialFit){task.candidate=result;task.assessment={...lane.last};s.phase='reviewing';}
      else{if(raw.excluded!==true)followup(task,raw,pages);finishTask(task,(raw.gaps||[]).map(g=>clean(g)).join(' · ')||(raw.excluded?'Company excluded':'Identity, market, selected signal or commercial-fit evidence is incomplete.'),raw.excluded?'rejected':'needs_evidence');}
@@ -524,11 +510,11 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
        const candidate=task.candidate;
        const facts=await operation('register_check',candidate.company,signal=>registerFacts(candidate,pages,signal));
        const outcome=M.targetOutcome(candidate,facts,criteria);
-       if(outcome.pending)finishPending(task,outcome,pages);
+       if(outcome.pending)finishTask(task,outcome.reason,'needs_evidence');
      else if(outcome.excluded)finishTask(task,outcome.reason,'rejected');
        else{task.candidate=outcome.candidate;task.registerChecked=true;s.reason='Reviewing source evidence before counting a match';}
       }else if(task.candidate&&strict){
-       const review=await generate({stage:'review',criteria:modelCriteria(criteria),pages,candidate:modelCandidate(task.candidate),instructions:profilePolicy?profileReview+(criteria.target?registerInstructions:'')+(task.candidate.revenueEvidence?financialReview:''):reviewInstructions});
+       const review=await generate({stage:'review',criteria:modelCriteria(criteria),pages,candidate:modelCandidate(task.candidate),instructions:profilePolicy?profileReview+registerInstructions+(task.candidate.revenueEvidence?financialReview:'')+(task.candidate.headcountEvidence?headcountReview:''):reviewInstructions});
        const result=M.reviewResult(task.candidate,review,criteria);
        if(result&&criteria.minimumScore&&result.score<criteria.minimumScore){
         finishTask(task,'Reviewed score '+result.score+' is below the required '+criteria.minimumScore+'.','rejected');
@@ -540,7 +526,7 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
         retain(result);finishTask(task);
        }else{if(review.decision!=='reject')followup(task,review,pages);finishTask(task,(review.gaps||[]).map(g=>clean(g)).join(' · ')||clean(review.reason)||'Required evidence review did not pass.',review.decision==='reject'?'rejected':'needs_evidence');}
       }else{
-       const raw=await generate({stage:'assess',criteria:modelCriteria(criteria),pages,instructions:profilePolicy?profileAssessment+(criteria.target?registerInstructions:'')+(criteria.target?.revenue?revenueInstructions:'')+(criteria.target?.industries?.length?industryStatement:''):assessmentInstructions});let match=M.assess(raw,profilePolicy?criteria:{...criteria,mode:'any'},pages);
+       const raw=await generate({stage:'assess',criteria:modelCriteria(criteria),pages,instructions:profilePolicy?profileAssessment+registerInstructions+(criteria.target?revenueInstructions:'')+(criteria.target?.industries?.length?industryStatement:''):assessmentInstructions});let match=M.assess(raw,profilePolicy?criteria:{...criteria,mode:'any'},pages);
        // Legacy jobs can finish their already-evidenced multi-signal matches.
        // Their older policy is retained and never relabelled as a new review.
        if(!strict&&match){s.partial||={};match=M.mergeResult(s.partial[match.domain],match,criteria);if(Object.keys(s.partial).length<500)s.partial[match.domain]=match;}

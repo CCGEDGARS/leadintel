@@ -29,7 +29,7 @@ test('the search planner never receives the size rule; it gets the industry name
  assert.doesNotMatch(JSON.stringify(plan),/"employees"|"registryOnly"|\b250\b|verified against the business register/);
  assert.match(plan.instructions,/Fabricated metal products/);assert.match(plan.instructions,/Machinery and equipment/);
  assert.match(plan.instructions,/companies' own websites/);assert.match(plan.instructions,/never put employee counts/i);
- assert.match(plan.instructions,/small and mid-sized/,'an employee maximum becomes a size word, not a number');
+ assert.doesNotMatch(plan.instructions,/small and mid-sized/);
  assert.equal(Object.hasOwn(assess.criteria,'target'),false);
 });
 
@@ -53,7 +53,7 @@ test('no reasoning prompt carries the size, industry or register rules; the regi
  assert.equal(review.candidate.company,'Factory0');assert.equal(Object.hasOwn(review.candidate,'target'),false,'the reviewer does not see the register outcome');
  assert.match(prompts.find(p=>p.stage==='assess').instructions,/industry:\{division,url,quote\}/,'the industry statement is still asked for');
  assert.equal(list.status,'complete');assert.deepEqual(list.results.map(r=>r.company),['Factory0']);
- assert.deepEqual(list.results[0].target.checks.map(c=>[c.key,c.status]),[['registry','match'],['industry','match'],['employees','match']],'the kept company still carries its register checks');
+ assert.deepEqual(list.results[0].target.checks.map(c=>[c.key,c.status]),[['registry','match'],['industry','match'],['employees','reported'],['revenue','unknown']],'the kept company still carries its register checks');
  assert.equal(list.results[0].target.register.id,'5500000000');
  assert.ok(asked.includes('Factory0'));
 });

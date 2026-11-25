@@ -173,7 +173,7 @@
  }
  // Keep the literal amount and currency together. Ambiguous separators, multiple
  // amounts, stale periods and projections require a better source.
- function annualRevenue(pages,raw,host,company,currency,now){
+ function annualRevenue(pages,raw,host,company,now){
   const proof=sourceProof(pages,raw);
   if(!proof||domain(proof.url)!==host||!namedIdentity(proof.quote,company))return null;
   const text=proof.quote,years=[...new Set(text.match(/\b20\d{2}\b/g)||[])],current=new Date(now).getUTCFullYear();
@@ -186,12 +186,18 @@
   const amounts=[...text.matchAll(new RegExp('(?<![\\d.,−–(\\-])\\b('+unit+')\\s+('+value+')(?![\\d.,]\\d)|(?<![\\d.,−–(\\-])\\b('+value+')\\s+('+unit+')\\b','gi'))];
   if(amounts.length!==1)return null;
   const m=amounts[0],original=(m[1]||m[4]).toUpperCase(),literal=m[2]||m[3];
-  if(original!==currency&&!(original==='DKK'&&currency==='EUR'))return null;
   if(/(?:thousand|billion|milliard|tusind|mia\b|mio\b|million|[kmb]\b)/i.test(text.slice(m.index+m[0].length).trimStart().split(/\s/)[0]))return null;
   const scaled=literal.match(/^(\d+(?:[.,]\d{1,2})?)\s+(?:million(?:er)?|mio)\.?$/i);
   const amount=scaled?Math.round(Number(scaled[1].replace(',','.'))*1e6):Number(literal.replace(/[.,]/g,''));
   if(!Number.isSafeInteger(amount))return null;
   return {...proof,amount,currency:original,year:+years[0]};
+ }
+ function publishedHeadcount(pages,raw,host,company){
+  const proof=sourceProof(pages,raw);
+  if(!proof||domain(proof.url)!==host||!namedIdentity(proof.quote,company))return null;
+  const counts=[...proof.quote.matchAll(/(?<![\d.,–-])\b(\d{1,3}(?:,\d{3})+|\d+)\s+(?:employees|medarbejdere|ansatte)\b/gi)];
+  if(counts.length!==1||/group|koncern|target|forecast|expected|more than|over |approximately|cirka|at least|fewer than|less than|up to/i.test(proof.quote))return null;
+  return {...proof,count:Number(counts[0][1].replace(/,/g,''))};
  }
  function assessProfiles(raw,c,pages,now){
   const website=url(raw.website),host=domain(website),company=clean(raw.company,180);
@@ -231,13 +237,21 @@
   // confirm the industry when the register code says otherwise.
   const stated=c.target?.industries?.length&&/^\d{2}$/.test(clean(raw.industry?.division,4))?sourceProof(pages,raw.industry):null;
   const industryEvidence=stated&&domain(stated.url)===host?{division:clean(raw.industry.division,4),url:stated.url,quote:stated.quote}:null;
-  const revenueEvidence=c.target?.revenue&&annualRevenue(pages,raw.annualRevenue,host,company,c.target.revenue.currency,now);
-  return profileScores({...(revenueEvidence?{revenueEvidence}:{}),...(industryEvidence?{industryEvidence}:{}),company,website,domain:host,location:clean(raw.location.label,180),market:raw.location.market,identity,locationEvidence:location,
+  const revenueEvidence=c.target&&annualRevenue(pages,raw.annualRevenue,host,company,now);
+  const headcountEvidence=c.target&&publishedHeadcount(pages,raw.headcount,host,company);
+  return profileScores({...(headcountEvidence?{headcountEvidence}:{}),...(revenueEvidence?{revenueEvidence}:{}),...(industryEvidence?{industryEvidence}:{}),company,website,domain:host,location:clean(raw.location.label,180),market:raw.location.market,identity,locationEvidence:location,
    commercialFit:{...commercial,status:'supported',reason:clean(raw.commercialFit.reason,700),buyingIntent:'unconfirmed'},profileMatches,signalMatches,checkedAt:new Date(now).toISOString(),buyingIntent:'unconfirmed'},c);
  }
  function reviewProfiles(candidate,review,c,now){
   if(!candidate||review?.decision!=='pass'||!clean(review.reason)||(review.gaps||[]).length||['identityConfirmed','marketConfirmed','commercialFitConfirmed','exclusionsChecked'].some(k=>review[k]!==true))return null;
-  if(candidate.target?.checks.some(check=>check.key==='revenue'&&check.evidence)&&review.annualRevenueConfirmed!==true)return null;
+  if(candidate.headcountEvidence&&review.headcountConfirmed!==true){
+   const {headcountEvidence,...rest}=candidate;
+   candidate={...rest,target:{...rest.target,checks:(rest.target?.checks||[]).map(check=>check.key==='employees'&&check.evidence?{key:'employees',status:'unknown',detail:'Headcount unconfirmed'}:check)}};
+  }
+  if(candidate.revenueEvidence&&review.annualRevenueConfirmed!==true){
+   const {revenueEvidence,...rest}=candidate;
+   candidate={...rest,target:{...rest.target,checks:(rest.target?.checks||[]).map(check=>check.key==='revenue'&&check.evidence?{key:'revenue',status:'unknown',detail:'Annual turnover unconfirmed'}:check)}};
+  }
   const profiles=new Set(Array.isArray(review.supportedProfileIds)?review.supportedProfileIds:[]),signals=new Set(Array.isArray(review.supportedSignalIds)?review.supportedSignalIds:[]);
   const signalMatches=candidate.signalMatches.filter(m=>signals.has(m.signalId)&&matchStrength(m.score));
   const eventsSupported=signalRule(signalMatches,c);
@@ -251,23 +265,18 @@
  // company; missing or unavailable facts keep it with every check marked unknown.
  function targetOutcome(candidate,facts,c){
   if(!c?.target||!candidate)return {excluded:false,candidate};
-  const disclosure=facts?.status==='found'&&!facts.group&&!facts.revenue&&candidate.revenueEvidence;
-  const effective=disclosure?.currency==='DKK'&&c.target.revenue?.currency==='EUR'&&facts.annualEuroRate?{...disclosure,amount:disclosure.amount/facts.annualEuroRate.rate,currency:'EUR'}:disclosure;
-  const result=TargetCriteria.evaluate(c.target,effective?{...facts,revenue:effective}:facts,{industryEvidence:candidate.industryEvidence});
-  if(disclosure){
-   const check=result.checks.find(check=>check.key==='revenue');
-   if(check){
-    check.evidence={url:disclosure.url,quote:disclosure.quote};
-    if(effective!==disclosure){
-     check.detail+=' · '+disclosure.amount.toLocaleString('en-US')+' DKK at '+facts.annualEuroRate.rate+' DKK per EUR (ECB annual average)';
-     check.exchangeRateSource=facts.annualEuroRate.url;
-    }
-   }
+  const disclosure=!facts?.group&&!facts?.revenue&&candidate.revenueEvidence;
+  const result=TargetCriteria.evaluate(c.target,facts,{disclosure,industryEvidence:candidate.industryEvidence});
+  const headcount=result.checks.find(check=>check.key==='employees');
+  if(headcount.status==='unknown'&&!facts?.group&&candidate.headcountEvidence){
+   const {count,url,quote}=candidate.headcountEvidence;
+   Object.assign(headcount,{status:'reported',detail:count.toLocaleString('en-US')+' employees',evidence:{url,quote}});
   }
+  if(disclosure)result.checks.find(check=>check.key==='revenue').evidence={url:disclosure.url,quote:disclosure.quote};
   const checks=result.checks.map(check=>({...check,detail:clean(check.detail,500)}));
   if(result.decision==='exclude')return {excluded:true,reason:'Outside the target criteria: '+checks.filter(check=>check.status==='mismatch').map(check=>check.detail).join(' · ')};
   if(c.minimumScore){
-   const missing=checks.filter(check=>check.status==='unknown'&&(check.key==='registry'?c.target.registryOnly:check.key==='revenue'?c.target.revenue?.min!=null:true));
+   const missing=checks.filter(check=>check.status==='unknown'&&(check.key==='industry'||check.key==='registry'&&c.target.registryOnly));
    if(missing.length)return {pending:true,reason:'Required evidence missing: '+missing.map(check=>check.detail).join(' · ')};
   }
   const register=facts?.status==='found'?{registry:clean(facts.registry,40),id:clean(facts.id,40),name:clean(facts.name,180),city:clean(facts.city,120),marketingProtected:facts.marketingProtected??null,source:facts.source||null,...(facts.group?{group:facts.group}:{})}:null;

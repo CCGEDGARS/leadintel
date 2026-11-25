@@ -90,6 +90,7 @@ test('lookalike list with five references and no optional triggers progresses wi
 
   const services=profileServices({count:10});
   f.env.COMPANY_LIST_TEST_SERVICES={...services,
+    registry:async()=>({status:"unavailable"}),
     read:async url=>{
       const page=await services.read(url);
       return {...page,markdown:page.markdown.replace('Stockholm, Sweden','Aarhus, Denmark')};
@@ -143,7 +144,7 @@ test('lookalike list with five references and no optional triggers progresses wi
   await reopened.waitForSelector('.cl-result-heading');
   assert.match(await reopened.locator('#company-list-content').innerText(),new RegExp(state.results.length+' of 10'));
   const originalDomains=state.results.map(r=>r.domain);
-  for(let extension=0;extension<3&&readRun().status==='incomplete';extension++){
+  for(let extension=0;extension<4&&readRun().status==='incomplete';extension++){
     const resumed=reopened.waitForResponse(r=>r.url().includes('/api/company-lists')&&r.request().method()==='POST'&&r.request().postDataJSON()?.action==='resume');
     await reopened.getByRole('button',{name:'Keep searching'}).click();
     assert.equal((await resumed).status(),200);

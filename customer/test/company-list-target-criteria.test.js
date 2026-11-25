@@ -22,7 +22,7 @@ test('structured criteria are normalised and frozen with the list; invalid input
  assert.deepEqual(config({target}).target,{version:1,employees:{min:25,max:250},revenue:{min:3000000,idealMin:null,idealMax:null,currency:'EUR'},industries:['24','25'],registryOnly:true});
  assert.throws(()=>config({target:{employees:{min:300,max:25}}}),e=>e.status===400);
  assert.throws(()=>config({target:{industries:['metal']}}),e=>e.status===400);
- assert.match(M.criteriaSummary(config({target})),/25–250 employees/);
+ assert.match(M.criteriaSummary(config({target})),/turnover.*evidence/i);
  assert.doesNotMatch(M.criteriaSummary(config()),/employees/);
 });
 
@@ -41,7 +41,7 @@ test('register facts inside the criteria are attached to the company with one re
  const c=config({target}),candidate=M.assess(raw(),c,[page],now);
  const outcome=M.targetOutcome(candidate,registered(),c);
  assert.equal(outcome.excluded,false);
- assert.deepEqual(outcome.candidate.target.checks.map(x=>[x.key,x.status]),[['registry','match'],['industry','match'],['employees','match'],['revenue','unknown']]);
+ assert.deepEqual(outcome.candidate.target.checks.map(x=>[x.key,x.status]),[['registry','match'],['industry','match'],['employees','reported'],['revenue','unknown']]);
  assert.deepEqual(outcome.candidate.target.register,{registry:'DK-CVR',id:'11111111',name:'FABRICATOR A/S',city:'Give',marketingProtected:true,source:{name:'CVR',url:'https://register.example/11111111',checkedAt:'2026-11-20T12:00:00.000Z'}});
  assert.equal(outcome.candidate.score,candidate.score,'the fit score is not changed by the register check');
  assert.equal(outcome.candidate.company,'Fabricator');
@@ -50,9 +50,9 @@ test('register facts inside the criteria are attached to the company with one re
 test('a known mismatch excludes with the plain reasons; unknown facts keep the company flagged',()=>{
  const c=config({target}),candidate=M.assess(raw(),c,[page],now);
  const large=M.targetOutcome(candidate,registered({employees:{count:833}}),c);
- assert.deepEqual(large,{excluded:true,reason:'Outside the target criteria: 833 employees (outside 25–250)'});
+ assert.equal(large.candidate.score,candidate.score);assert.equal(large.candidate.target.checks.find(c=>c.key==='employees').detail,'833 employees');
  const both=M.targetOutcome(candidate,registered({employees:{count:1027},industry:{code:'711210',label:'Engineering consultancy'}}),c);
- assert.equal(both.reason,'Outside the target criteria: 71.12 Engineering consultancy is outside the selected industries · 1,027 employees (outside 25–250)');
+ assert.equal(both.reason,'Outside the target criteria: 71.12 Engineering consultancy is outside the selected industries');
  assert.equal(M.targetOutcome(candidate,{status:'not_found',registry:'DK-CVR',country:'DK'},c).reason,'Outside the target criteria: Not found in the DK-CVR register');
  for(const facts of [{status:'unavailable',registry:'DK-CVR',country:'DK'},{status:'ambiguous',registry:'DK-CVR',country:'DK'},{status:'unsupported'}]){
   const kept=M.targetOutcome(candidate,facts,c);

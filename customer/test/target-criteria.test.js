@@ -27,25 +27,25 @@ test('invalid ranges and codes are rejected with a 400 instead of being guessed'
 test('a registered active company inside every known range passes with one reason per criterion',()=>{
  const r=T.evaluate(criteria(),found());
  assert.equal(r.decision,'pass');assert.deepEqual(r.excludedBy,[]);
- assert.deepEqual(r.checks.map(c=>[c.key,c.status]),[['registry','match'],['industry','match'],['employees','match'],['revenue','unknown']]);
+ assert.deepEqual(r.checks.map(c=>[c.key,c.status]),[['registry','match'],['industry','match'],['employees','reported'],['revenue','unknown']]);
  assert.match(check(r,'registry').detail,/11111111/);assert.match(check(r,'employees').detail,/120/);
- assert.match(check(r,'revenue').detail,/not published/i);
+ assert.match(check(r,'revenue').detail,/unavailable/i);
 });
 
-test('employee count outside the range excludes; a missing count keeps the company',()=>{
- for(const count of [3108,833,251,24,0]){const r=T.evaluate(criteria(),found({employees:{count}}));assert.equal(r.decision,'exclude',String(count));assert.deepEqual(r.excludedBy,['employees']);}
+test('published and missing counts both keep the company',()=>{
+ for(const count of [3108,833,251,24,0]){const r=T.evaluate(criteria(),found({employees:{count}}));assert.equal(r.decision,'pass',String(count));assert.deepEqual(r.excludedBy,[]);}
  for(const count of [25,250])assert.equal(T.evaluate(criteria(),found({employees:{count}})).decision,'pass');
  for(const employees of [null,{},{count:null}]){const r=T.evaluate(criteria(),found({employees}));assert.equal(r.decision,'pass');assert.equal(check(r,'employees').status,'unknown');}
 });
 
-test('a registry interval excludes only when it lies wholly outside the range',()=>{
+test('registry intervals are reported verbatim',()=>{
  const status=(min,max)=>{const r=T.evaluate(criteria(),found({employees:{min,max}}));return [r.decision,check(r,'employees').status];};
- assert.deepEqual(status(50,99),['pass','match']);
- assert.deepEqual(status(20,49),['pass','unknown']);
- assert.deepEqual(status(200,499),['pass','unknown']);
- assert.deepEqual(status(500,999),['exclude','mismatch']);
- assert.deepEqual(status(1000,null),['exclude','mismatch']);
- assert.deepEqual(status(10,19),['exclude','mismatch']);
+ assert.deepEqual(status(50,99),['pass','reported']);
+ assert.deepEqual(status(20,49),['pass','reported']);
+ assert.deepEqual(status(200,499),['pass','reported']);
+ assert.deepEqual(status(500,999),['pass','reported']);
+ assert.deepEqual(status(1000,null),['pass','reported']);
+ assert.deepEqual(status(10,19),['pass','reported']);
 });
 
 test('industry outside the selected divisions excludes; holding and head-office codes stay unknown',()=>{
@@ -74,13 +74,12 @@ test('an outage, an ambiguous match or a market without a register never exclude
  }
 });
 
-test('published revenue below the minimum excludes; other currencies are not compared',()=>{
- const revenue=(amount,currency='EUR')=>T.evaluate(criteria(),found({revenue:{amount,currency,year:2025}}));
- assert.deepEqual(revenue(2999999).excludedBy,['revenue']);
- assert.equal(check(revenue(3000000),'revenue').status,'match');
- assert.match(check(revenue(25000000),'revenue').detail,/ideal/i);
- assert.doesNotMatch(check(revenue(5000000),'revenue').detail,/ideal/i);
- const dkk=revenue(1000000,'DKK');assert.equal(dkk.decision,'pass');assert.equal(check(dkk,'revenue').status,'unknown');assert.match(check(dkk,'revenue').detail,/DKK/);
+test('published turnover retains its original currency and year regardless of legacy thresholds',()=>{
+ for(const [amount,currency] of [[2900000,'EUR'],[1000000,'DKK'],[200000000,'EUR']]){
+  const result=T.evaluate(criteria(),found({revenue:{amount,currency,year:2025}}));
+  assert.deepEqual(result.excludedBy,[]);
+  assert.deepEqual(check(result,'revenue'),{key:'revenue',status:'reported',detail:amount.toLocaleString('en-US')+' '+currency+' (2025)'});
+ }
 });
 
 test('without criteria nothing is evaluated',()=>{
@@ -89,18 +88,18 @@ test('without criteria nothing is evaluated',()=>{
 
 test('describe states the saved rules in plain words',()=>{
  const text=T.describe(criteria());
- assert.match(text,/25–250 employees/);assert.match(text,/3,000,000 EUR/);assert.match(text,/24, 25/);assert.match(text,/register/i);
+ assert.match(text,/turnover.*evidence/i);assert.doesNotMatch(text,/25–250|3,000,000/);assert.match(text,/24, 25/);assert.match(text,/register/i);
  assert.equal(T.describe(null),'');
 });
 
-test('a group sized by its largest registered member is excluded when that member alone exceeds the range',()=>{
+test('a group reports headcount with its entity scope',()=>{
  const group=found({name:'EXAMPLE MANUFACTURING A/S',id:'22222222',employees:{min:3325,max:null},group:{members:4,basis:'largest active entity whose legal name starts with the company name'}});
  const r=T.evaluate(criteria(),group);
- assert.equal(r.decision,'exclude');assert.deepEqual(r.excludedBy,['employees']);
+ assert.equal(r.decision,'pass');assert.deepEqual(r.excludedBy,[]);
  assert.match(check(r,'registry').detail,/^Registered group \(4 entities\), largest: EXAMPLE MANUFACTURING A\/S \(DK-CVR 22222222\)/);
  assert.match(check(r,'employees').detail,/3,325\+ employees/);
  const small=T.evaluate(criteria(),{...group,employees:{min:40,max:null}});
- assert.equal(small.decision,'pass');assert.equal(check(small,'employees').status,'unknown');
+ assert.equal(small.decision,'pass');assert.equal(check(small,'employees').status,'reported');
 });
 
 test('a quoted first-party statement of an allowed activity overrides a register code, and never excludes by itself',()=>{
