@@ -1,3 +1,4 @@
+import {reserveReasoning,researchPrompt} from './company-list-spend.js';
 import '../../customer/company-lists.js';
 import {createBuyerSourceSearch} from './buyer-source-search.js';
 import {readPublicBuyerPage} from './service-integrations.js';
@@ -68,6 +69,7 @@ function failure(cause,events=[],operation=''){
  return kind?{...issue,cause:{provider:PROVIDER_NAMES[seen.id],kind,...(seen.status&&{status:seen.status}),...(seen.code&&{code:seen.code})}}:issue;
 }
 function classify(cause,events=[],operation=''){
+ if(cause.code==='research_spend'||['research_yield','research_price','search_budget'].includes(cause.code))return {code:cause.code,retry:false,reason:cause.message};
  const traces=[...(cause.researchTrace||[]),...events];
  // The reasoning and search adapters expose sanitized HTTP errors in their messages.
  const reportedStatus=message=>Number(String(message||'').match(/(?:request failed \(|\bHTTP )(\d{3})\b/i)?.[1]);
@@ -170,7 +172,13 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
   const held=new Set();   // pages a lane is working on; always empty in the one-lane loop
   const safeEvent=r=>({provider:clean(r.provider,40),operation:clean(r.operation,30),status:clean(r.status,30),...(r.reason?{reason:clean(r.reason,180)}:{}),...(r.httpStatus?{httpStatus:r.httpStatus}:{}),...(Number.isFinite(r.results)?{results:r.results}:{})});
   const observe=r=>{operationEvents.push(safeEvent(r));};
-  const search=services.search||createBuyerSourceSearch(env,row.workspace_id,{purpose:'company_list',guard,observe,scrapeResults:false,primaryTimeoutMs:12000});
+  const beforeGrounded=async()=>{
+   const cap=s.groundedLimit??3;
+   if((s.groundedQueries||0)>=cap)throw error('The paid AI web-search allowance is used. Review results before approving more searches.','search_budget');
+   s.groundedQueries=(s.groundedQueries||0)+1;
+   await checkpoint();
+  };
+  const search=services.search||createBuyerSourceSearch(env,row.workspace_id,{purpose:'company_list',guard,observe,beforeGrounded,scrapeResults:false,primaryTimeoutMs:12000});
   // A reasoning call the provider refused keeps who refused, the HTTP status and the provider's own code on its receipt.
   const refused=(r,e)=>{const seen=refusal(e);if(!seen.id)return;if(!r.provider)r.provider=seen.id;if(seen.status)r.http=seen.status;if(seen.code)r.providerCode=seen.code;};
   const operation=async(kind,target,fn)=>{
@@ -188,6 +196,7 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
    finally{signal.removeEventListener('abort',abort);if(operationEvents.length)r.providers=operationEvents.slice(0,10);s.inFlight=null;}
   };
   const ask=async(prompt,signal,receipt,streamed=false)=>{
+   prompt=researchPrompt(prompt);
    let value;
    if(services.generate)value=await services.generate(prompt,criteria);
    else{
@@ -200,13 +209,21 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
     const retryWithoutStream=name==='openai'&&prior?.status==='failed'&&(prior.http>=500||prior.transport==='stream');
     const stream=streamed&&!retryWithoutStream&&!(name==='openai'&&s.openAiJsonModel===model);
     receipt.transport=stream?'stream':'json';
+    const baseline=s.yieldBaseline||{checked:0,matches:0};
+    if(s.results.length>baseline.matches)s.yieldBaseline={checked:s.checked,matches:s.results.length};
+    else if(s.checked-baseline.checked>=20)throw error('Research paused after 20 source assessments without a new verified match. Review the criteria before continuing.','research_yield');
+    const payload=JSON.stringify(prompt);
+    const settleSpend=reserveReasoning(s,model,system+payload,3500);
+    await checkpoint();
+    signal.throwIfAborted();
     let result;
     try{
-     result=await provider.generate({system,prompt:JSON.stringify(prompt),maxOutputTokens:3500,reasoningEffort:'low',signal,...(stream?{onDelta(){}}:{})});
+     result=await provider.generate({system,prompt:payload,maxOutputTokens:3500,reasoningEffort:'low',signal,...(stream?{onDelta(){}}:{})});
     }catch(cause){
      if(stream&&name==='openai'&&failure(cause,[],receipt.operation).code==='provider_temporary')s.openAiJsonModel=model;
      throw cause;
     }
+    settleSpend(result.usage);
     receipt.provider=clean(result.provider,40);receipt.model=clean(result.model,100);
     // What the call used, as the provider reported it: on its receipt, and summed per model for the whole list, because
     // only the last 250 receipts are kept. An answer that turns out unusable below was still paid for.
@@ -418,7 +435,7 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
     const index=s.queryIndex++,q=s.queries[index],me={last:null,events:[]};let searched=false;
     try{
      const rows=await laneOperation(me,'search',q,async(signal,receipt,events)=>{
-      const run=services.search||createBuyerSourceSearch(env,row.workspace_id,{purpose:'company_list',guard,observe:r=>events.push(safeEvent(r)),scrapeResults:false,primaryTimeoutMs:12000});
+      const run=services.search||createBuyerSourceSearch(env,row.workspace_id,{purpose:'company_list',guard,beforeGrounded,observe:r=>events.push(safeEvent(r)),scrapeResults:false,primaryTimeoutMs:12000});
       const found=await run(q,{limit:10,signal}),rows=Array.isArray(found)?found:found?.results;if(!Array.isArray(rows))throw error('Search response needs retry.','invalid_response');return rows;
      });
      searched=true;
