@@ -30,7 +30,7 @@ test('the list form offers five companies and still opens on ten',async t=>{
  assert.deepEqual([...sizes.options].map(option=>option.value),['5','10','20','50','100','200','custom']);
  assert.equal(sizes.value,'10');
  assert.equal(h.find('[name="count"]').hidden,true);
- assert.equal(h.find('[name="budget"]').value,'200','the allowance it opens with is the one for ten');
+ assert.equal(h.find('[name="budget"]').value,String(M.recommendedBudget(10)),'the allowance it opens with is the one for ten');
 });
 
 test('choosing five sets the allowance for five, and the list that starts asks for five',async t=>{

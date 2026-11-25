@@ -8,7 +8,9 @@
  const QUALITY_VERSION='20261119-reviewed-evidence-v2';
  const PROFILE_VERSION='20261119-profiles-signals-v3';
  const isLookalike=s=>s?.kind==='lookalike'||s?.type==='lookalike'||/(?:^|[-_])lookalike(?:[-_]|$)/i.test(clean(s?.id))||/^look[ -]?alike(?:\s+(?:signal|companies|customers))?$/i.test(clean(s?.name));
- const recommendedBudget=count=>Math.min(5000,Math.max(100,Number(count||10)*20));
+ // Forty operations a company: a kept company cost 22–43 operations in four measured lists of ten (215, 325, 390 and
+ // 434 operations, 23–25 Nov 2026). With twenty, every list stopped at its allowance before it was full.
+ const recommendedBudget=count=>Math.min(5000,Math.max(100,Number(count||10)*40));
  function options(main={}){
   const refs=[],groups=[],seen=new Set(),portfolio=main.referenceCustomerPortfolio||{};
   const lists=(portfolio.lists||[]).slice();
