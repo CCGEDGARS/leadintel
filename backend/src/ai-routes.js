@@ -235,6 +235,7 @@ export async function handleAiRoute(request,env,cors={}){
       const saved=await env.DB.prepare(`UPDATE workspace_ai_integrations SET model=?,verified_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP
         WHERE workspace_id=? AND provider=? AND encrypted_api_key=? AND model=? AND ${OWNER_SESSION_GUARD}`).bind(model,workspaceId,provider,existing.encrypted_api_key,existing.model,access.user.sessionTokenHash,access.user.id,workspaceId).run();
       if(!saved?.meta?.changes){const denied=await deniedOwnerCommit(env,{workspaceId,user:access.user,provider,operationId,cors});if(denied)return denied;await connectionTrace(env,{workspaceId,userId:access.user.id,type:'ai.provider_check_superseded',provider,metadata:{operation_id:operationId}});return error('AI connection or model changed during verification. Reload Settings before retrying.',409,cors,{code:'AI_CONNECTION_CONFLICT'});}
+      await recordProviderCredit(env,{workspaceId,userId:access.user.id,provider,kind:'recovered'});
       await audit(env,{workspaceId,userId:access.user.id,type:'ai.provider_model_updated',provider,metadata:{model,active:Boolean(existing.active),operation_id:operationId}});
       return json({saved:true,provider,model,active:Boolean(existing.active),verified_at:new Date().toISOString()},200,cors);
     }catch(cause){
