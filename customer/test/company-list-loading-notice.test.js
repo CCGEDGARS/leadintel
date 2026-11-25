@@ -27,11 +27,11 @@ test('Open saved lists says it is loading until the lists arrive, then shows the
  const page=setup(t);await settle();
  while(page.waiting.length)page.waiting.shift().answer({lists:[]});await settle();
  page.press('lists');await settle();
- assert.equal(page.notice(),'Loading your company lists…');
- assert.equal(page.w.document.getElementById('company-list-panel').getAttribute('aria-busy'),'true');
+ assert.equal(page.w.document.getElementById('cl-history-lists').textContent,'Loading saved lists…');
+ assert.equal(page.w.document.getElementById('cl-history-lists').getAttribute('aria-busy'),'true');
  page.waiting.shift().answer({lists:[{id:'one',name:'Denmark steel',status:'complete',progress:{count:3,target:10}}]});await settle();
  assert.equal(page.notice(),'');
- assert.match(page.content(),/Denmark steel/);
+ assert.match(page.w.document.getElementById('cl-history-lists').textContent,/Denmark steel/);
 });
 
 test('Build company list says it is loading the criteria until the form is there',async t=>{
@@ -50,5 +50,5 @@ test('a failed request replaces the loading line with the error and keeps it',as
  while(page.waiting.length)page.waiting.shift().answer({lists:[]});await settle();
  page.press('lists');await settle();
  page.waiting.shift().answer({error:'Company lists are temporarily unavailable.'});await settle();
- assert.equal(page.notice(),'Company lists are temporarily unavailable.');
+ assert.equal(page.w.document.getElementById('cl-history-lists').textContent,'Company lists are temporarily unavailable.');
 });

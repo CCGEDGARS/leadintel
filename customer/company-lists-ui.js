@@ -4,7 +4,7 @@
  let current=null,options=null,scope='',pending=false,timer=null,pollVersion=0,sort='score',descending=true,prepared=null,showAll=false;
  const identity=()=>JSON.stringify([root.LeadIntelServerBridge?.session?.authenticated,root.LeadIntelServerBridge?.session?.user?.id,root.LeadIntelServerBridge?.workspace?.id,root.LeadIntelServerBridge?.workspace?.role]);
  function stopPolling(){clearTimeout(timer);pollVersion++;}
- function synchronize(){const key=identity();if(key!==scope){scope=key;current=null;options=null;prepared=null;showAll=false;searchScopeRevision++;searchKey='';savedSearch=null;lastSavedCopy=null;searchMessage='';searchState={snapshot:null,busy:false};stopPolling();if($('company-list-content'))$('company-list-content').replaceChildren();notice('');paintSearch();}return key;}
+ function synchronize(){const key=identity();if(key!==scope){const changed=Boolean(scope);scope=key;current=null;options=null;prepared=null;showAll=false;searchScopeRevision++;searchKey='';savedSearch=null;lastSavedCopy=null;searchMessage='';searchState={snapshot:null,busy:false};stopPolling();if($('company-list-content'))$('company-list-content').replaceChildren();if($('cl-history-lists'))$('cl-history-lists').replaceChildren();if(changed&&$('prior-company-search'))$('prior-company-search').open=false;notice('');paintSearch();}return key;}
  // A request that got no answer: the browser could not make it (fetch rejects with a TypeError) or none came in 30 s.
  const unanswered=e=>{throw e?.name==='TimeoutError'||e?.name==='TypeError'&&e.code===undefined&&e.status===undefined?Object.assign(Error(e.message),{code:'LIST_REQUEST_UNANSWERED',cause:e}):e;};
  // A status read worth asking again: it got no answer, or what came was cut off or written by a gateway on the way
@@ -137,16 +137,49 @@
     </div>
     <div class="cl-entry-actions">
      <button type="button" class="primary-btn" data-cl="new">Build company list</button>
-     <button type="button" class="secondary-btn" data-cl="lists">Open saved lists</button>
     </div>
    </header>
    <p id="company-list-notice" role="status" aria-live="polite"></p>
    <div id="company-list-content"></div>`;if(search)search.prepend(panel);else anchor.before(panel);panel.addEventListener('click',click);panel.addEventListener('change',change);panel.addEventListener('input',e=>{if(e.target.closest('#company-list-form')){invalidateReview();if(['budget','count','industry'].includes(e.target.name))syncCriteriaFields();}});
+  let history=$('prior-company-search');
+  if(!history){
+   history=document.createElement('details');history.id='prior-company-search';
+   history.append(document.createElement('summary'));panel.append(history);
+  }
+  const summary=history.querySelector('summary');
+  summary.textContent='Saved lists and search history';summary.dataset.cl='lists';
+  const saved=document.createElement('section');saved.id='cl-history-lists';summary.after(saved);
+  let loadedOnOpen=false;
+  const updateHistory=()=>{
+   if(history.open&&!loadedOnOpen){loadedOnOpen=true;void loadHistory(saved);}
+   if(!history.open)loadedOnOpen=false;
+  };
+  summary.addEventListener('click',event=>{
+   event.preventDefault();synchronize();history.open=!history.open;updateHistory();
+  });
+  history.addEventListener('toggle',updateHistory);
+  if(!panel.contains(saved))saved.addEventListener('click',click);
+  updateHistory();
   mountCrm();
  }
  function mountCrm(){  const crm=document.querySelector('#crm-workspace .crm-header');if(crm&&!$('crm-company-lists')){const b=document.createElement('button');b.id='crm-company-lists';b.type='button';b.className='secondary-btn';b.textContent='Company lists';b.onclick=()=>{document.querySelector('#crm-workspace [data-crm-close]')?.click();root.LeadIntelDiscoveryUI?.open({focus:'companies'});$('company-list-panel')?.scrollIntoView({block:'start'});action(showLists);};crm.append(b);}
  }
- async function showLists(){clearTimeout(timer);const data=await api();current=null;$('company-list-content').innerHTML='<h4>Your company lists</h4>'+(data.lists.length?'<div class="cl-saved">'+data.lists.map(l=>'<button type="button" class="secondary-btn" data-cl="open" data-id="'+esc(l.id)+'"><strong>'+esc(l.name)+'</strong><span>'+l.progress.count+' / '+l.progress.target+' · '+esc(l.kind==='search_snapshot'?'Saved search results':statusLabel(l.status))+(l.saved?' · Saved to CRM':'')+'</span></button>').join('')+'</div>':'<p>No lists yet. Build your first list using active profiles and optional buying signals.</p>');}
+ let historyRead=0;
+ async function loadHistory(saved){
+  const version=++historyRead,owner=synchronize();
+  saved.setAttribute('aria-busy','true');saved.textContent='Loading saved lists…';
+  try{
+   const data=await api();
+   if(version!==historyRead||identity()!==owner||!saved.isConnected)return;
+   saved.innerHTML='<h4>Saved lists</h4>'+(data.lists.length?'<div class="cl-saved">'+data.lists.map(l=>'<button type="button" class="secondary-btn" data-cl="open" data-id="'+esc(l.id)+'"><strong>'+esc(l.name)+'</strong><span>'+l.progress.count+' / '+l.progress.target+' · '+esc(l.kind==='search_snapshot'?'Saved search results':statusLabel(l.status))+(l.saved?' · Saved to CRM':'')+'</span></button>').join('')+'</div>':'<p>No lists yet. Build your first list using active profiles and optional buying signals.</p>');
+  }catch(error){if(version===historyRead&&owner===identity())saved.textContent=error.message;}
+  finally{if(version===historyRead)saved.removeAttribute('aria-busy');}
+ }
+ function showLists(){
+  const history=$('prior-company-search');if(!history)return;
+  if(history.open)void loadHistory($('cl-history-lists'));else history.open=true;
+  history.querySelector('summary').focus();
+ }
  async function newList(){
   const bridge=root.LeadIntelServerBridge,owner=scope;
   if(bridge?.conflict)throw Error('Resolve workspace sync before choosing criteria.');
@@ -287,7 +320,7 @@
   return ' · Evidence score '+match.score;
  }
  function showMissingList(){
-  current=null;$('company-list-content').textContent='This list was deleted. Open saved lists to choose another list.';
+  current=null;$('company-list-content').textContent='This list was deleted. Choose another list in Saved lists and search history.';
  }
  async function open(id){
   if(current?.id!==id){showAll=false;sort='score';descending=true;}
@@ -361,12 +394,19 @@
  }
  function download(type,list=current){const content=type==='csv'?M.csv(list):M.xlsx(list),blob=new Blob([content],{type:type==='csv'?'text/csv;charset=utf-8':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=(list.name.replace(/[^\p{L}\p{N} _-]/gu,'').slice(0,80)||'companies')+'.'+type;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);}
  function click(event){
-  const b=event.target.closest('[data-cl]');if(!b||b.disabled)return;
+  const b=event.target.closest('[data-cl]');if(!b||b.disabled||b.dataset.cl==='lists')return;
   const command=b.dataset.cl;
   return action(async()=>{
    if(command==='new')return newList();
-   if(command==='lists')return showLists();
-   if(command==='open')return open(b.dataset.id);
+   if(command==='open'){
+    await open(b.dataset.id);
+    if(current?.id===b.dataset.id){
+     $('prior-company-search').open=false;
+     const heading=$('company-list-content').querySelector('h4');
+     if(heading){heading.tabIndex=-1;heading.focus();}
+    }
+    return;
+   }
    if(command==='review')return review();
    if(command==='start'){
     if(!prepared||JSON.stringify(prepared)!==JSON.stringify(formValue()))throw Error('Review the current criteria first.');
@@ -414,7 +454,7 @@
     if(savedSearch?.id===list.id)savedSearch=null;
     if(lastSavedCopy?.id===list.id)lastSavedCopy=null;
     searchMessage='';paintSearch();
-    return showLists();
+    current=null;$('company-list-content').replaceChildren();return showLists();
    }
    if(command==='buyer'){await root.LeadIntelDiscoveryUI?.openListCompany?.(result.candidate);return;}
    if(command==='resume'&&result.list)startedHere.set(result.list.id,Date.now());

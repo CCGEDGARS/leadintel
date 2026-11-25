@@ -66,3 +66,24 @@ test('a panel mounted outside a search card is still hidden on Buyers and shown 
  window.dispatchEvent(new window.CustomEvent('leadintel:journey-focus-changed',{detail:{focus:'companies'}}));
  assert.equal(panel.hidden,false);
 });
+
+test('one header action and one read-only history disclosure preserve the active list view',async t=>{
+ const document=mount(t,step.replace('<div class="market-research-head">Company search</div>','<details id="prior-company-search"><summary>Earlier searches</summary><section id="previous-results">Earlier results</section></details>'));
+ const w=document.defaultView,history=document.getElementById('prior-company-search'),content=document.getElementById('company-list-content'),requests=[];
+ w.dispatchEvent(new w.Event('leadintel:session-changed'));
+ w.fetch=async(url,init)=>{requests.push(init.method);return {ok:true,json:async()=>({lists:[{id:'saved',name:'Steel prospects',status:'complete',progress:{count:2,target:2}}]})};};
+ content.textContent='Criteria under review';
+ assert.deepEqual([...document.querySelectorAll('.cl-entry button')].map(b=>b.textContent),['Build company list']);
+ assert.equal(history.open,false);
+ history.querySelector('summary').click();
+ await new Promise(r=>setTimeout(r,10));
+ assert.equal(history.open,true);
+ assert.equal(history.children[1].id,'cl-history-lists');
+ assert.match(history.children[1].textContent,/Steel prospects/);
+ assert.equal(history.children[2].id,'previous-results');
+ assert.equal(content.textContent,'Criteria under review');
+ assert.deepEqual(requests,['GET']);
+ history.querySelector('summary').click();
+ assert.equal(history.open,false);
+ assert.deepEqual(requests,['GET']);
+});
