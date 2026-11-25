@@ -15,13 +15,28 @@ export function websiteIdentitySupport(candidate,person){
 }
 export function websiteContactIdentity(person={}){
  if(!D.isIndependentContactPerson(person)||/(?:^|\s)(?:CEO|CFO|COO|CTO|CIO|CRO|CLO|CHRO|CMO)(?:\s|$)/u.test(String(person.publicName||person.name||'')))return false;
+ // A portfolio heading followed by an invitation to explore a project is not a staff card.
+ const title=String(person.title||'').trim();
+ if(/^(?:discover|explore|read about|learn more|experience|oplev|udforsk)\s+/iu.test(title)&&!/^(?:experience|discovery)\s+(?:manager|director|designer|lead|specialist)\b/i.test(title))return false;
  const source=person.publicNameUrl||'';
  if(!source)return person.identityOrigin==='apollo';
- try{const url=new URL(source);if(/(^|\.)linkedin\.com$/i.test(url.hostname)&&!D.normalizeProfessionalLinkedInUrl(source))return false;return ['https:','http:'].includes(url.protocol);}catch{return false;}
+ try{const url=new URL(source);
+  if(/(^|\.)linkedin\.com$/i.test(url.hostname))return Boolean(D.normalizeProfessionalLinkedInUrl(source));
+  // Portfolio, product and event pages routinely mention roles belonging to
+  // clients or speakers. A role word in a caption cannot establish employment.
+  // Accept an explicitly published staff card from that page, or let a separate
+  // official staff or professional profile source establish the person instead.
+  const contentPage=/\/(?:projects?|projekter?|produkter?|produkte?|products?|services?|solutions?|portfolio|case-stud(?:y|ies)|cases?|events?|webinars?|news|blog|references?|referencer)(?:[\/_-]|$)/i.test(url.pathname);
+  if(contentPage){
+   const card=person.publishedStaffCard;
+   if(person.identityOrigin==='public_listing'||card?.url!==source||!(card.email||card.phone))return false;
+  }
+  return ['https:','http:'].includes(url.protocol);}catch{return false;}
 }
 export function websiteContactRole(value){
  const text=String(value||'').toLowerCase().replace(/^(?:group|global|corporate)\s+/,'');
  if(/\bchief\s+risk(?:\s|&)/.test(text))return 'cro';
+ if(/^(?:production director|produktionsdirektør)$/iu.test(text))return 'production director';
  if(/administrerende\s+direktør|adm\.?\s*direktør|verkställande\s+direktör/.test(text))return 'ceo';
  for(const [code,words] of [['ceo','chief executive officer'],['cfo','chief financial officer'],['coo','chief operating officer'],['cto','chief technology officer'],['cio','chief information officer'],['cmo','chief marketing officer'],['chro','chief human resources officer'],['cro','chief risk officer'],['clo','chief legal officer']])if(new RegExp('\\b'+code+'\\b').test(text)||text.includes(words))return code;
  return text.trim();

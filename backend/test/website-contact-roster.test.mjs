@@ -30,3 +30,33 @@ test('current official staff evidence confirms an existing directory identity wi
  const {websiteIdentitySupport}=await import('../src/website-contact-evidence.js'),person={id:'original-paid',name:'Toms Jurjevs',publicName:'Toms Jurjevs',title:'CEO',organization:input.company,identityOrigin:'public_listing',publicNameUrl:'https://directory.example/toms',contactData:{phone:{number:'+37120000001'}}},page={url:'https://finance.example/about-us/',markdown:'# Finance Group\n## Our leadership\n### Toms Jurjevs\nFounder & CEO',sourceRead:true,evidenceKind:'page_extract'},state={identityReviewVersion:1,people:[person],tasks:[{kind:'read',value:page.url,status:'complete',checkedAt:date,result:page}]};
  reconcileWebsiteContactIdentities(state,input);assert.equal(state.people.length,1);assert.equal(state.people[0].id,'original-paid');assert.equal(state.people[0].identityOrigin,'official');assert.equal(state.people[0].publicNameUrl,page.url);assert.equal(state.people[0].contactData.phone.number,'+37120000001');assert.ok(state.people[0].roleSourceVariants.some(r=>r.url==='https://directory.example/toms'));assert.equal(websiteIdentitySupport(input,state.people[0]).eligible,true);assert.equal(state.people[0].freeResearchStatus,undefined,'official identity evidence does not invent completed public searches');
 });
+
+test('saved project cards are excluded and current owners recovered from official Danish prose',()=>{
+ const input={domain:'fabrication.example',company:'Example Fabrication'};
+ const url='https://fabrication.example/om-os/',date=new Date().toISOString();
+ const people=[['University Bridge','Experience Malmö’s new waterfront landmark'],['Vipp Shelter','Discover the unique and stylish shelter from Vipp']].map(([name,title])=>({name,title,identityOrigin:'official',publicNameUrl:url}));
+ const state={identityReviewVersion:2,people,tasks:[{kind:'read',status:'complete',checkedAt:date,result:{sourceRead:true,url,markdown:'I dag ejes Example Fabrication A/S af Holding ApS samt produktionsdirektør Jesper Themsen og CEO Jan Sørensen. Today, Client Ltd is owned by CEO Alex Client.'}}]};
+ reconcileWebsiteContactIdentities(state,input);
+ assert.deepEqual(state.people.map(p=>[p.name,p.title]),[['Jesper Themsen','produktionsdirektør'],['Jan Sørensen','CEO']]);
+ assert.equal(state.excludedIdentities.length,2);
+ assert.ok(state.people.every(p=>p.publicNameUrl===url&&!p.publicEmail&&!p.freeResearchStatus));
+});
+
+test('content cards mentioning professional roles cannot unlock contact lookup',async()=>{
+ const {websitePaidReadiness}=await import('../src/website-contact-evidence.js');
+ for(const [path,name,title] of [
+  ['products','Atlas Prime','An assistant for the project manager'],
+  ['case-studies','Silver Harbour','Designed with the chief architect'],
+  ['events','Digital Futures','CEO panel with our clients'],
+  ['projekter','Green Horizon','Bygget sammen med vores projektleder'],
+ ]){
+  const person={name,title,publicNameUrl:'https://finance.example/'+path+'/item',identityOrigin:'official',freeResearchStatus:'complete'};
+  assert.equal(websiteContactIdentity(person),false);
+  assert.equal(websitePaidReadiness(input,person,'complete').code,'WEBSITE_CONTACT_IDENTITY_REQUIRED');
+ }
+ const person={name:'Anna Lind',title:'Project Manager',identityOrigin:'official',publicNameUrl:'https://finance.example/projects/new'};
+ const card={url:person.publicNameUrl,email:'anna@finance.example'};
+ assert.equal(websiteContactIdentity({...person,publishedStaffCard:card}),true);
+ assert.equal(websiteContactIdentity({...person,publishedStaffCard:{...card,url:'https://other.example/team'}}),false);
+ assert.equal(websiteContactIdentity({...person,publicNameUrl:'https://finance.example/team'}),true);
+});

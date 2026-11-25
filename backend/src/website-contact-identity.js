@@ -3,7 +3,7 @@ import '../../customer/discovery-engine.js';
 import {websiteOfficialStaff} from './website-contact-staff.js';
 import {websiteLinkedInMatchRows} from './website-linkedin-review.js';
 const D=globalThis.LeadIntelDiscovery;
-export const WEBSITE_IDENTITY_REVIEW_VERSION=2;
+export const WEBSITE_IDENTITY_REVIEW_VERSION=3;
 
 // Repair derived identity grouping from existing server-owned receipts. This
 // does not acquire a source, approve a person, or purchase contact data.

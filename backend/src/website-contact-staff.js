@@ -44,6 +44,25 @@ function nestedStaffCards(page,input){
  }
  return people;
 }
+// On official About pages, leadership may be named in the current ownership
+// statement instead of individual cards. Match the named employer and an
+// explicit role beside each name. Keep the published source for identity checks.
+function currentOwnerRoles(page,input){
+ if(!page.sourceRead||D.canonicalDomain(page.url)!==input.domain)return [];
+ const company=clean(input.company).replace(/\s+(?:a\/s|aps|ltd\.?|inc\.?)$/i,'').toLowerCase();
+ const people=[];
+ for(const sentence of page.markdown.split(/[.!?\n]+/)){
+  const ownership=sentence.trim().match(/^(?:today,?\s+|currently,?\s+)?(.+?)\s+is (?:currently )?owned by\s+(.+)$|^(?:i dag\s+)?ejes\s+(.+?)\s+af\s+(.+)$/iu);
+  if(!ownership||clean(ownership[1]||ownership[3]).replace(/\s+(?:a\/s|aps|ltd|inc)$/i,'').toLowerCase()!==company)continue;
+  const owners=ownership[2]||ownership[4];
+  for(const clause of owners.split(/\s+(?:og|samt|and)\s+|,\s*/iu)){
+   const entry=clause.trim().match(/^(CEO|CFO|COO|CTO|(?:Production|Managing|Finance|Operations) Director|(?:produktions|økonomi|administrerende\s+)?direktør)\s+(.+)$/iu);
+   if(!entry||!/^\p{Lu}[\p{L}’'-]+(?:\s+\p{Lu}[\p{L}’'-]+){1,4}$/u.test(entry[2])||!D.hasFullBuyerName(entry[2]))continue;
+   people.push({name:entry[2],publicName:entry[2],title:entry[1],organization:input.company,publicNameUrl:page.url,identitySource:'public',identityStatus:'confirmed',nameVerification:'confirmed',companyContactSource:'official_staff'});
+  }
+ }
+ return people;
+}
 export function websiteStaffCards(page,input){
  const found=[],role=/\b(?:CEO|CFO|COO|CTO|CIO|CRO|CLO|CMO|CHRO|chief|director|head|manager|president|founder|chairman|chairwoman)\b|direktør|direktör|koncernchef|bestyrels|afdelingschef|vadītāj|priekšsēdētāj|valdes locekl/i;
  // Neutral website research also accepts local-language staff cards. Require
@@ -57,6 +76,6 @@ export function websiteStaffCards(page,input){
   if(!named&&!staffPage)continue;
   found.push(D.matchPublicBuyerDetails([person],[page],input.domain,input.company)[0]);
  }
- return [...found,...nestedStaffCards(page,input)];
+ return [...found,...nestedStaffCards(page,input),...currentOwnerRoles(page,input)];
 }
 export function websiteOfficialStaff(page,input){if(page.sourceRead!==true||D.canonicalDomain(page.url)!==input.domain)return [];return websiteSourceChunks(page).flatMap(chunk=>[...D.discoverCompanyContacts([chunk],{company:input.company,domain:input.domain},[]),...websiteStaffCards(chunk,input)]);}
