@@ -2221,7 +2221,7 @@ async function runDurableBuyerResearch(candidate,options={}){
     if(lastRevision!==revision){lastRevision=revision;saveDiscovery();renderAll();}
     options.persist?.(candidate,job);
   };
-  const settings={profile,paidResearch,onMismatch:error=>{if(!current())return;candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),lastError:{name:error.code||error.name,message:error.message,phase:error.phase||'start'}};saveDiscovery();},resumeExisting:options.resumeExisting===true,personIds:options.personIds,force:options.force===true,resumeIncomplete:options.resumeIncomplete===true,signal:options.signal,isCurrent:current,persist,hydrateCrm:(owner,detail)=>{
+  const settings={profile,paidResearch,allowMeteredPublicResearch:options.allowMeteredPublicResearch===true,onMismatch:error=>{if(!current())return;candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),lastError:{name:error.code||error.name,message:error.message,phase:error.phase||'start'}};saveDiscovery();},resumeExisting:options.resumeExisting===true,personIds:options.personIds,force:options.force===true,resumeIncomplete:options.resumeIncomplete===true,signal:options.signal,isCurrent:current,persist,hydrateCrm:(owner,detail)=>{
     if(!current()||!buyerHydrationScope(owner,detail))return;
     for(const person of owner.people||[]){const ids=options.personIds||owner.buyerResearchJob?.personIds;if(ids?.length&&!ids.map(String).includes(String(person.id)))continue;const contact=buyerHydrationContact(owner,person,detail);if(contact)enrichmentResults.set(personKey(owner,person),{contact,request:{status:LeadIntelDiscovery.phoneLookupState?.(contact,detail.phoneRequests||[],person.id)||'not_requested'}});
       const raw=(detail.contactData||[]).find(data=>String(data.personId)===String(person.id)),data=raw&&LeadIntelDiscovery.safeContactData(raw,person,owner.domain);if(data&&(!person.contactData||Date.parse(data.checkedAt)>=Date.parse(person.contactData.checkedAt||'')))person.contactData=data;
@@ -4294,6 +4294,10 @@ function buyerResearchProgressHtml(candidate,{companyActionVisible=false}={}){
   const credits=progress.credits&&typeof progress.credits.used==="number"&&Number.isFinite(progress.credits.used)?progress.credits:null;
   const creditTotal=credits&&Number.isFinite(Number(credits.total))?Math.max(Number(credits.total),credits.used):credits?.used,creditUnknown=credits?Number(credits.totalUnreported??credits.unreported)||0:0,creditUnknownRequests=credits?Number(credits.totalUnreportedRequests??credits.unreportedRequests)||0:0;
   const creditLine=credits&&progress.jobId?`<p>Firecrawl credits used by this research: <strong>${creditTotal}</strong>${creditTotal!==credits.used?` · ${credits.used} since it was last resumed`:""}${creditUnknown>0?` · includes up to ${creditUnknown} for ${creditUnknownRequests} request${creditUnknownRequests===1?"":"s"} whose cost Firecrawl did not report`:""}${credits.aboveExpected===true&&Number.isFinite(Number(credits.expected))?` · more than the ${Number(credits.expected)} a company of this size usually needs`:""}</p>`:"";
+  if(progress.executionStatus==='needs_review'&&progress.diagnostics?.at(-1)?.code==='free_discovery_finished'){
+    const count=candidate.people?.length||0;
+    return `<section class="buyer-research-progress" role="status"><strong>Free discovery finished</strong><p>${count} ${count===1?'person':'people'} found in the available sources. Expand web research to check remaining gaps with metered providers.</p>${creditLine}</section>`;
+  }
   const phases=progress.jobId?[["official","Official sources"],["dossier","Company research"],["identities","Find people"],["contacts","Contact evidence"],["review",(progress.phase==='paid'||progress.phase==='error'&&progress.diagnostics?.at(-1)?.phase==='paid')?'Paid contact research':'Review evidence']]:[
     ["company","Verify company"],
     ["roles","Search relevant roles"],
@@ -4341,6 +4345,7 @@ async function controlSavedBuyerResearch(domain,action,button){
  const candidate=selectedProspects().find(row=>canonicalDomain(row.domain)===canonicalDomain(domain));
  if(!candidate||!crmAuthenticated())return false;
  if(action==='check')return runDurableBuyerResearch(candidate,{restore:true});
+ if(action==='expand')return runDurableBuyerResearch(candidate,{resumeExisting:true,allowMeteredPublicResearch:true});
  if(action==='resume')return runDurableBuyerResearch(candidate,{resumeExisting:true,personIds:candidate.buyerResearchJob?.personIds||undefined});
  const b=bridge(),state=discovery,scope=discoveryOperationContext(),profile={...companyQualificationProfile(mainState()),decisionMakers:LeadIntelDiscovery.buyerRolesForTarget(mainState(),candidate)||candidate.buyerRoles||''};
  const current=()=>bridge()===b&&discovery===state&&discoveryOperationContext()===scope&&selectedProspects().includes(candidate)&&crmAuthenticated();
@@ -4477,6 +4482,7 @@ function buyerCompanyResearchAction(candidate){
   if(candidate.buyerDiscovery?.lastError?.name==='BUYER_JOB_ROLES_MISMATCH')return {action:'refresh',label:'Research current buyer roles'};
   if(candidate.buyerDiscovery?.lastError?.name==='BUYER_JOB_CONTEXT_MISMATCH')return {action:'refresh',label:'Research current company context'};
   const progress=candidate.buyerResearchProgress;
+  if(job?.status==='needs_review'&&progress?.diagnostics?.at(-1)?.code==='free_discovery_finished')return {action:'expand',label:'Expand web research · uses credits'};
   if(job?.id&&job.id===progress?.jobId&&job.status==='needs_review'&&!job.personIds?.length&&(progress.windowPaused??(progress.diagnostics?.at(-1)?.code==='run_window')))return {action:'continue',label:'Resume buyer research'};
   if(candidate.buyerRolesChanged)return {action:'refresh',label:'Refresh buyers'};
   const finishedPlan=!job?.personIds?.length&&['official','dossier','identities','contacts','review'].every(key=>candidate.buyerResearchProgress?.stages?.[key]===true);
@@ -4489,6 +4495,7 @@ async function runBuyerCompanyAction(domain,button){
   const candidate=selectedProspects().find(row=>canonicalDomain(row.domain)===canonicalDomain(domain));
   if(!candidate)return false;
   const {action}=buyerCompanyResearchAction(candidate),job=candidate.buyerResearchJob;
+  if(action==='expand')return controlSavedBuyerResearch(domain,'expand',button);
   if(action==='continue')return controlSavedBuyerResearch(domain,'resume',button);
   if(action==='check')return controlSavedBuyerResearch(domain,'check',button);
   return findPotentialDecisionMakers(domain,{explicitSelection:true,refreshDossier:action==='resume',forceResearch:action==='refresh',resumeExisting:action==='resume'&&Boolean(job?.id&&!job.personIds?.length&&['needs_review','failed','canceled'].includes(job.status))});

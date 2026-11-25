@@ -220,7 +220,7 @@
           if(expectedJobId&&job.id!==expectedJobId)throw Error('The saved research was replaced. Reopen the company to see its latest progress.');
           const savedPeople=(job.input?.personIds||[]).map(String).sort();
           if(stable(savedPeople)!==stable([...(scope.personIds||[])].sort()))throw Error('The selected buyers have changed. Reopen the company to see its latest progress.');
-          if(TERMINAL.has(job.status)&&job.status!=='complete')job=await request(scope,'POST',{action:'resume',jobId:job.id,expectedRevision:job.revision},null,controller);
+          if(TERMINAL.has(job.status)&&job.status!=='complete')job=await request(scope,'POST',{action:'resume',...(options.allowMeteredPublicResearch?{allowMeteredPublicResearch:true}:{}),jobId:job.id,expectedRevision:job.revision},null,controller);
         }else if(!readOnly){
           if(scope.bridge.conflict)throw Error('Resolve the workspace synchronization conflict before starting or resuming buyer research.');
           const jobIds=job?.input?.personIds||job?.progress?.personIds,selected=scope.personIds?.length?new Set(scope.personIds):null;
@@ -233,7 +233,7 @@
           if(!job||!ACTIVE.has(job.status)&&(options.force||options.paidResearch||job.status!=='complete'||!covered)){
             const resume=job&&covered&&paidScopeMatches&&!options.paidResearch&&(!options.force||options.resumeIncomplete===true&&job.resumePhase&&job.resumePhase!=='done')&&TERMINAL.has(job.status)&&job.status!=='complete';
             const observed=observedJob?.id&&domain(observedJob.domain||observedJob.candidate?.domain)===domain(owner.domain)?observedJob:null;
-            const command=resume?{action:'resume'}:{action:'start',peopleFirst:true,...requestInput(owner,scope.profile),...(scope.personIds?{personIds:scope.personIds}:{}),force:options.force===true,resumeIncomplete:options.resumeIncomplete===true,paidResearch:options.paidResearch===true};
+            const command=resume?{action:'resume'}:{action:'start',peopleFirst:true,freeDiscovery:true,...requestInput(owner,scope.profile),...(scope.personIds?{personIds:scope.personIds}:{}),force:options.force===true,resumeIncomplete:options.resumeIncomplete===true,paidResearch:options.paidResearch===true};
             job=await request(scope,'POST',{...command,...(observed?{jobId:observed.id,expectedRevision:observed.revision}:{})},null,controller);
           }
         }

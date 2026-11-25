@@ -3007,7 +3007,7 @@
     const inventory=safeOfficialContactInventory(candidate.buyerDiscovery?.officialContactInventory,candidate.domain),research=inventory?.research,age=Date.parse(options.now||new Date().toISOString())-Date.parse(inventory?.checkedAt||''),queries=officialContactResearchQueries(candidate);
     return Boolean(research?.policyVersion===OFFICIAL_CONTACT_RESEARCH_POLICY.version&&research.status==='complete'&&age>=0&&age<30*86400000&&!research.failures.length&&!research.pendingUrls.length&&!research.discoveryTruncated&&research.queries.length===queries.length&&queries.every(query=>research.queries.some(row=>row.query===query&&row.status==='complete'))&&research.completedUrls.length>0&&inventory.sourcePages.some(url=>research.completedUrls.includes(url))&&research.reads.every(row=>row.status==='complete'));
   }
-  async function runOfficialContactResearch(candidate,{rows=[],search,readPage,signal,guard=()=>{},onProgress=()=>{},onSignal=()=>{},onCheckpoint=()=>{},force=false,seedUrls=[],peopleFirst=false,maxDurationMs=OFFICIAL_CONTACT_RESEARCH_POLICY.maxDurationMs}={}){
+  async function runOfficialContactResearch(candidate,{rows=[],search,readPage,signal,guard=()=>{},onProgress=()=>{},onSignal=()=>{},onCheckpoint=()=>{},force=false,seedUrls=[],peopleFirst=false,siteOnly=false,maxDurationMs=OFFICIAL_CONTACT_RESEARCH_POLICY.maxDurationMs}={}){
     const policy=OFFICIAL_CONTACT_RESEARCH_POLICY,previous=safeOfficialContactInventory(candidate.buyerDiscovery?.officialContactInventory,candidate.domain),ledgerAt=previous?.research?.status==='complete'?previous.checkedAt:previous?.research?.startedAt||previous?.checkedAt,reusable=!force&&!(previous?.research&&previous.research.status!=='complete'&&previous.research.discoveryScope!==policy.scopeVersion)&&previous?.research?.policyVersion===policy.version&&Date.now()-Date.parse(ledgerAt)>=0&&Date.now()-Date.parse(ledgerAt)<30*86400000,startedAt=reusable?previous.research.startedAt||previous.checkedAt:new Date().toISOString(),fresh=reusable&&officialContactCoveragePassed(candidate)&&Boolean(previous.contacts.length||previous.channels.length||previous.routes.length);
     if(fresh&&!force)return {inventory:previous,rows,freshRows:[]};
     const controller=new AbortController();onSignal(controller.signal);const cancel=()=>controller.abort(),timer=setTimeout(cancel,maxDurationMs);signal?.addEventListener('abort',cancel,{once:true});if(signal?.aborted)cancel();
@@ -3078,7 +3078,7 @@
         const peoplePages=[...queue.values()].filter(entry=>entry.priority<0&&!attempted.has(canonicalBuyerSource(entry.url))).slice(0,policy.concurrency);
         await bounded(()=>Promise.all(peoplePages.map(fetchOne)));
       }
-      await discover(queries);let followed=false;
+      if(!siteOnly)await discover(queries);let followed=siteOnly;
       while(attempted.size<policy.maxPages){
         const inventory=officialCompanyContactInventory([...read.values()],candidate);
         let pending=[...queue.values()].filter(entry=>!attempted.has(canonicalBuyerSource(entry.url))&&!readKeys.has(canonicalBuyerSource(entry.url))).sort((a,b)=>a.priority-b.priority);
@@ -3086,7 +3086,7 @@
         if(!pending.length)break;
         await bounded(()=>Promise.all(pending.slice(0,Math.min(policy.concurrency,policy.maxPages-attempted.size)).map(fetchOne)));
       }
-      await ensure();return finish(false);
+      await ensure();return finish(siteOnly);
     }catch(error){if(signal?.aborted)return {inventory:checkpointInventory,rows,freshRows,canceled:true};try{await guard();}catch{return {inventory:checkpointInventory,rows,freshRows,canceled:true};}failures.push(String(error.message||error));return finish(true);}
     finally{clearTimeout(timer);signal?.removeEventListener('abort',cancel);}
   }

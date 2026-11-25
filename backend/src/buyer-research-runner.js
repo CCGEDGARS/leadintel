@@ -7,7 +7,7 @@ import {sha256} from './security.js';
 import {researchWorkspaceDossier} from './company-dossier.js';
 import {createBuyerSourceSearch} from './buyer-source-search.js';
 import {buyerCreditWindowKey,buyerCreditLimitFor,createBuyerCreditMeter,readBuyerCredits} from './buyer-research-credits.js';
-import {readPublicBuyerPage,searchWorkspaceApolloPeople} from './service-integrations.js';
+import {fetchDirectPublicPage,readPublicBuyerPage,searchWorkspaceApolloPeople} from './service-integrations.js';
 import {discoverApolloBuyerIdentities} from './buyer-apollo-discovery.js';
 import {reviewWorkspaceBuyerEvidence,searchWorkspaceBuyerContact} from './ai-routes.js';
 import {lookupCompanyManagement,registerManagementPage} from './company-registry.js';
@@ -36,7 +36,8 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
   if(!row)break;
   const input=parse(row.input_json),originalCandidate=parse(row.result_json,input.candidate),reconciledCandidate=D.reconcileBuyerEvidence(originalCandidate,{trustedAgentSources:true});
   const adoptPendingDossier=input.peopleFirst==null&&!input.taskId&&!input.paidResearch&&!input.recheck&&input.scope==='all_buyers'&&row.phase==='dossier';
-  if(adoptPendingDossier)input.peopleFirst=true;
+  if(adoptPendingDossier){input.peopleFirst=true;input.freeDiscovery=true;}
+  const siteOnly=input.freeDiscovery===true;
   const peopleFirst=input.peopleFirst&&!input.taskId&&!input.recheck&&input.scope==='all_buyers';
   const nextPhase=peopleFirst?{...standardPhaseOrder,official:'identities',identities:'contacts',contacts:input.dossierPassFinished?'review':'dossier',dossier:'review'}:standardPhaseOrder;
   const {contactOptions}=await loadBuyerContactContext(env,{workspaceId:row.workspace_id},reconciledCandidate);
@@ -47,7 +48,7 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
   const deferSemanticStamp=row.phase==='paid'&&(sourceScopeChanged||Number(input.executionContinuationVersion||0)<4&&(originalCandidate.publicResearch?.aiReview?.inputSignature!==D.buyerReviewSignature(reconciledCandidate)||!D.buyerResearchCoveragePassed(reconciledCandidate,{contactOptions})));
   const candidate=deferSemanticStamp?originalCandidate:reconciledCandidate,controller=new AbortController();let invocationExhausted=false,activeTaskReservations=0,accepting=true,phase=row.phase,phaseMs=row.phase_ms,phaseRuns=row.phase_runs,changed=0,contextVersion=-1;
   const rescopeOfficial=sourceScopeChanged&&!deferSemanticStamp&&!input.recheck;
-  if(adoptPendingDossier){phase=row.phase='identities';phaseMs=0;phaseRuns=0;}
+  if(adoptPendingDossier){phase=row.phase='official';phaseMs=0;phaseRuns=0;}
   if(rescopeOfficial){phase=row.phase='official';phaseMs=0;phaseRuns=0;}
   const runWindow=buyerRunWindow(row,input,clock()),windowPause=()=>Object.assign(Error(BUYER_RUN_WINDOW_REASON),{code:'RUN_WINDOW'});
   const timer=setTimeout(()=>controller.abort(runWindow.remainingMs<=windowMs?windowPause():Object.assign(Error('Job processing slice ended'),{code:'TIME_BUDGET'})),Math.max(1,Math.min(windowMs,runWindow.remainingMs)));
@@ -124,7 +125,7 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
    return {rows:normalized,providers:rows.searchProviders||[],researchTrace:rows.researchTrace||[]};
   }));
   const read=async url=>task('read',C.url(url),async()=>{
-   let raw;try{raw=await (services.read||((url,signal)=>readPublicBuyerPage(env,row.workspace_id,url,{signal,totalTimeoutMs:18000,directTimeoutMs:3000,firecrawlTimeoutMs:12000,meter:creditMeter})))(url,controller.signal);}catch(error){for(const entry of error.researchTrace||[])observe(entry);throw error;}
+   let raw;try{raw=await (services.read||(siteOnly?((url,signal)=>fetchDirectPublicPage(url,{signal:AbortSignal.any([signal,AbortSignal.timeout(8000)])})):null)||((url,signal)=>readPublicBuyerPage(env,row.workspace_id,url,{signal,totalTimeoutMs:18000,directTimeoutMs:3000,firecrawlTimeoutMs:12000,meter:creditMeter})))(url,controller.signal);}catch(error){for(const entry of error.researchTrace||[])observe(entry);throw error;}
    const page=raw?.data||raw||{};
    if(raw?.success===false||page.error||Number(page.metadata?.statusCode)>=400)throw Error('Source read unavailable');
    const supplied=[page.url,page.metadata?.sourceURL,page.metadata?.url].filter(v=>v!==undefined&&v!==null).map(C.url),actual=supplied[0]||C.url(url),text=String(page.markdown||page.content||page.text||'').slice(0,60000);
@@ -165,7 +166,7 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
   try{
    await guard();const context=await workspaceBuyerContext(env,row.workspace_id,input.taskId);if(context.hash!==input.workspaceContext)throw Object.assign(Error('The seller context changed'),{code:'CONTEXT_CHANGED'});
    const rows=await allRows(),phaseStart=clock(),remaining=Math.max(1000,windowMs-(clock()-start)-500);
-   if(input.scope!=='selected_buyers'&&!apolloIdentityChecked&&['identities','contacts','review','paid'].includes(phase)){
+   if(!siteOnly&&input.scope!=='selected_buyers'&&!apolloIdentityChecked&&['identities','contacts','review','paid'].includes(phase)){
     const before=new Set((candidate.people||[]).map(person=>person.id));
     const directory=await discoverApolloBuyerIdentities({candidate,profile:input.profile,task,guard,record:observe,observed:input.apolloIdentityReceipts,
       search:payload=>(services.apollo?services.apollo(payload,controller.signal,{workspaceId:row.workspace_id,userId:row.requested_by,guard}):searchWorkspaceApolloPeople(env,row.workspace_id,payload,{userId:row.requested_by,signal:controller.signal,guard,beforeDispatch:()=>{if(windowMs-(clock()-start)<15000)throw Object.assign(Error('Apollo discovery deferred to the next processing slice'),{code:'TIME_BUDGET'});}}))});
@@ -199,8 +200,8 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
     }
    }
    if(phase==='official'){
-    await D.runOfficialContactResearch(candidate,{rows,search,readPage:read,signal:controller.signal,guard,peopleFirst,force:false,maxDurationMs:Math.min(remaining,180000),seedUrls:(candidate.people||[]).flatMap(p=>[p.publicNameUrl,p.publicEmailUrl,p.publicPhoneUrl]).filter(url=>D.canonicalDomain(url)===candidate.domain),onCheckpoint:acquirePeople});acquiredRows=(await allRows()).filter(r=>r.sourceRead===true);acquirePeople();
-    if(D.officialContactCoveragePassed(candidate)||Number(phaseRuns)>=2&&!changed)phase=nextPhase[phase];
+    await D.runOfficialContactResearch(candidate,{rows,search,readPage:read,signal:controller.signal,guard,peopleFirst,siteOnly,force:false,maxDurationMs:Math.min(remaining,180000),seedUrls:(candidate.people||[]).flatMap(p=>[p.publicNameUrl,p.publicEmailUrl,p.publicPhoneUrl]).filter(url=>D.canonicalDomain(url)===candidate.domain),onCheckpoint:acquirePeople});acquiredRows=(await allRows()).filter(r=>r.sourceRead===true);acquirePeople();
+    if(siteOnly||D.officialContactCoveragePassed(candidate)||Number(phaseRuns)>=2&&!changed)phase=nextPhase[phase];
    }else if(phase==='dossier'){
     if(candidate.buyerDiscovery?.companyDossier?.status==='complete'){phase=nextPhase[phase];}
     else if(phaseMs>=phaseBudget.dossier){diagnostics.push({phase,reason:'Company research time limit reached; continuing buyer checks with saved evidence',at:new Date().toISOString()});phase=nextPhase[phase];}
@@ -211,7 +212,15 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
      if(result.status==='complete'||result.continuation===false){if(result.status!=='complete')diagnostics.push({phase,reason:'Bounded dossier attempt incomplete; continuing contact research with its evidence gaps retained',at:new Date().toISOString()});phase=nextPhase[phase];}
     }catch(error){if(error.code==='CANCELED'||error.code==='CONTEXT_CHANGED'||controller.signal.aborted)throw error;diagnostics.push({phase,reason:errorReason(error,phase),at:new Date().toISOString()});phase=nextPhase[phase];}
    }else if(phase==='identities'){
-    if(input.scope==='selected_buyers'){phase=nextPhase[phase];}else{
+    if(siteOnly){
+     acquiredRows=(await allRows()).filter(source=>source.sourceRead===true);acquirePeople();
+     for(const person of candidate.people||[]){
+      const published=D.gmailResearchMatches(person,candidate,acquiredRows);
+      if(published.length)person.gmailMatches=[...new Map([...(person.gmailMatches||[]),...published].map(match=>[match.email,match])).values()].slice(0,8);
+     }
+     report.status='partial';status='needs_review';
+     diagnostics.push({phase,code:'free_discovery_finished',reason:'Free website and register checks finished. Expand research to use metered web sources for remaining gaps.',at:new Date().toISOString()});
+    }else if(input.scope==='selected_buyers'){phase=nextPhase[phase];}else{
     const plan=D.buyerResearchPlan(candidate,input.profile);
     for(const query of plan.queries.slice(0,6)){await guard();try{await search(query);}catch(error){if(error.code==='CANCELED'||controller.signal.aborted)throw error;}}
     const trace=D.tracePublicBuyers(await allRows(),candidate.company,{...input.profile,companyDomain:candidate.domain});candidate.people=D.retainBuyerIdentities(D.mergeBuyerPool(candidate.people||[],trace.people,input.profile),input.profile,candidate).slice(0,10);acquirePeople();phase=nextPhase[phase];}
@@ -246,7 +255,7 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
    }
    if(invocationExhausted){phase=row.phase;throw Object.assign(Error('Shared invocation query budget reached; saved work will continue'),{code:'TIME_BUDGET'});}
    await guard();phaseMs+=Math.max(1,clock()-phaseStart);phaseRuns=phase==='contacts'&&changed>0?0:phaseRuns+1;
-   if(phase===row.phase&&(phaseExhausted(phase,phaseMs,phaseRuns)||input.recheck&&phase==='contacts'&&phaseMs>=input.recheck.maxActiveMs)){
+   if(status==='queued'&&phase===row.phase&&(phaseExhausted(phase,phaseMs,phaseRuns)||input.recheck&&phase==='contacts'&&phaseMs>=input.recheck.maxActiveMs)){
     diagnostics.push({phase,reason:'Phase work budget reached; completed evidence retained',at:new Date().toISOString()});phase=nextPhase[phase];
    }
    if(phase!==row.phase){phaseMs=0;phaseRuns=0;}
@@ -280,12 +289,13 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
     const requiredGap=row.phase==='official'&&!D.officialContactCoveragePassed(candidate)?'Official website checks are incomplete':row.phase==='dossier'&&candidate.buyerDiscovery?.companyDossier?.status!=='complete'?'Required company dossier is incomplete':row.phase==='identities'&&!candidate.people?.length?'No supported decision-maker identities were found':row.phase==='contacts'&&!D.buyerResearchCoveragePassed(candidate,{contactOptions})?'Mandatory contact checks are incomplete':row.phase==='review'&&candidate.publicResearch?.aiReview?.status!=='complete'?'AI evidence review is incomplete':'';
     if(requiredGap){phase=row.phase;status='needs_review';diagnostics.push({phase,code:'task_required_check',reason:requiredGap,at:new Date().toISOString()});}
    }
+   if(siteOnly&&status==='queued'&&!['identities','official'].includes(phase)){phase='identities';phaseMs=0;phaseRuns=0;}
    if(status==='queued'&&phase==='done')await settleQuality();
    candidate.peopleStatus=candidate.people?.length?'complete':status==='queued'?'loading':'empty';
    candidate.publicContactStatus=['queued','running'].includes(status)?'loading':status==='complete'?'complete':'error';
    candidate.publicContactVersion='20261021-adaptive-depth-v3';
    let updated;
-   try{updated=await scopedWrite(args=>stmt(env,`UPDATE buyer_research_jobs SET input_json=json_set(input_json,'$.peopleFirst',json(?),'$.dossierPassFinished',?,'$.executionContinuationVersion',?,'$.contactSchedulingVersion',?,'$.apolloIdentityVersion',?,'$.apolloIdentityReceipts',json(?),'$.paidResearch',json(?)),status=?,phase=?,phase_ms=?,phase_runs=?,result_json=?,diagnostic_json=?,last_error='',lease_token=NULL,lease_until=0,next_at=?,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND lease_token=? AND lease_until>? AND status='running' AND ${authoritySql} AND COALESCE((SELECT version FROM customer_workspace_state WHERE workspace_id=buyer_research_jobs.workspace_id),0)=?${paidContinuation?' AND EXISTS(SELECT 1 FROM crm_intelligence WHERE workspace_id=? AND company_id=? AND research_snapshot_json=? AND evidence_json=?)':''}`,JSON.stringify(input.peopleFirst??null),input.dossierPassFinished?1:0,deferSemanticStamp?Number(input.executionContinuationVersion||0):4,scheduledContactWork?1:Number(input.contactSchedulingVersion||0),apolloIdentityChecked?1:0,JSON.stringify(input.apolloIdentityReceipts),JSON.stringify(input.paidResearch||null),status,phase,phaseMs,phaseRuns,JSON.stringify(candidate),JSON.stringify(diagnostics.slice(-20)),clock(),...args,...(paidContinuation?[row.workspace_id,input.paidResearch.companyId,paidContinuation.row.research_snapshot_json,paidContinuation.row.evidence_json]:[])),true);}
+   try{updated=await scopedWrite(args=>stmt(env,`UPDATE buyer_research_jobs SET input_json=json_set(input_json,'$.freeDiscovery',json(?),'$.peopleFirst',json(?),'$.dossierPassFinished',?,'$.executionContinuationVersion',?,'$.contactSchedulingVersion',?,'$.apolloIdentityVersion',?,'$.apolloIdentityReceipts',json(?),'$.paidResearch',json(?)),status=?,phase=?,phase_ms=?,phase_runs=?,result_json=?,diagnostic_json=?,last_error='',lease_token=NULL,lease_until=0,next_at=?,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND lease_token=? AND lease_until>? AND status='running' AND ${authoritySql} AND COALESCE((SELECT version FROM customer_workspace_state WHERE workspace_id=buyer_research_jobs.workspace_id),0)=?${paidContinuation?' AND EXISTS(SELECT 1 FROM crm_intelligence WHERE workspace_id=? AND company_id=? AND research_snapshot_json=? AND evidence_json=?)':''}`,JSON.stringify(Boolean(input.freeDiscovery)),JSON.stringify(input.peopleFirst??null),input.dossierPassFinished?1:0,deferSemanticStamp?Number(input.executionContinuationVersion||0):4,scheduledContactWork?1:Number(input.contactSchedulingVersion||0),apolloIdentityChecked?1:0,JSON.stringify(input.apolloIdentityReceipts),JSON.stringify(input.paidResearch||null),status,phase,phaseMs,phaseRuns,JSON.stringify(candidate),JSON.stringify(diagnostics.slice(-20)),clock(),...args,...(paidContinuation?[row.workspace_id,input.paidResearch.companyId,paidContinuation.row.research_snapshot_json,paidContinuation.row.evidence_json]:[])),true);}
    catch(error){
     updated={meta:{changes:0}};
     if(storageFailure(error)){status='needs_review';updated=await stmt(env,`UPDATE buyer_research_jobs SET status='needs_review',last_error='Workspace storage is full. Completed evidence is preserved; free space and resume.',lease_token=NULL,lease_until=0,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND lease_token=? AND status='running'`,row.id,lease).run();}

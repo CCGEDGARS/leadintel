@@ -105,3 +105,17 @@ test('a selected buyer job keeps broad company inventory while executing only th
  assert.equal(D.acceptedOfficialBuyerEmail(candidate,person),s.email(2));assert.ok(D.confirmedBuyerPhone(candidate,person));
  const view=await publicBuyerJob(f.env,finished);assert.equal(view.status,'complete');assert.equal(view.input.scope,'selected_buyers');assert.deepEqual(view.input.personIds,[selected.id]);assert.equal(view.quality.passed,false);assert.equal(view.quality.requirements.find(r=>r.id==='four_buyers').passed,false);
 });
+
+test('Find buyers saves public staff results before any metered request and expansion requires explicit opt-in',async t=>{
+ const f=await buyerJobsFixture(t),s=scenario(variants[0]),job=await startScenario(f,s,{peopleFirst:true,freeDiscovery:true});
+ const unexpected=()=>assert.fail('Free discovery called a metered provider');
+ const services={read:s.services.read,registry:async()=>({status:'not_found'}),search:unexpected,apollo:unexpected,review:unexpected,independent:unexpected,dossier:unexpected,paidLookup:unexpected};
+ const {row,phases}=await terminal(f,job,services);
+ assert.deepEqual(phases,['official','identities']);assert.equal(row.status,'needs_review');
+ assert.equal(JSON.parse(row.diagnostic_json).at(-1).code,'free_discovery_finished');
+ assert.equal(JSON.parse(row.result_json).people.length,4);assert.equal(s.counters.queries.length,0);
+ const command={action:'resume',jobId:row.id,expectedRevision:row.revision};
+ const {commandBuyerJob}=await import('../src/buyer-research-store.js');
+ const held=await commandBuyerJob(f.env,workspaceId,f.users.owner,command);assert.equal(held.status,'needs_review');
+ const expanded=await commandBuyerJob(f.env,workspaceId,f.users.owner,{...command,allowMeteredPublicResearch:true});assert.equal(expanded.status,'queued');assert.equal(JSON.parse(expanded.input_json).freeDiscovery,false);assert.ok(!JSON.parse(expanded.input_json).paidResearch);
+});
