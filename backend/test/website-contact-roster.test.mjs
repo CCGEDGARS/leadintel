@@ -41,3 +41,22 @@ test('saved project cards are excluded and current owners recovered from officia
  assert.equal(state.excludedIdentities.length,2);
  assert.ok(state.people.every(p=>p.publicNameUrl===url&&!p.publicEmail&&!p.freeResearchStatus));
 });
+
+test('content cards mentioning professional roles cannot unlock contact lookup',async()=>{
+ const {websitePaidReadiness}=await import('../src/website-contact-evidence.js');
+ for(const [path,name,title] of [
+  ['products','Atlas Prime','An assistant for the project manager'],
+  ['case-studies','Silver Harbour','Designed with the chief architect'],
+  ['events','Digital Futures','CEO panel with our clients'],
+  ['projekter','Green Horizon','Bygget sammen med vores projektleder'],
+ ]){
+  const person={name,title,publicNameUrl:'https://finance.example/'+path+'/item',identityOrigin:'official',freeResearchStatus:'complete'};
+  assert.equal(websiteContactIdentity(person),false);
+  assert.equal(websitePaidReadiness(input,person,'complete').code,'WEBSITE_CONTACT_IDENTITY_REQUIRED');
+ }
+ const person={name:'Anna Lind',title:'Project Manager',identityOrigin:'official',publicNameUrl:'https://finance.example/projects/new'};
+ const card={url:person.publicNameUrl,email:'anna@finance.example'};
+ assert.equal(websiteContactIdentity({...person,publishedStaffCard:card}),true);
+ assert.equal(websiteContactIdentity({...person,publishedStaffCard:{...card,url:'https://other.example/team'}}),false);
+ assert.equal(websiteContactIdentity({...person,publicNameUrl:'https://finance.example/team'}),true);
+});

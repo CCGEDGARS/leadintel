@@ -21,10 +21,17 @@ export function websiteContactIdentity(person={}){
  const source=person.publicNameUrl||'';
  if(!source)return person.identityOrigin==='apollo';
  try{const url=new URL(source);
-  // Case-study pages can name real project leaders, but a heading and a
-  // description of the work alone do not establish a professional role.
-  if(/\/(?:projects?|projekter?|portfolio|case-studies|cases)(?:[/-]|$)/i.test(url.pathname)&&!/(?:\b(?:chief|head|manager|engineer|director|architect|designer|founder|owner|partner|supervisor|lead|CEO|CFO|COO|CTO)\b|leder\b|direktør|ingeniør|arkitekt|chef\b)/iu.test(title))return false;
-  if(/(^|\.)linkedin\.com$/i.test(url.hostname)&&!D.normalizeProfessionalLinkedInUrl(source))return false;return ['https:','http:'].includes(url.protocol);}catch{return false;}
+  if(/(^|\.)linkedin\.com$/i.test(url.hostname))return Boolean(D.normalizeProfessionalLinkedInUrl(source));
+  // Portfolio, product and event pages routinely mention roles belonging to
+  // clients or speakers. A role word in a caption cannot establish employment.
+  // Accept an explicitly published staff card from that page, or let a separate
+  // official staff or professional profile source establish the person instead.
+  const contentPage=/\/(?:projects?|projekter?|produkter?|produkte?|products?|services?|solutions?|portfolio|case-stud(?:y|ies)|cases?|events?|webinars?|news|blog|references?|referencer)(?:[\/_-]|$)/i.test(url.pathname);
+  if(contentPage){
+   const card=person.publishedStaffCard;
+   if(person.identityOrigin==='public_listing'||card?.url!==source||!(card.email||card.phone))return false;
+  }
+  return ['https:','http:'].includes(url.protocol);}catch{return false;}
 }
 export function websiteContactRole(value){
  const text=String(value||'').toLowerCase().replace(/^(?:group|global|corporate)\s+/,'');
