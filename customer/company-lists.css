@@ -86,3 +86,20 @@
 }
 .cl-live [data-live="clock"] { font-variant-numeric: tabular-nums; font-weight: 700; }
 #cl-edit-fields[hidden] { display: none; }
+
+#cl-save-name {
+ display: flex;
+ flex-wrap: wrap;
+ align-items: end;
+ gap: .75rem;
+ margin: 1rem 0;
+}
+#cl-save-name label { display: grid; gap: .35rem; }
+.cl-toolbar details[data-detail="extend"] > summary {
+ cursor: pointer;
+ padding: .7rem 1rem;
+ border: 1px solid #ceddd4;
+ border-radius: .6rem;
+ font-weight: 600;
+}
+.cl-toolbar details[data-detail="extend"][open] { flex-basis: 100%; }

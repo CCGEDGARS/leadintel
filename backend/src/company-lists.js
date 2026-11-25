@@ -101,9 +101,9 @@ export async function handleCompanyListsRoute(request,env,cors={},ctx){
    if(u.searchParams.has('search_snapshot')){const fingerprint=u.searchParams.get('search_snapshot');if(!/^[a-f0-9]{64}$/.test(fingerprint))throw fail('Invalid saved-list reference.',400);return respond({list:await readCompanyList(env,workspaceId,'search_'+await sha256(workspaceId+'\0'+fingerprint))});}
    if(u.searchParams.has('id'))return respond({list:await readCompanyList(env,workspaceId,u.searchParams.get('id'))});
    const rows=await sql(env,`SELECT id,status,saved,revision,created_at,updated_at,last_error,
-    json_object('name',json_extract(input_json,'$.name'),'kind',json_extract(input_json,'$.kind'),'count',json_extract(input_json,'$.count'),'budget',json_extract(input_json,'$.budget')) AS input_json,
+    json_object('name',json_extract(input_json,'$.name'),'kind',json_extract(input_json,'$.kind'),'crmList',json_extract(input_json,'$.crmList'),'count',json_extract(input_json,'$.count'),'budget',json_extract(input_json,'$.budget')) AS input_json,
     json_object('reasoningSpend',json_extract(state_json,'$.reasoningSpend'),'run',json_extract(state_json,'$.run'),'resultCount',json_array_length(state_json,'$.results'),'pendingCount',json_array_length(state_json,'$.pending'),'operations',json_extract(state_json,'$.operations'),'allowance',json_extract(state_json,'$.allowance'),'checked',json_extract(state_json,'$.checked'),'reason',json_extract(state_json,'$.reason'),'phase',json_extract(state_json,'$.phase'),'nextAttemptAt',json_extract(state_json,'$.nextAttemptAt'),'operationTotals',json_extract(state_json,'$.operationTotals')) AS state_json
-    FROM company_lists WHERE workspace_id=? ORDER BY created_at DESC,rowid DESC LIMIT 50`,workspaceId).all();return respond({lists:(rows.results||[]).map(row=>{const l=publicList(row,parse(row.state_json));return {id:l.id,name:l.name,kind:l.criteria.kind,status:l.status,saved:l.saved,progress:l.progress,updatedAt:l.updatedAt};})});
+    FROM company_lists WHERE workspace_id=? ORDER BY created_at DESC,rowid DESC LIMIT 50`,workspaceId).all();return respond({lists:(rows.results||[]).map(row=>{const l=publicList(row,parse(row.state_json));return {id:l.id,name:l.name,kind:l.criteria.kind,crmList:Boolean(l.criteria.crmList||l.saved),status:l.status,saved:l.saved,progress:l.progress,updatedAt:l.updatedAt};})});
   }
   if(request.method!=='POST')throw fail('Method not allowed.',405);
   const text=await request.text();if(text.length>1024*1024)throw fail('List request is too large.',413);const body=parse(text,null);if(!body||typeof body!=='object')throw fail('List request required.',400);if(body.action!=='snapshot'&&text.length>24000)throw fail('List request is too large.',413);
@@ -122,16 +122,22 @@ export async function handleCompanyListsRoute(request,env,cors={},ctx){
    if(!['extend','pause','resume','save','delete','buyer'].includes(body.action))throw fail('Unknown list action.',400);
    if(active(row.status)&&['save','delete','buyer'].includes(body.action))throw fail('Pause research before saving, deleting or selecting companies.');
    const s=parse(row.state_json),criteria=parse(row.input_json);
+   if(row.saved)criteria.crmList=true; // Preserve membership for lists saved before this flag existed.
    if(body.action==='buyer'){const [candidate]=await saveRows(env,row,user,body.domain);return respond({candidate});}
-   if(body.action==='save'){const cursor=Number(body.cursor||0);if(!Number.isInteger(cursor)||cursor<0||cursor>=s.results.length||(cursor!==0&&cursor!==(s.saveCursor||0)))throw fail('Invalid save position.',400);await saveRows(env,row,user,undefined,cursor);nextCursor=cursor+20<s.results.length?cursor+20:null;s.saveCursor=nextCursor||0;const result=await sql(env,`UPDATE company_lists SET saved=?,state_json=?,revision=revision+1 WHERE id=? AND workspace_id=? AND revision=? AND EXISTS(SELECT 1 FROM sessions s JOIN workspace_members m ON m.user_id=s.user_id WHERE s.token_hash=? AND s.expires_at>datetime('now') AND m.user_id=? AND m.workspace_id=? AND m.role IN ('owner','researcher','sales'))`,nextCursor===null?1:0,JSON.stringify(s),row.id,workspaceId,row.revision,user.hash,user.id,workspaceId).run();if(!result.meta.changes)throw fail('List changed while saving; completed CRM saves are retained.');}
+   if(body.action==='save'){
+    if(!criteria.crmList&&body.name!==undefined){
+     if(typeof body.name!=='string'||!body.name.trim()||body.name.trim().length>120)throw fail('Enter a list name of up to 120 characters.',400);
+     criteria.name=body.name.trim();
+    }
+    const cursor=Number(body.cursor||0);if(!Number.isInteger(cursor)||cursor<0||cursor>=s.results.length||(cursor!==0&&cursor!==(s.saveCursor||0)))throw fail('Invalid save position.',400);await saveRows(env,row,user,undefined,cursor);nextCursor=cursor+20<s.results.length?cursor+20:null;s.saveCursor=nextCursor||0;if(nextCursor===null)criteria.crmList=true;const result=await sql(env,`UPDATE company_lists SET saved=?,input_json=?,state_json=?,revision=revision+1 WHERE id=? AND workspace_id=? AND revision=? AND EXISTS(SELECT 1 FROM sessions s JOIN workspace_members m ON m.user_id=s.user_id WHERE s.token_hash=? AND s.expires_at>datetime('now') AND m.user_id=? AND m.workspace_id=? AND m.role IN ('owner','researcher','sales'))`,nextCursor===null?1:0,JSON.stringify(criteria),JSON.stringify(s),row.id,workspaceId,row.revision,user.hash,user.id,workspaceId).run();if(!result.meta.changes)throw fail('List changed while saving; completed CRM saves are retained.');}
    else if(body.action==='delete'){const deleted=await sql(env,`DELETE FROM company_lists WHERE id=? AND workspace_id=? AND revision=? AND EXISTS(SELECT 1 FROM sessions s JOIN workspace_members m ON m.user_id=s.user_id WHERE s.token_hash=? AND s.expires_at>datetime('now') AND m.user_id=? AND m.workspace_id=? AND m.role IN ('owner','researcher','sales'))`,row.id,workspaceId,row.revision,user.hash,user.id,workspaceId).run();if(!deleted.meta.changes)throw fail('The list changed. Reload before deleting.');return respond({deleted:true});}
    else{
     const extending=body.action==='extend';
     if(extending){
-     if(row.status!=='complete')throw fail('Finish the current target before adding companies.');
-     if(!Number.isInteger(body.additional)||body.additional<1||criteria.count+body.additional>200)throw fail('Choose an additional count within the 200-company list limit.',400);
+     if(active(row.status)||!s.results.length)throw fail('Pause research and find at least one company before adjusting this list.');
+     if(!Number.isInteger(body.additional)||body.additional<1||s.results.length+body.additional>200)throw fail('Choose an additional count within the 200-company list limit.',400);
      if(!Number.isInteger(body.budget)||body.budget<10||body.budget>5000)throw fail('Choose 10 to 5,000 research operations.',400);
-     criteria.count+=body.additional;
+     criteria.count=s.results.length+body.additional;
      criteria.budget=body.budget;
      s.allowance=s.operations+body.budget;
      s.saveCursor=0;

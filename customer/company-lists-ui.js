@@ -155,6 +155,7 @@
    if(!history.open)loadedOnOpen=false;
   };
   summary.addEventListener('click',event=>{
+   crmHistory=false;
    event.preventDefault();synchronize();history.open=!history.open;updateHistory();
   });
   history.addEventListener('toggle',updateHistory);
@@ -163,20 +164,22 @@
   restoreActive();
   mountCrm();
  }
- function mountCrm(){  const crm=document.querySelector('#crm-workspace .crm-header');if(crm&&!$('crm-company-lists')){const b=document.createElement('button');b.id='crm-company-lists';b.type='button';b.className='secondary-btn';b.textContent='Company lists';b.onclick=()=>{document.querySelector('#crm-workspace [data-crm-close]')?.click();root.LeadIntelDiscoveryUI?.open({focus:'companies'});$('company-list-panel')?.scrollIntoView({block:'start'});action(showLists);};crm.append(b);}
+ function mountCrm(){  const crm=document.querySelector('#crm-workspace .crm-header');if(crm&&!$('crm-company-lists')){const b=document.createElement('button');b.id='crm-company-lists';b.type='button';b.className='secondary-btn';b.textContent='Company lists';b.onclick=()=>{document.querySelector('#crm-workspace [data-crm-close]')?.click();root.LeadIntelDiscoveryUI?.open({focus:'companies'});$('company-list-panel')?.scrollIntoView({block:'start'});action(()=>showLists(true));};crm.append(b);}
  }
- let historyRead=0;
+ let historyRead=0,crmHistory=false;
  async function loadHistory(saved){
   const version=++historyRead,owner=synchronize();
   saved.setAttribute('aria-busy','true');saved.textContent='Loading saved lists…';
   try{
    const data=await api();
    if(version!==historyRead||identity()!==owner||!saved.isConnected)return;
-   saved.innerHTML='<h4>Saved lists</h4>'+(data.lists.length?'<div class="cl-saved">'+data.lists.map(l=>'<button type="button" class="secondary-btn" data-cl="open" data-id="'+esc(l.id)+'"><strong>'+esc(l.name)+'</strong><span>'+l.progress.count+' / '+l.progress.target+' · '+esc(l.kind==='search_snapshot'?'Saved search results':statusLabel(l.status))+(l.saved?' · Saved to CRM':'')+'</span></button>').join('')+'</div>':'<p>No lists yet. Build your first list using active profiles and optional buying signals.</p>');
+   const lists=crmHistory?data.lists.filter(l=>l.crmList||l.saved||l.kind==='search_snapshot'):data.lists;
+   saved.innerHTML='<h4>'+(crmHistory?'CRM company lists':'Saved lists and drafts')+'</h4>'+(lists.length?'<div class="cl-saved">'+lists.map(l=>'<button type="button" class="secondary-btn" data-cl="open" data-id="'+esc(l.id)+'"><strong>'+esc(l.name)+'</strong><span>'+l.progress.count+' / '+l.progress.target+' · '+esc(l.kind==='search_snapshot'?'Saved search results':statusLabel(l.status))+(l.saved?' · Saved to CRM':l.crmList?' · Changes to save':l.kind==='search_snapshot'?'':' · Draft')+'</span></button>').join('')+'</div>':'<p>No lists yet. Build your first list using active profiles and optional buying signals.</p>');
   }catch(error){if(version===historyRead&&owner===identity())saved.textContent=error.message;}
   finally{if(version===historyRead)saved.removeAttribute('aria-busy');}
  }
- function showLists(){
+ function showLists(onlyCrm=false){
+  crmHistory=onlyCrm;
   const history=$('prior-company-search');if(!history)return;
   if(history.open)void loadHistory($('cl-history-lists'));else history.open=true;
   history.querySelector('summary').focus();
@@ -189,7 +192,7 @@
   options=(await api({options:'1'})).options;current=null;prepared=null;showAll=false;sort='score';descending=true;
   const profiles=options.profiles||[],signals=options.buyingSignals||[],trigger=profiles.some(p=>p.type==='trigger-led'&&p.active&&p.ready);
   $('company-list-content').innerHTML=`<form id="company-list-form">
-   <div id="cl-edit-fields"><div class="cl-grid"><label>List name<input name="name" maxlength="120" required value="My company list"></label>
+   <div id="cl-edit-fields"><div class="cl-grid"><input type="hidden" name="name" value="My company list">
     <label>Companies to find<select name="preset"><option>5</option><option selected>10</option><option>20</option><option>50</option><option>100</option><option>200</option><option value="custom">Custom</option></select><input name="count" type="number" min="1" max="200" value="10" aria-label="Custom company count" hidden></label>
     <label>Target countries or markets<textarea name="markets" rows="2" required>${esc(options.markets.join('\n'))}</textarea><small>One per line. These countries apply to this list; references may be elsewhere.</small></label></div>
    <fieldset><legend>1. Targeting profiles</legend><p>Choose one or combine active profiles. Manage their definitions and switches in Strategy. Off profiles have no influence on this list.</p>
@@ -390,7 +393,7 @@
    return descending?-cmp:cmp;
   });
   const firstLabel=sort==='score'&&descending?'top':'first';
-  $('company-list-content').innerHTML='<div class="cl-result-heading"><h4>'+esc(l.name)+'</h4><span>'+esc(statusLabel(l.status))+(l.saved?' · Saved to CRM':'')+'</span></div>'+(active?liveHtml(l):'')+'<p><strong>'+l.results.length+' of '+l.criteria.count+' matching companies</strong> · '+l.progress.checked+' sources assessed · '+l.progress.operations+' / '+l.progress.allowance+' research operations</p><progress max="'+l.criteria.count+'" value="'+l.results.length+'" aria-label="Matching companies"></progress><p role="status" class="'+(paused?'cl-paused':l.status==='incomplete'?'cl-blocker':'')+'">'+esc(paused?'The search paused: '+l.results.length+' of '+l.criteria.count+' companies found so far, '+l.progress.checked+' page'+(l.progress.checked===1?'':'s')+' checked. Your results are kept.':causeText(l,active)||l.progress.reason)+'</p><details data-detail="criteria"><summary>List criteria and research receipts</summary><p>'+esc(M.criteriaSummary(l.criteria))+' · '+esc(l.criteria.markets.join(', '))+'</p><p>References: '+esc(l.criteria.references.map(r=>r.name).join(', ')||'None')+'</p><p>Importance: '+esc(l.criteria.signals.map(s=>s.name+' '+l.criteria.weights[s.id]).join(', '))+'</p><p>Criteria are frozen when research starts. New lists check selected profiles first; optional verified buying signals add priority or become required filters. Off criteria have no influence. Earlier lists retain their saved policy. Buying intent is unconfirmed.</p><p>'+esc(l.progress.operationTotals?'Measured attempts: '+l.progress.operationTotals.complete+' completed, '+l.progress.operationTotals.failed+' failed, '+l.progress.operationTotals.interrupted+' interrupted. Showing recent receipts; each match retains its own evidence review.':'Earlier accounting retained; detailed receipts were not recorded for every historical operation.')+'</p><ul>'+l.receipts.slice(-20).map(r=>'<li>'+esc([r.provider,r.stage||r.operation,r.status,r.providerCode,r.http&&'HTTP '+r.http,r.at].filter(Boolean).join(' · '))+'</li>').join('')+'</ul></details><div class="cl-toolbar"><button type="button" class="secondary-btn" data-cl="refresh">Refresh status</button>'+(active?'<button type="button" class="secondary-btn" data-cl="pause">Pause research</button>':l.status!=='complete'?'<button type="button" class="primary-btn" data-cl="resume">'+(l.failureCode==='search_budget'?'Approve 3 more AI searches':l.failureCode==='research_spend'?'Approve $1 more and resume':paused?'Keep searching':'Resume within remaining allowance')+'</button>':'')+'<button type="button" class="primary-btn" data-cl="save" '+(active||!rows.length?'disabled':'')+'>Save list to CRM</button><button type="button" class="secondary-btn" data-cl="csv" '+(!rows.length?'disabled':'')+'>Download CSV</button><button type="button" class="secondary-btn" data-cl="xlsx" '+(!rows.length?'disabled':'')+'>Download Excel</button><button type="button" class="text-btn" data-cl="delete" '+(active?'disabled':'')+'>Delete list</button></div>'+(paused?'<p class="cl-continue-note">Continues for up to '+l.criteria.budget+' more research steps.</p>':'')+(l.incompleteChecks?.length?'<details data-detail="incomplete"><summary>Incomplete or rejected source checks ('+l.incompleteChecks.length+')</summary>'+l.incompleteChecks.slice(-30).map(r=>'<p><a href="'+esc(r.url)+'" target="_blank" rel="noopener noreferrer">'+esc(r.company||M.domain(r.url))+'</a> · '+esc(r.reason)+'</p>').join('')+'</details>':'')+(rows.length?'<p>'+rows.length+' matching companies · Showing '+(showAll?'all companies':firstLabel+' '+Math.min(10,rows.length))+'</p>'+(active?'<p class="cl-buyers-wait" role="note">'+esc(BUYERS_WAIT)+'</p>':'')+(rows.length>10?'<button type="button" class="secondary-btn" data-cl="show-all">'+(showAll?'Show '+firstLabel+' 10':'Show all '+rows.length+' companies')+'</button>':'')+'<div class="cl-table-wrap"><table><thead><tr>'+[['company','Company'],['location','Location'],['score','Relevance']].map(([k,v])=>'<th'+(sort===k?' aria-sort="'+(descending?'descending':'ascending')+'"':'')+'><button type="button" data-cl="sort" data-sort="'+k+'">'+v+(sort===k?(descending?' ↓':' ↑'):'')+'</button></th>').join('')+'<th>Profiles, signals and evidence</th><th>Next step</th></tr></thead><tbody>'+(showAll?rows:rows.slice(0,10)).map(r=>'<tr><td><strong>'+esc(r.company)+'</strong><a href="'+esc(r.website)+'" target="_blank" rel="noopener noreferrer">'+esc(r.domain)+' ↗</a></td><td>'+esc(r.location)+'</td><td><strong>'+r.score+'</strong>'+(r.fitScore!==undefined?'<small>Profile fit '+esc(r.fitScore)+'/90 · Signal bonus +'+esc(r.signalBonus)+'/10</small>':'')+'<small>Buying intent unconfirmed</small></td><td><details data-detail="company:'+esc(r.domain)+'"><summary>'+esc(r.matches.map(m=>m.name).join(', '))+'</summary>'+r.matches.map(m=>'<p><strong>'+esc((m.kind==='profile'?'Profile: ':m.kind==='signal'?'Buying signal: ':'')+m.name)+'</strong>'+matchScore(m)+'</p><p>'+esc(m.reason)+'</p><blockquote>'+esc(m.quote)+'</blockquote><a href="'+esc(m.url)+'" target="_blank" rel="noopener noreferrer">Source'+(m.date?' · '+esc(m.date):'')+' ↗</a>'+(m.referenceName?'<p>Similar to '+esc(m.referenceName)+': '+esc(m.referenceQuote)+(m.referenceUrl?' <a href="'+esc(m.referenceUrl)+'" target="_blank" rel="noopener noreferrer">Reference source ↗</a>':'')+'</p>':'')).join('')+(r.profileMatches?.some(m=>m.opportunityUrl)?r.profileMatches.filter(m=>m.opportunityUrl).map(m=>'<p>Opportunity: '+esc(m.opportunityTitle)+' <a href="'+esc(m.opportunityUrl)+'" target="_blank" rel="noopener noreferrer">Saved opportunity source ↗</a></p>').join(''):'')+(r.quality?'<p>Evidence review: '+esc(r.quality.reason)+'</p>':'<p>Earlier evidence policy; no separate review was recorded.</p>')+(r.commercialFit?'<p>Commercial fit: '+esc(r.commercialFit.reason)+'</p>':'')+targetHtml(r)+'<p>Checked '+esc(new Date(r.checkedAt).toLocaleString())+'</p></details></td><td><button type="button" class="secondary-btn" data-cl="buyer" data-domain="'+esc(r.domain)+'" '+(active?'disabled title="'+esc(BUYERS_WAIT)+'"':'')+'>Find buyers →</button></td></tr>').join('')+'</tbody></table></div>':'<p>No verified matches yet. Incomplete research does not mean no matching companies exist.</p>');for(const detail of content.querySelectorAll('details'))detail.open=expanded.has(detail.dataset.detail);
+  $('company-list-content').innerHTML='<div class="cl-result-heading"><h4>'+esc(l.name)+'</h4><span>'+esc(statusLabel(l.status))+(l.saved?' · Saved to CRM':l.criteria.crmList?' · Changes to save':' · Draft')+'</span></div>'+(active?liveHtml(l):'')+'<p><strong>'+l.results.length+' of '+l.criteria.count+' matching companies</strong> · '+l.progress.checked+' sources assessed · '+l.progress.operations+' / '+l.progress.allowance+' research operations</p><progress max="'+l.criteria.count+'" value="'+l.results.length+'" aria-label="Matching companies"></progress><p role="status" class="'+(paused?'cl-paused':l.status==='incomplete'?'cl-blocker':'')+'">'+esc(paused?'The search paused: '+l.results.length+' of '+l.criteria.count+' companies found so far, '+l.progress.checked+' page'+(l.progress.checked===1?'':'s')+' checked. Your results are kept.':causeText(l,active)||l.progress.reason)+'</p><details data-detail="criteria"><summary>List criteria and research receipts</summary><p>'+esc(M.criteriaSummary(l.criteria))+' · '+esc(l.criteria.markets.join(', '))+'</p><p>References: '+esc(l.criteria.references.map(r=>r.name).join(', ')||'None')+'</p><p>Importance: '+esc(l.criteria.signals.map(s=>s.name+' '+l.criteria.weights[s.id]).join(', '))+'</p><p>Criteria are frozen when research starts. New lists check selected profiles first; optional verified buying signals add priority or become required filters. Off criteria have no influence. Earlier lists retain their saved policy. Buying intent is unconfirmed.</p><p>'+esc(l.progress.operationTotals?'Measured attempts: '+l.progress.operationTotals.complete+' completed, '+l.progress.operationTotals.failed+' failed, '+l.progress.operationTotals.interrupted+' interrupted. Showing recent receipts; each match retains its own evidence review.':'Earlier accounting retained; detailed receipts were not recorded for every historical operation.')+'</p><ul>'+l.receipts.slice(-20).map(r=>'<li>'+esc([r.provider,r.stage||r.operation,r.status,r.providerCode,r.http&&'HTTP '+r.http,r.at].filter(Boolean).join(' · '))+'</li>').join('')+'</ul></details><div class="cl-toolbar"><button type="button" class="secondary-btn" data-cl="refresh">Refresh status</button>'+(active?'<button type="button" class="secondary-btn" data-cl="pause">Pause research</button>':l.status!=='complete'?'<button type="button" class="primary-btn" data-cl="resume">'+(l.failureCode==='search_budget'?'Approve 3 more AI searches':l.failureCode==='research_spend'?'Approve $1 more and resume':paused?'Keep searching':'Resume within remaining allowance')+'</button>':'')+'<button type="button" class="primary-btn" data-cl="save" '+(active||!rows.length?'disabled':'')+'>Save</button><button type="button" class="secondary-btn" data-cl="csv" '+(!rows.length?'disabled':'')+'>Download CSV</button><button type="button" class="secondary-btn" data-cl="xlsx" '+(!rows.length?'disabled':'')+'>Download Excel</button><button type="button" class="text-btn" data-cl="delete" '+(active?'disabled':'')+'>Delete</button></div>'+(paused?'<p class="cl-continue-note">Continues for up to '+l.criteria.budget+' more research steps.</p>':'')+(l.incompleteChecks?.length?'<details data-detail="incomplete"><summary>Incomplete or rejected source checks ('+l.incompleteChecks.length+')</summary>'+l.incompleteChecks.slice(-30).map(r=>'<p><a href="'+esc(r.url)+'" target="_blank" rel="noopener noreferrer">'+esc(r.company||M.domain(r.url))+'</a> · '+esc(r.reason)+'</p>').join('')+'</details>':'')+(rows.length?'<p>'+rows.length+' matching companies · Showing '+(showAll?'all companies':firstLabel+' '+Math.min(10,rows.length))+'</p>'+(active?'<p class="cl-buyers-wait" role="note">'+esc(BUYERS_WAIT)+'</p>':'')+(rows.length>10?'<button type="button" class="secondary-btn" data-cl="show-all">'+(showAll?'Show '+firstLabel+' 10':'Show all '+rows.length+' companies')+'</button>':'')+'<div class="cl-table-wrap"><table><thead><tr>'+[['company','Company'],['location','Location'],['score','Relevance']].map(([k,v])=>'<th'+(sort===k?' aria-sort="'+(descending?'descending':'ascending')+'"':'')+'><button type="button" data-cl="sort" data-sort="'+k+'">'+v+(sort===k?(descending?' ↓':' ↑'):'')+'</button></th>').join('')+'<th>Profiles, signals and evidence</th><th>Next step</th></tr></thead><tbody>'+(showAll?rows:rows.slice(0,10)).map(r=>'<tr><td><strong>'+esc(r.company)+'</strong><a href="'+esc(r.website)+'" target="_blank" rel="noopener noreferrer">'+esc(r.domain)+' ↗</a></td><td>'+esc(r.location)+'</td><td><strong>'+r.score+'</strong>'+(r.fitScore!==undefined?'<small>Profile fit '+esc(r.fitScore)+'/90 · Signal bonus +'+esc(r.signalBonus)+'/10</small>':'')+'<small>Buying intent unconfirmed</small></td><td><details data-detail="company:'+esc(r.domain)+'"><summary>'+esc(r.matches.map(m=>m.name).join(', '))+'</summary>'+r.matches.map(m=>'<p><strong>'+esc((m.kind==='profile'?'Profile: ':m.kind==='signal'?'Buying signal: ':'')+m.name)+'</strong>'+matchScore(m)+'</p><p>'+esc(m.reason)+'</p><blockquote>'+esc(m.quote)+'</blockquote><a href="'+esc(m.url)+'" target="_blank" rel="noopener noreferrer">Source'+(m.date?' · '+esc(m.date):'')+' ↗</a>'+(m.referenceName?'<p>Similar to '+esc(m.referenceName)+': '+esc(m.referenceQuote)+(m.referenceUrl?' <a href="'+esc(m.referenceUrl)+'" target="_blank" rel="noopener noreferrer">Reference source ↗</a>':'')+'</p>':'')).join('')+(r.profileMatches?.some(m=>m.opportunityUrl)?r.profileMatches.filter(m=>m.opportunityUrl).map(m=>'<p>Opportunity: '+esc(m.opportunityTitle)+' <a href="'+esc(m.opportunityUrl)+'" target="_blank" rel="noopener noreferrer">Saved opportunity source ↗</a></p>').join(''):'')+(r.quality?'<p>Evidence review: '+esc(r.quality.reason)+'</p>':'<p>Earlier evidence policy; no separate review was recorded.</p>')+(r.commercialFit?'<p>Commercial fit: '+esc(r.commercialFit.reason)+'</p>':'')+targetHtml(r)+'<p>Checked '+esc(new Date(r.checkedAt).toLocaleString())+'</p></details></td><td><button type="button" class="secondary-btn" data-cl="buyer" data-domain="'+esc(r.domain)+'" '+(active?'disabled title="'+esc(BUYERS_WAIT)+'"':'')+'>Find buyers →</button></td></tr>').join('')+'</tbody></table></div>':'<p>No verified matches yet. Incomplete research does not mean no matching companies exist.</p>');for(const detail of content.querySelectorAll('details'))detail.open=expanded.has(detail.dataset.detail);
   if(active){
    const last=l.receipts.slice().reverse().find(r=>r.status==='complete'&&utcTime(r.at)>=(l.progress.run?.startedAt||0));
    if(last){
@@ -412,10 +415,12 @@
     content.querySelector('progress').after(summary);
    }
   }
-  if(l.status==='complete'&&!l.criteria.taskId&&l.criteria.count<200){
-   const max=200-l.criteria.count,count=Math.min(10,max);
-   content.insertAdjacentHTML('beforeend','<details data-detail="extend"><summary>Add more companies</summary><p>Search with the same criteria and an additional $1 estimated AI reasoning allowance and three AI web-search queries. New matches join this ranking.</p><label>Additional companies <input id="cl-extra-count" type="number" min="1" max="'+max+'" value="'+count+'"></label><label>Research operations for this extension <input id="cl-extra-budget" type="number" min="10" max="5000" value="'+M.recommendedBudget(count)+'"></label><button type="button" class="primary-btn" data-cl="extend">Start additional research</button></details>');
+  if(!active&&rows.length&&!l.criteria.taskId&&rows.length<200){
+   const max=200-rows.length,count=Math.min(10,max);
+   content.insertAdjacentHTML('beforeend','<details data-detail="extend"><summary>Adjust</summary><p>Search with the same criteria and an additional $1 estimated AI reasoning allowance and three AI web-search queries. New matches join this ranking.</p><label>Additional companies <input id="cl-extra-count" type="number" min="1" max="'+max+'" value="'+count+'"></label><label>Research operations for this extension <input id="cl-extra-budget" type="number" min="10" max="5000" value="'+M.recommendedBudget(count)+'"></label><button type="button" class="primary-btn" data-cl="extend">Start additional research</button></details>');
   }
+  const adjust=content.querySelector('[data-detail="extend"]');
+  if(adjust)content.querySelector('[data-cl="save"]').after(adjust);
   const addCount=$('cl-extra-count'),addBudget=$('cl-extra-budget');
   if(addCount&&addBudget){
    addCount.oninput=()=>{if(!addBudget.dataset.custom&&addCount.validity.valid)addBudget.value=M.recommendedBudget(Number(addCount.value));};
@@ -440,7 +445,7 @@
     return;
    }
    if(command==='review')return review();
-   if(command==='edit'){invalidateReview();$('company-list-form').elements.name.focus();return;}
+   if(command==='edit'){invalidateReview();$('company-list-form').elements.preset.focus();return;}
    if(command==='start'){
     if(!prepared||JSON.stringify(prepared)!==JSON.stringify(formValue()))throw Error('Review the current criteria first.');
     current=(await api({}, {action:'start',...prepared})).list;if(current)startedHere.set(current.id,Date.now());render();
@@ -458,16 +463,30 @@
    }
    if(['csv','xlsx'].includes(command))return download(command);
    const list=current,owner=scope;
-   if(command==='save'){
+   if(command==='save'||command==='save-named'){
+    let name;
+    if(!list.saved&&!list.criteria.crmList){
+     let form=$('cl-save-name');
+     if(!form){
+      form=document.createElement('form');form.id='cl-save-name';
+      form.innerHTML='<label>List name <input name="listName" required maxlength="120"></label> <button type="submit" class="primary-btn" data-cl="save-named">Save</button> <button type="button" class="secondary-btn" data-cl="cancel-name">Cancel</button>';
+      form.onsubmit=e=>e.preventDefault();
+      form.elements.listName.value=list.name==='My company list'?'':list.name;
+      b.closest('.cl-toolbar').after(form);form.elements.listName.focus();return;
+     }
+     name=form.elements.listName.value.trim();
+     if(!name){form.elements.listName.value='';form.reportValidity();return;}
+    }
     let cursor=0;
     do{
-     const response=await api({}, {action:'save',id:list.id,revision:current.revision,cursor});
-     current=response.list;cursor=response.nextCursor;render();notice(cursor!==null?'Saving companies to CRM…':'');
+     const response=await api({}, {action:'save',id:list.id,revision:current.revision,cursor,...(name?{name}:{})});
+     current=response.list;cursor=response.nextCursor;render();notice(cursor!==null?'Saving companies to CRM…':'Saved to CRM → Company lists.');
     }while(cursor!==null);
     root.dispatchEvent(new CustomEvent('leadintel:crm-changed'));return;
    }
+   if(command==='cancel-name'){$('cl-save-name')?.remove();return;}
    if(command==='delete'){
-    const confirmed=await root.LeadIntelDialogs.confirm('This removes the list and its research history. Companies already saved in CRM remain available.',{title:'Delete company list?',action:'Delete list',danger:true});
+    const confirmed=await root.LeadIntelDialogs.confirm('Permanently delete “'+list.name+'” and its research history? Its CRM companies and buyers are kept.',{title:'Delete company list?',action:'Delete list',danger:true});
     if(!confirmed||owner!==identity()||current!==list)return;
    }
    const extraSearch=command==='resume'&&list.failureCode==='search_budget';

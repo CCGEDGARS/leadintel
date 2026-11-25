@@ -121,7 +121,9 @@ test('extend a reviewed list with a new allowance, retaining its matches and res
  }
  const five=await finish();
  assert.deepEqual(Object.keys(five.progress.run.milestones),['1','5']);
- const extend={action:'extend',id:first.id,revision:five.revision,additional:5,budget:100};
+ const named=(await (await route(f,{action:'save',id:first.id,revision:five.revision,name:'Steel targets'})).json()).list;
+ assert.equal(named.name,'Steel targets');
+ const extend={action:'extend',id:first.id,revision:named.revision,additional:5,budget:100};
  assert.equal((await route(f,{...extend,additional:196})).status,400);
  assert.equal((await route(f,{...extend,budget:0})).status,400);
  const wake=[];
@@ -131,6 +133,14 @@ test('extend a reviewed list with a new allowance, retaining its matches and res
  assert.equal((await route(f,extend)).status,409);
  const ten=await finish();
  assert.equal(ten.criteria.count,10);
+ assert.ok(ten.criteria.crmList);
+ const saved=(await (await route(f,{action:'save',id:ten.id,revision:ten.revision})).json()).list;
+ assert.equal(saved.name,'Steel targets');
+ const history=(await (await route(f,null)).json()).lists;
+ assert.equal(history.length,1);
+ assert.equal(history[0].id,first.id);
+ assert.equal(history[0].progress.count,10);
+ assert.equal(history[0].saved,true);
  assert.equal(ten.progress.allowance,five.progress.operations+100);
  assert.equal(ten.progress.run.baseline,5);
  assert.equal(new Set(ten.results.map(r=>r.domain)).size,10);
