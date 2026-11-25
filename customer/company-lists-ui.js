@@ -127,7 +127,21 @@
   // search, its saved companies and the known targets, more than a screen down, and was not found. It stays inside
   // the card because the card is what the page hides on the Buyers stage, which shares this section.
   const search=searchContext.closest('.discovery-panel'),anchor=$('event-discovery-panel')||searchContext;
-  const panel=document.createElement('section');panel.id='company-list-panel';panel.className='panel company-list-panel';panel.innerHTML='<div class="cl-heading"><div><span class="eyebrow">Company lists</span><h3>Find companies that match your profiles</h3><p>Build up to 200 companies from active profiles, with optional buying signals. Every match receives the same evidence checks.</p></div><button type="button" class="primary-btn" data-cl="new">Build company list</button></div><div class="cl-toolbar"><button type="button" class="secondary-btn" data-cl="lists">Open saved lists</button></div><p id="company-list-notice" role="status" aria-live="polite"></p><div id="company-list-content"></div>';if(search)search.prepend(panel);else anchor.before(panel);panel.addEventListener('click',click);panel.addEventListener('change',change);panel.addEventListener('input',e=>{if(e.target.closest('#company-list-form')){invalidateReview();if(['budget','count','industry'].includes(e.target.name))syncCriteriaFields();}});
+  const panel=document.createElement('section');panel.id='company-list-panel';panel.className='panel company-list-panel';panel.setAttribute('aria-labelledby','company-list-heading');
+  panel.innerHTML=`
+   <header class="cl-entry">
+    <div class="cl-entry-copy">
+     <span class="eyebrow">Company lists</span>
+     <h3 id="company-list-heading">Find companies that match your profiles</h3>
+     <p>Find up to 200 companies using your active profiles and optional buying signals. Every match gets the same evidence checks.</p>
+    </div>
+    <div class="cl-entry-actions">
+     <button type="button" class="primary-btn" data-cl="new">Build company list</button>
+     <button type="button" class="secondary-btn" data-cl="lists">Open saved lists</button>
+    </div>
+   </header>
+   <p id="company-list-notice" role="status" aria-live="polite"></p>
+   <div id="company-list-content"></div>`;if(search)search.prepend(panel);else anchor.before(panel);panel.addEventListener('click',click);panel.addEventListener('change',change);panel.addEventListener('input',e=>{if(e.target.closest('#company-list-form')){invalidateReview();if(['budget','count','industry'].includes(e.target.name))syncCriteriaFields();}});
   mountCrm();
  }
  function mountCrm(){  const crm=document.querySelector('#crm-workspace .crm-header');if(crm&&!$('crm-company-lists')){const b=document.createElement('button');b.id='crm-company-lists';b.type='button';b.className='secondary-btn';b.textContent='Company lists';b.onclick=()=>{document.querySelector('#crm-workspace [data-crm-close]')?.click();root.LeadIntelDiscoveryUI?.open({focus:'companies'});$('company-list-panel')?.scrollIntoView({block:'start'});action(showLists);};crm.append(b);}

@@ -10,3 +10,66 @@
 @keyframes cl-live-pulse{0%{box-shadow:0 0 0 0 rgba(var(--cl-live-pulse),.55)}70%{box-shadow:0 0 0 9px rgba(var(--cl-live-pulse),0)}100%{box-shadow:0 0 0 0 rgba(var(--cl-live-pulse),0)}}
 @media(prefers-reduced-motion:reduce){.company-list-panel .cl-live-dot{animation:none}}
 .company-list-panel .cl-paused{padding:14px;border:1px solid #ecd9a6;border-left:4px solid #d9b45a;border-radius:8px;background:#fdf8ea;color:#5d4a14}.company-list-panel .cl-continue-note{margin:-6px 0 14px;color:#60756a;font-size:13px}
+
+/* Company-list entry and its adjacent search history in Step 4. */
+#company-list-panel {
+  margin: 0 0 12px;
+  padding: 0;
+  border: 0;
+  box-shadow: none;
+}
+#company-list-panel .cl-entry {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 22px 36px;
+  padding: clamp(20px, 2.7vw, 40px);
+  border-radius: 16px;
+  background: linear-gradient(110deg, #102e29, #184e41);
+  color: #fff;
+}
+.cl-entry-copy { flex: 1 1 24rem; min-width: 0; }
+.cl-entry .eyebrow { color: #aee8c8; }
+#company-list-heading {
+  margin: 6px 0 10px;
+  max-width: 28ch;
+  color: #fff;
+  font-size: clamp(1.5rem, 2.4vw, 2.25rem);
+  line-height: 1.13;
+  letter-spacing: -.025em;
+}
+.cl-entry-copy p {
+  max-width: 62ch;
+  margin: 0;
+  color: #dfede6;
+  line-height: 1.5;
+}
+.cl-entry-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.cl-entry-actions button { min-height: 46px; }
+.cl-entry-actions .primary-btn {
+  background: #ccf1d9;
+  color: #103b2d;
+  border: 1px solid #ccf1d9;
+  box-shadow: none;
+}
+.cl-entry-actions .secondary-btn { background: transparent; border: 1px solid #83b2a1; color: #fff; }
+.cl-entry-actions .primary-btn:hover { background: #e7f9ed; }
+.cl-entry-actions .secondary-btn:hover { background: #285c4d; }
+.cl-entry-actions button:focus-visible { outline: 3px solid #ffd879; outline-offset: 3px; }
+#company-list-notice:empty, #company-list-content:empty { margin: 0; padding: 0; }
+#company-list-content:not(:empty) { padding: clamp(16px, 2.4vw, 32px) 0; }
+#prior-company-search > summary {
+  padding: 14px 18px;
+  border: 1px solid #ceddd4;
+  border-radius: 10px;
+  color: #234b3d;
+  background: #f2f6f3;
+  cursor: pointer;
+  font-weight: 600;
+}
+#prior-company-search > summary:focus-visible { outline: 3px solid #236b52; outline-offset: 2px; }
+@media (max-width: 650px) {
+  .cl-entry-actions { width: 100%; }
+  .cl-entry-actions button { flex: 1 1 10rem; }
+}
