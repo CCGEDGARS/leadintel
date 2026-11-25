@@ -2,7 +2,7 @@ import {requestFirecrawl} from './firecrawl-request.js';
 import {requireWorkspaceServiceCredential} from './service-integrations.js';
 import {searchWorkspaceWeb} from './ai-routes.js';
 // Public research only. This boundary never invokes paid contact reveal APIs.
-export function createBuyerSourceSearch(env,workspaceId,{guard=async()=>{},observe=()=>{},credential=requireWorkspaceServiceCredential,grounded=searchWorkspaceWeb,fetchImpl=fetch,signal,scrapeResults=true,primaryTimeoutMs=25000,purpose='buyer_research',meter}={}){
+export function createBuyerSourceSearch(env,workspaceId,{guard=async()=>{},observe=()=>{},credential=requireWorkspaceServiceCredential,grounded=searchWorkspaceWeb,fetchImpl=fetch,signal,scrapeResults=true,primaryTimeoutMs=25000,purpose='buyer_research',meter,beforeGrounded}={}){
  let unavailable=false,connection;
  const rowsWithSource=(rows,provider)=>{const values=rows.map(row=>({...row,buyerSource:provider,searchProvider:provider}));Object.defineProperty(values,'searchProviders',{value:[provider]});return values;};
  return async function search(query,{limit=8,diversify=false,signal:requestSignal}={}){
@@ -23,6 +23,10 @@ export function createBuyerSourceSearch(env,workspaceId,{guard=async()=>{},obser
    }catch(error){if(error?.code==='CREDIT_LIMIT')throw error;await check();observe({provider:'firecrawl',operation:'search',status:'failed',reason:String(error.message||'Public search unavailable').slice(0,180)});}
   }
   await check();
+  if(beforeGrounded){
+   try{await beforeGrounded();}catch(error){if(primaryRows.length)return primaryRows;throw error;}
+   await check();
+  }
   try{
    const result=await grounded(env,workspaceId,query,{signal:querySignal});await check();
    if(result.status!=='complete'||result.web_search===false||!Array.isArray(result.results))throw Error('Grounded public research unavailable');

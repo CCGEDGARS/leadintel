@@ -25,3 +25,10 @@ test('successful empty public searches remain distinct from provider failure and
  await assert.rejects(search('person'),/Canceled/);assert.equal(fallback,0);
  const empty=createBuyerSourceSearch({},'w',{credential:async()=>({apiKey:'fixture'}),fetchImpl:async()=>new Response(JSON.stringify({success:true,data:[]})),grounded:async()=>{throw Error('offline');}});assert.deepEqual(await empty('person'),[]);
 });
+test('a blocked AI search never calls the provider and preserves any primary results',async()=>{
+ const options={beforeGrounded:async()=>{throw Error('Search allowance reached');},grounded:async()=>assert.fail('Unexpected paid call')};
+ const fallback=createBuyerSourceSearch({},'w',{...options,credential:async()=>{throw Error('Missing');}});
+ await assert.rejects(fallback('next'),/allowance/);
+ const primary=createBuyerSourceSearch({},'w',{...options,credential:async()=>({apiKey:'fixture'}),fetchImpl:async()=>Response.json({success:true,data:[{url:'https://example.org'}]})});
+ assert.equal((await primary('next',{diversify:true}))[0].url,'https://example.org');
+});
