@@ -54,7 +54,7 @@ test('a running list says that it is running, for how long, and what it did last
  assert.equal(h.part('head'),'Researching…');
  assert.equal(h.part('clock'),'Running 4:12');
  assert.equal(h.part('now'),'Now: reading steelinfo.dk · 3 s ago');
- assert.equal(h.part('estimate'),'A list of 10 usually takes 3–10 minutes');
+ assert.equal(h.part('estimate'),'Time left appears after the first two matches');
 });
 
 test('the clock and the "ago" move every second without a new status read',async t=>{
@@ -88,7 +88,7 @@ test('from two matches on, the time left is worked out from the pace so far',asy
  const nine=await open(t,list({kept:9,receipts:[receipt('page_read','https://a.example/',269)]}),270);
  assert.equal(nine.part('estimate'),'About 1 minute left at this pace','never less than a minute');
  const one=await open(t,list({kept:1,receipts:[receipt('page_read','https://a.example/',239)]}),240);
- assert.equal(one.part('estimate'),'A list of 10 usually takes 3–10 minutes','one match is not a pace');
+ assert.equal(one.part('estimate'),'Time left appears after the first two matches','one match is not a pace');
 });
 
 test('a list of another size does not borrow the figure measured for ten',async t=>{
@@ -133,7 +133,7 @@ test('right after "continue" the line does not show the earlier run\'s last oper
  const h=await open(t,list({status:'incomplete',kept:2,receipts:before,progress:{operations:200,allowance:200}}),1800,()=>({list:list({status:'queued',kept:2,receipts:before,progress:{operations:200,allowance:400}})}));
  await h.click('resume');
  assert.equal(h.part('now'),'Now: continuing the search');
- assert.equal(h.part('estimate'),'A list of 10 usually takes 3–10 minutes','two matches of the earlier run are not this run\'s pace');
+ assert.equal(h.part('estimate'),'Time left appears after the first two matches','two matches of the earlier run are not this run\'s pace');
  h.second(5);
  assert.equal(h.part('clock'),'Running 0:05');assert.equal(h.part('now'),'Now: continuing the search');
 });

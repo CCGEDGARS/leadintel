@@ -230,6 +230,10 @@
   const result=TargetCriteria.evaluate(c.target,facts,{industryEvidence:candidate.industryEvidence});
   const checks=result.checks.map(check=>({...check,detail:clean(check.detail,500)}));
   if(result.decision==='exclude')return {excluded:true,reason:'Outside the target criteria: '+checks.filter(check=>check.status==='mismatch').map(check=>check.detail).join(' · ')};
+  if(c.minimumScore){
+   const missing=checks.filter(check=>check.status==='unknown'&&(check.key==='registry'?c.target.registryOnly:check.key==='revenue'?c.target.revenue?.min!=null:true));
+   if(missing.length)return {pending:true,reason:'Required evidence missing: '+missing.map(check=>check.detail).join(' · ')};
+  }
   const register=facts?.status==='found'?{registry:clean(facts.registry,40),id:clean(facts.id,40),name:clean(facts.name,180),city:clean(facts.city,120),marketingProtected:facts.marketingProtected??null,source:facts.source||null,...(facts.group?{group:facts.group}:{})}:null;
   return {excluded:false,candidate:{...candidate,target:{checks,register}}};
  }

@@ -118,7 +118,11 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
      ON CONFLICT(workspace_id,list_id,domain) DO UPDATE SET evidence_id=excluded.evidence_id,result_json=excluded.result_json`,
      result.domain,entry.evidenceId,encoded,row.id,row.workspace_id,token,entry.evidenceId);
    }
-   if(index<0)s.results.push(entry);else s.results[index]=entry;
+   if(index<0){
+    s.results.push(entry);
+    const kept=s.results.length-(s.run?.baseline||0);
+    if(s.run&&[1,5,10].includes(kept))s.run.milestones[kept]=Date.now()-s.run.startedAt;
+   }else s.results[index]=entry;
   };
   // `broken`: a write that carried a kept company's evidence row failed. The company is in memory but not stored, and a
   // later write would store it without its evidence, so no later write of this slice is made.
@@ -287,11 +291,16 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
       catch(cause){if(signal.aborted)throw cause;return {status:'unavailable'};}
      });
      const outcome=M.targetOutcome(candidate,facts,criteria);
-     if(outcome.excluded)finishTask(task,outcome.reason,'rejected');
+     if(outcome.pending)finishTask(task,outcome.reason,'needs_evidence');
+     else if(outcome.excluded)finishTask(task,outcome.reason,'rejected');
      else{task.candidate=outcome.candidate;task.registerChecked=true;}
     }else if(task.candidate){
      const review=await laneAsk(lane,{stage:'review',criteria:modelCriteria(criteria),pages,candidate:modelCandidate(task.candidate),instructions:profileReview},task);
      const result=M.reviewResult(task.candidate,review,criteria);
+     if(result&&criteria.minimumScore&&result.score<criteria.minimumScore){
+      finishTask(task,'Reviewed score '+result.score+' is below the required '+criteria.minimumScore+'.','rejected');
+      save();return;
+     }
      if(result){
       result.audit={reads:pages.map(p=>({url:p.url,readAt:p.readAt,operationId:p.receipt?.id,providers:p.receipt?.providers||[]})),assessment:task.assessment,review:{...lane.last}};
       // Kept and written in one turn of the writer. Another lane may have completed the list while this review ran:
@@ -491,11 +500,16 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
         catch(cause){if(signal.aborted)throw cause;return {status:'unavailable'};}
        });
        const outcome=M.targetOutcome(candidate,facts,criteria);
-       if(outcome.excluded)finishTask(task,outcome.reason,'rejected');
+       if(outcome.pending)finishTask(task,outcome.reason,'needs_evidence');
+     else if(outcome.excluded)finishTask(task,outcome.reason,'rejected');
        else{task.candidate=outcome.candidate;task.registerChecked=true;s.reason='Reviewing source evidence before counting a match';}
       }else if(task.candidate&&strict){
        const review=await generate({stage:'review',criteria:modelCriteria(criteria),pages,candidate:modelCandidate(task.candidate),instructions:profilePolicy?profileReview:reviewInstructions});
        const result=M.reviewResult(task.candidate,review,criteria);
+       if(result&&criteria.minimumScore&&result.score<criteria.minimumScore){
+        finishTask(task,'Reviewed score '+result.score+' is below the required '+criteria.minimumScore+'.','rejected');
+        await checkpoint();continue;
+       }
        if(result){
         result.audit={reads:pages.map(p=>({url:p.url,readAt:p.readAt,operationId:p.receipt?.id,providers:p.receipt?.providers||[]})),assessment:task.assessment,review:{...lastOperation}};
         for(const prior of s.reviews)if(prior.status==='needs_evidence'&&M.domain(prior.url)===result.domain)prior.status='resolved';
