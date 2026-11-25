@@ -545,26 +545,23 @@ test('a search that came back, and whose following write failed, is not searched
  assert.equal(statusOf(f,list.id),'complete');assert.equal(stateOf(f,list.id).results.length,22);
 });
 
-// The list reaches its number in the same slice in which another lane's record cannot be written. That slice ends as
-// complete, so no later slice would ever close a receipt left as started.
-test('an operation whose record could not be written is closed as interrupted, also when the list completes in that slice',async t=>{
+test('a refused operation-start write is accounted for when the list finishes',async t=>{
  let searches=0,failed=0;const f=await setup(t,8),base=profileServices({count:30}),written=new Set();
  f.env.COMPANY_LIST_TEST_SERVICES={...base,
   search:async()=>{const from=searches++*10;return Array.from({length:10},(_,i)=>({url:`https://factory${from+i}.example/`}));},
-  // Every website answers at its own speed, so the lanes are at different steps when the 22nd company is kept.
+  // Every website answers at its own speed, so the lanes are at different steps during the run.
   read:async url=>{await pause(5+Number(host(url).match(/\d+/)[0])*7%23);return base.read(url);},
   generate:async p=>{if(p.stage==='plan')return {queries:p.round?[]:['first','second','third']};await pause(5+Number(host(p.pages.at(-1).url).match(/\d+/)[0])*11%29);return base.generate(p);}};
  const list=await startBare(f,{count:22,budget:400});
- // The write that keeps the 22nd company (a `batch`) also carries the receipts of operations other lanes have just
- // opened; those lanes wait for a write after it. From then on every write fails, slowly, except the last one that
- // stores the list as complete: the list has its number before the waiting lanes hear of the failure.
+ // Inject the fault while there is still useful work for multiple lanes.
+ // The final company now finishes without speculative operations in flight.
  const prepare=f.DB.prepare.bind(f.DB),batch=f.DB.batch.bind(f.DB);
  f.DB.prepare=sql=>{const statement=prepare(sql);if(/^UPDATE company_lists SET state_json=\?/.test(sql)){const bind=statement.bind.bind(statement);statement.bind=(...values)=>{
   const stored=JSON.parse(values[0]),opened=stored.receipts.filter(r=>r.status==='started'&&!written.has(r.id)).map(r=>r.id),bound=bind(...values),run=bound.run.bind(bound);
-  bound.run=async()=>{if(bound.kept)return run();if(waiting&&values[1]==='running'){failed++;await pause(20);throw new Error('D1_ERROR: Network connection lost.');}for(const id of opened)written.add(id);return run();};
+  bound.run=async()=>{if(bound.kept)return run();if(!failed&&stored.results.length>=5&&opened.length&&values[1]==='running'){waiting=opened.length;failed++;await pause(20);throw new Error('D1_ERROR: Network connection lost.');}for(const id of opened)written.add(id);return run();};
   bound.opened=opened;bound.results=stored.results.length;return bound;};}return statement;};
  let waiting=0;
- f.DB.batch=async statements=>{await pause(30);for(const statement of statements){statement.kept=true;if(statement.results>=22)waiting+=(statement.opened||[]).length;for(const id of statement.opened||[])written.add(id);}return batch(statements);};
+ f.DB.batch=async statements=>{await pause(30);for(const statement of statements){statement.kept=true;for(const id of statement.opened||[])written.add(id);}return batch(statements);};
  for(let i=0;i<40&&active(f,list.id);i++){const before=stateOf(f,list.id);await runCompanyListJobs(f.env,{jobId:list.id,now:Math.max(Date.now(),(before.nextAttemptAt||0)+1),windowMs:45000});}
  const state=stateOf(f,list.id),totals=state.operationTotals;
  t.diagnostic(`operations ${state.operations}, operations that waited for the failed write ${waiting}, totals ${JSON.stringify(totals)}`);
