@@ -654,3 +654,28 @@ test('a reported OpenAI 502 gets one assessment per recovery attempt',async t=>{
  assert.equal(statusOf(f,list.id),'incomplete');
  assert.equal(stateOf(f,list.id).pending.length,8);
 });
+
+test('duplicate queries and tracking aliases incur one search and read while distinct content is still assessed',async t=>{
+ for(const lanes of [1,4])await t.test(String(lanes),async t=>{
+  const f=await setup(t,lanes),base=profileServices({count:3}),searched=[],read=[];
+  f.env.COMPANY_LIST_TEST_SERVICES={...base,
+   generate:async p=>p.stage==='plan'?{queries:p.round?[]:['Steel  fabricators','steel fabricators']}:base.generate(p),
+   search:async q=>{searched.push(q);return ['/?item=1','/?item=1&utm_source=email#about','/?item=2'].map(path=>({url:'https://factory0.example'+path}));},
+   read:async url=>{read.push(url);return {url,text:'Insufficient'};}
+  };
+  const list=await finish(f,(await start(f,{count:3})).id);
+  assert.equal(list.status,'incomplete');assert.deepEqual(searched,['Steel fabricators']);
+  assert.deepEqual(read,['https://factory0.example/?item=1','https://factory0.example/?item=2']);
+ });
+});
+
+test('one remaining place needs one successful candidate and no speculative search',async t=>{
+ const f=await setup(t,8),base=profileServices({count:8}),calls={plan:0,search:0,read:0,assess:0,review:0};
+ f.env.COMPANY_LIST_TEST_SERVICES={...base,
+  generate:async p=>{calls[p.stage]++;return p.stage==='plan'?{queries:['first','reserve','more']}:base.generate(p);},
+  search:async q=>{calls.search++;return base.search(q);},
+  read:async url=>{calls.read++;return base.read(url);}
+ };
+ const list=await finish(f,(await start(f,{count:1})).id);
+ assert.equal(list.status,'complete',list.progress.reason);assert.deepEqual(calls,{plan:1,search:1,read:1,assess:1,review:1});
+});

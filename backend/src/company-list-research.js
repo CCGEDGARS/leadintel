@@ -11,6 +11,26 @@ const T=globalThis.LeadIntelTargetCriteria;
 const sql=(env,q,...v)=>env.DB.prepare(q).bind(...v);
 const parse=v=>JSON.parse(v);
 const clean=(v,n=500)=>String(v??'').replace(/\s+/g,' ').trim().slice(0,n);
+// Comparison keys only. Read and cite the original URL, keeping content-selecting
+// parameters, path case and hash routes distinct.
+function sourceKey(value){
+ const safe=M.url(value);if(!safe)return '';
+ const url=new URL(safe);
+ if(!/^#(?:!|\/)/.test(url.hash))url.hash='';
+ const tags=[...url.searchParams.keys()].filter(key=>/^(utm_.+|gclid|fbclid|msclkid)$/i.test(key));
+ for(const tag of tags)url.searchParams.delete(tag);
+ return url.href;
+}
+function newQueries(plan,previous){
+ const queries=[],seen=new Set(previous.map(q=>clean(q,350).toLowerCase()));
+ for(const raw of Array.isArray(plan.queries)?plan.queries:[]){
+  const query=clean(raw,350),key=query.toLowerCase();
+  if(!key||seen.has(key))continue;
+  queries.push(query);seen.add(key);
+  if(queries.length===8)break;
+ }
+ return queries;
+}
 const error=(message,code,status=503)=>Object.assign(Error(message),{code,status});
 // The shape of a refused answer is kept in the receipt; the answer itself is not.
 const unusable=detail=>Object.assign(error('Reasoning response needs retry.','invalid_response'),{detail});
@@ -106,6 +126,31 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
   delete s.slice;   // the figures of the last slice with several lanes; a new such slice writes its own
   timer=setTimeout(()=>controller.abort(),windowMs);
   s.receipts||=[];s.reviews||=[];s.seen||=[];s.pending||=[];
+  // Retain deliberate retries (the same spelling is requeued on failure), but
+  // discard differently cased copies from plans created by older workers.
+  const plannedSpelling=new Map(s.queries.slice(0,s.queryIndex).map(q=>[clean(q,350).toLowerCase(),q]));
+  s.queries=s.queries.slice(0,s.queryIndex).concat(s.queries.slice(s.queryIndex).filter(q=>{
+   const key=clean(q,350).toLowerCase();
+   if(plannedSpelling.has(key))return plannedSpelling.get(key)===q;
+   plannedSpelling.set(key,q);return true;
+  }));
+  const seenSources=new Set(s.seen.map(sourceKey));
+  // Older checkpoints can contain several unread aliases. Prefer the task with
+  // saved evidence and preserve independent follow-ups carrying their own context.
+  const queuedSources=new Set(s.pending.filter(task=>task.context||task.page||task.candidate).map(task=>sourceKey(task.url)));
+  s.pending=s.pending.filter(task=>{
+   if(task.context||task.page||task.candidate)return true;
+   const key=sourceKey(task.url);
+   if(queuedSources.has(key))return false;
+   queuedSources.add(key);return true;
+  });
+  const queueHits=rows=>{
+   for(const hit of rows.slice(0,10)){
+    const url=M.url(hit.url),key=sourceKey(url);
+    if(!key||seenSources.has(key)||s.seen.length>=4000||s.results.some(r=>r.domain===M.domain(url)))continue;
+    seenSources.add(key);s.seen.push(url);s.pending.push({url});
+   }
+  };
   // Older jobs keep their existing accounting. Do not invent past receipts.
   s.operationTotals||={started:0,complete:0,failed:0,interrupted:0,previousOperations:s.operations||0};
   if(s.inFlight){const prior=s.receipts.find(r=>r.id===s.inFlight.id);if(prior)prior.status='interrupted';s.operationTotals.interrupted++;s.inFlight=null;}
@@ -265,13 +310,14 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
    const allowed=new Set(pages.flatMap(p=>[...(p.links||[]),...(p.text.match(/https?:\/\/[^\s<>"\]\)]+/g)||[])]).map(M.url).filter(Boolean));
    const additions=[];
    for(const url of new Set((Array.isArray(raw.followupUrls)?raw.followupUrls:[]).slice(0,3).map(M.url))){
-    if(!allowed.has(url)||pages.some(p=>p.url===url))continue;
+    const key=sourceKey(url);
+    if(!allowed.has(url)||pages.some(p=>sourceKey(p.url)===key))continue;
     // A search may already have queued the linked page as a standalone hit.
     // Promote that unread hit so its assessment keeps the evidence that led here.
-    const queued=s.pending.findIndex(p=>p!==task&&!held.has(p)&&p.url===url&&!p.context&&!p.page);
+    const queued=s.pending.findIndex(p=>p!==task&&!held.has(p)&&sourceKey(p.url)===key&&!p.context&&!p.page);
     if(queued>=0)s.pending.splice(queued,1);
-    else if(s.seen.includes(url)||s.seen.length>=4000)continue;
-    else s.seen.push(url);
+    else if(seenSources.has(key)||s.seen.length>=4000)continue;
+    else{s.seen.push(url);seenSources.add(key);}
     additions.push({url,context:pages.slice(-4),depth:(task.depth||0)+1});
    }
    s.pending.splice(s.pending.indexOf(task)+1,0,...additions);return additions.length>0;
@@ -286,7 +332,7 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
    const busy=new Set(),cooled=new Set(),feeders=new Set(),FEEDERS=3;packing=true;s.slice={at:new Date().toISOString(),lanes:count,from:s.operations,writes:0,writeMs:0,slowestWriteMs:0,workMs:0,waitMs:0,idleMs:0,tailMs:0,feedMs:0};const sliceBegan=Date.now(),left=[];let stop=null,drained=null,feedDown=null,readStreak=0,waiters=[];
    const wake=()=>{const all=waiters;waiters=[];for(const resolve of all)resolve();};
    const halt=reason=>{stop||=reason;wake();};
-   const claim=()=>{for(const task of s.pending){if(held.has(task)||cooled.has(task))continue;const site=M.domain(task.url);if(busy.has(site))continue;held.add(task);busy.add(site);return task;}return null;};
+   const claim=()=>{if(held.size>=criteria.count-s.results.length)return null;for(const task of s.pending){if(held.has(task)||cooled.has(task))continue;const site=M.domain(task.url);if(busy.has(site))continue;held.add(task);busy.add(site);return task;}return null;};
    const release=task=>{held.delete(task);busy.delete(M.domain(task.url));wake();};
    // No authority read of its own before or after: the write that records the operation as started asks the same
    // question (lease, running, session) and is awaited before any work is sent, and nothing that comes back late can be
@@ -439,7 +485,7 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
       const found=await run(q,{limit:10,signal}),rows=Array.isArray(found)?found:found?.results;if(!Array.isArray(rows))throw error('Search response needs retry.','invalid_response');return rows;
      });
      searched=true;
-     for(const hit of rows.slice(0,10)){const url=M.url(hit.url);if(url&&!s.seen.includes(url)&&s.seen.length<4000&&!s.results.some(r=>r.domain===M.domain(url))){s.seen.push(url);s.pending.push({url});}}
+     queueHits(rows);
      s.phase='researching';await checkpoint();
     }catch(e){
      // The query is added to the end of the queries for a later try; the planned queries stay where they are (other
@@ -463,7 +509,7 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
     try{
      const prompt={stage:'plan',criteria:modelCriteria(criteria),previousQueries:s.queries,alreadyMatched:s.results.map(r=>r.company),gaps:s.reviews.slice(-12),round:s.round,instructions:profilePlanning+targetPlanning(criteria)};
      const plan=await laneOperation(me,'analysis','search plan',(signal,receipt)=>ask(prompt,signal,receipt,true)).catch(recoverInitialPlan);
-     const queries=[...new Set((Array.isArray(plan.queries)?plan.queries:[]).map(q=>clean(q,350)).filter(q=>q&&!s.queries.some(old=>old.toLowerCase()===q.toLowerCase())))].slice(0,8);
+     const queries=newQueries(plan,s.queries);
      s.round++;s.roundStart={seen:s.seen.length,matches:s.results.length};s.queries.push(...queries);
      if(!queries.length)drained={end:'incomplete',code:'search_exhausted',phase:'exhausted',reason:'No further useful queries. Completed matches are retained; review the criteria.'};
      else{s.phase='researching';s.reason='Researching your selected profiles and buying signals';}
@@ -473,8 +519,12 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
    const refill=()=>{
     if(stop||drained||feedDown||(recovering&&s.pending.length))return;
     const start=work=>{const run=work().catch(cause=>halt({fatal:cause})).finally(()=>{feeders.delete(run);wake();});feeders.add(run);};
-    while(feeders.size<FEEDERS&&s.queryIndex<s.queries.length&&unclaimed()+feeders.size*5<count*2)start(feedSearch);
-    if(!feeders.size&&s.queryIndex>=s.queries.length&&unclaimed()<count)start(feedPlan);
+    const remaining=criteria.count-s.results.length;
+    // Finish available candidates when the target is close. A rejection opens
+    // capacity for another search immediately.
+    const enough=()=>remaining<=count&&(feeders.size>0||held.size+unclaimed()>=remaining);
+    while(!enough()&&feeders.size<FEEDERS&&s.queryIndex<s.queries.length&&unclaimed()+feeders.size*5<count*2)start(feedSearch);
+    if(!enough()&&!feeders.size&&s.queryIndex>=s.queries.length&&unclaimed()<count)start(feedPlan);
    };
    const lane=async index=>{
     const me={index,last:null,events:[]};
@@ -588,14 +638,14 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
      }
     }else if(s.queryIndex<s.queries.length){
      const q=s.queries[s.queryIndex],rows=await operation('search',q,async signal=>{const found=await search(q,{limit:10,signal}),rows=Array.isArray(found)?found:found?.results;if(!Array.isArray(rows))throw error('Search response needs retry.','invalid_response');return rows;});
-     for(const hit of rows.slice(0,10)){const url=M.url(hit.url);if(url&&!s.seen.includes(url)&&s.seen.length<4000&&!s.results.some(r=>r.domain===M.domain(url))){s.seen.push(url);s.pending.push({url});}}
+     queueHits(rows);
      s.queryIndex++;s.phase='researching';s.reason='Reading discovered sources';await checkpoint();
     }else{
      if(s.roundStart){s.noProgressRounds=(s.seen.length===s.roundStart.seen&&s.results.length===s.roundStart.matches)?(s.noProgressRounds||0)+1:0;s.roundStart=null;}
      const maxRounds=Math.max(10,Math.ceil(criteria.count/5));
      if(s.round>=maxRounds||s.noProgressRounds>=3||s.seen.length>=4000){s.failureCode='search_exhausted';s.phase='exhausted';s.reason='The bounded search plan finished below target. Saved matches passed their checks; no weaker matches were added to fill the list.';await checkpoint('incomplete');return [row.id];}
      const plan=await generate({stage:'plan',criteria:modelCriteria(criteria),previousQueries:s.queries,alreadyMatched:s.results.map(r=>r.company),gaps:s.reviews.slice(-12),round:s.round,instructions:profilePolicy?profilePlanning+targetPlanning(criteria):'Return {queries:[strings]}. Plan at most eight distinct company searches for ONLY selected signals and target markets. For Lookalike, use selected reference source-backed operations, products and relevant purchasing applications; no unrelated hiring, investment or tender requirement. Reference countries are not target markets. Use local business language and English. Diversify relevant industry subsegments and official company sites, trade associations and specialist sources. Avoid previous queries and matched companies. Resolve the supplied evidence gaps where useful. Never invent company names. Empty queries only when no further useful research is justified.'}).catch(recoverInitialPlan);
-     const queries=[...new Set((Array.isArray(plan.queries)?plan.queries:[]).map(q=>clean(q,350)).filter(q=>q&&!s.queries.some(old=>old.toLowerCase()===q.toLowerCase())))].slice(0,8);
+     const queries=newQueries(plan,s.queries);
      s.round++;s.roundStart={seen:s.seen.length,matches:s.results.length};s.queries.push(...queries);s.phase=queries.length?'researching':'exhausted';s.reason=queries.length?(profilePolicy?'Researching your selected profiles and buying signals':'Researching your selected signals'):'No further useful queries. Completed matches are retained; review the criteria.';
      if(!queries.length)s.failureCode='search_exhausted';await checkpoint(queries.length?'running':'incomplete');if(!queries.length)return [row.id];
     }
