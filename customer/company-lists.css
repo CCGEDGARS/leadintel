@@ -103,3 +103,12 @@
  font-weight: 600;
 }
 .cl-toolbar details[data-detail="extend"][open] { flex-basis: 100%; }
+
+.cl-history-group { margin: .5rem 0; }
+.cl-history-group > summary, #cl-previous-search > summary {
+ padding: .75rem 0;
+ cursor: pointer;
+ font-weight: 600;
+}
+.cl-history-group .cl-saved button { gap: .5rem 1rem; flex-wrap: wrap; }
+.cl-history-group .cl-saved button span { font-weight: 400; }
