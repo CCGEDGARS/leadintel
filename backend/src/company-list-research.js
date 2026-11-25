@@ -16,7 +16,7 @@ const clean=(v,n=500)=>String(v??'').replace(/\s+/g,' ').trim().slice(0,n);
 function sourceKey(value){
  const safe=M.url(value);if(!safe)return '';
  const url=new URL(safe);
- if(!/^#(?:!|\/)/.test(url.hash))url.hash='';
+ if(/^#[\w.-]+$/.test(url.hash))url.hash='';
  const tags=[...url.searchParams.keys()].filter(key=>/^(utm_.+|gclid|fbclid|msclkid)$/i.test(key));
  for(const tag of tags)url.searchParams.delete(tag);
  return url.href;
@@ -332,7 +332,19 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
    const busy=new Set(),cooled=new Set(),feeders=new Set(),FEEDERS=3;packing=true;s.slice={at:new Date().toISOString(),lanes:count,from:s.operations,writes:0,writeMs:0,slowestWriteMs:0,workMs:0,waitMs:0,idleMs:0,tailMs:0,feedMs:0};const sliceBegan=Date.now(),left=[];let stop=null,drained=null,feedDown=null,readStreak=0,waiters=[];
    const wake=()=>{const all=waiters;waiters=[];for(const resolve of all)resolve();};
    const halt=reason=>{stop||=reason;wake();};
-   const claim=()=>{if(held.size>=criteria.count-s.results.length)return null;for(const task of s.pending){if(held.has(task)||cooled.has(task))continue;const site=M.domain(task.url);if(busy.has(site))continue;held.add(task);busy.add(site);return task;}return null;};
+   const claim=()=>{
+    const remaining=criteria.count-s.results.length;
+    if(held.size>=remaining)return null;
+    let selected=null,best=-1;
+    for(const task of s.pending){
+     if(held.has(task)||cooled.has(task)||busy.has(M.domain(task.url)))continue;
+     const priority=task.candidate?2:task.page?1:0;
+     if(priority>best){selected=task;best=priority;}
+     if(remaining>count||best===2)break;
+    }
+    if(selected){held.add(selected);busy.add(M.domain(selected.url));}
+    return selected;
+   };
    const release=task=>{held.delete(task);busy.delete(M.domain(task.url));wake();};
    // No authority read of its own before or after: the write that records the operation as started asks the same
    // question (lease, running, session) and is awaited before any work is sent, and nothing that comes back late can be

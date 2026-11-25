@@ -679,3 +679,19 @@ test('one remaining place needs one successful candidate and no speculative sear
  const list=await finish(f,(await start(f,{count:1})).id);
  assert.equal(list.status,'complete',list.progress.reason);assert.deepEqual(calls,{plan:1,search:1,read:1,assess:1,review:1});
 });
+
+test('a resumed list uses a previously read page for the last place before buying another read',async t=>{
+ const f=await setup(t,4),base=profileServices({count:3}),list=await startBare(f,{count:1}),state=stateOf(f,list.id);
+ const saved='https://factory1.example/',unread='https://factory0.example/';
+ const page=await base.read(saved);
+ state.pending=[{url:unread},{url:unread+'?utm_source=old'},{url:saved,page:{url:saved,text:page.markdown||page.text,links:[],receipt:{id:1}}}];
+ state.seen=state.pending.map(p=>p.url);
+ f.DB.raw.prepare('UPDATE company_lists SET state_json=? WHERE id=?').run(JSON.stringify(state),list.id);
+ const reads=[];
+ f.env.COMPANY_LIST_TEST_SERVICES={...base,read:async url=>{reads.push(url);return base.read(url);}};
+ const finished=await finish(f,list.id);
+ assert.equal(finished.status,'complete',finished.progress.reason);
+ assert.equal(finished.results[0].domain,'factory1.example');
+ assert.deepEqual(reads,[]);
+ assert.equal(stateOf(f,list.id).pending.filter(p=>p.url.startsWith(unread)).length,1);
+});
