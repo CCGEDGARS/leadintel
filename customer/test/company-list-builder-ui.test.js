@@ -86,6 +86,14 @@ test('sorting preserves the open evidence for the same company and labels the di
  await h.w.LeadIntelCompanyListUI.open('one');
  const top=()=>h.find('tbody tr td strong').textContent;
  assert.equal(top(),'Zinc');
+ const first=h.find('tbody tr');
+ assert.equal(first.querySelector('.cl-rank').textContent,'1');
+ const score=first.querySelector('.cl-fit details');
+ assert.equal(score.open,false);
+ assert.match(score.querySelector('summary').textContent,/^\d+\/100$/);
+ score.querySelector('summary').click();
+ assert.equal(score.open,true);
+ assert.ok(first.querySelector('[data-cl="buyer"]'));
  assert.match(h.find('tbody tr').textContent,/Profile fit 80\/90 · Signal bonus \+0\/10/);
  assert.match(h.find('[data-detail="company:zinc.example"]').textContent,/Assessed strength 80\/100 · Profile fit 80\/90/);
  h.find('[data-detail="company:zinc.example"]').open=true;

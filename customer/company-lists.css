@@ -119,3 +119,32 @@
 .cl-row-menu { position: relative; }
 .cl-row-menu > summary { cursor: pointer; list-style: none; padding: .5rem .75rem; font-weight: 700; }
 .cl-row-menu > div { position: absolute; z-index: 2; right: 0; display: grid; gap: .3rem; padding: .35rem; background: white; border: 1px solid #ceddd4; border-radius: .5rem; }
+
+.cl-matches-heading { margin: 1.5rem 0 .5rem; font-size: 1.2rem; }
+.cl-ranked-list table { border-collapse: separate; border-spacing: 0 .45rem; }
+.cl-ranked-list th { color: #41594f; font-size: .86rem; }
+.cl-ranked-list tbody td { background: #fff; border-block: 1px solid #d8e4dd; vertical-align: middle; }
+.cl-ranked-list tbody td:first-child { border-inline-start: 1px solid #d8e4dd; border-radius: .7rem 0 0 .7rem; }
+.cl-ranked-list tbody td:last-child { border-inline-end: 1px solid #d8e4dd; border-radius: 0 .7rem .7rem 0; min-width: 0; width: 10rem; }
+.cl-ranked-name { display: flex; gap: 1rem; align-items: center; }
+.cl-rank { min-width: 2rem; text-align: center; color: #52675e; font-variant-numeric: tabular-nums; }
+.cl-ranked-name strong { font-size: 1.05rem; color: #183a2f; }
+.cl-ranked-name a { color: #306353; text-decoration: none; }
+.cl-ranked-name a:hover { text-decoration: underline; }
+.cl-ranked-list .cl-fit { width: 24%; }
+.cl-fit summary { cursor: pointer; color: #174f40; width: fit-content; padding: .35rem; border-radius: .35rem; }
+.cl-fit summary:hover { background: #edf5ef; }
+.cl-fit summary b { font-size: 1.3rem; }
+.cl-fit summary span { font-size: .85rem; }
+.cl-score-evidence { padding: .5rem; font-size: .9rem; overflow-wrap: anywhere; }
+.cl-ranked-list .cl-buyer-action button:enabled { background: #165b49; border-color: #165b49; color: white; }
+@media(max-width:650px){
+ .company-list-panel .cl-ranked-list tbody tr { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: .35rem .75rem; }
+ .company-list-panel .cl-ranked-list tbody td { border: 0; padding: .25rem 0; width: auto; min-width: 0; }
+ .company-list-panel .cl-ranked-list td:nth-child(n)::before { content: none; }
+ .cl-ranked-name { gap: .4rem; }
+ .cl-ranked-list .cl-place { grid-column: 1; padding-left: 2.4rem !important; font-size: .85rem; }
+ .cl-ranked-list .cl-fit { grid-column: 2; grid-row: 1; }
+ .cl-ranked-list tr:has(details[open]) .cl-fit { grid-column: 1/-1; grid-row: auto; }
+ .cl-ranked-list .cl-buyer-action { grid-column: 1/-1; }
+}
