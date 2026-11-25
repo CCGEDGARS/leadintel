@@ -103,3 +103,51 @@ test('retrying a failed plan does not count the same empty discovery round twice
  let list=await readCompanyList(f.env,workspaceId,first.id);assert.equal(list.status,'queued');await tick(f,list.progress.nextAttemptAt+1);list=await readCompanyList(f.env,workspaceId,first.id);assert.equal(list.status,'complete');
  const state=JSON.parse(f.DB.raw.prepare('SELECT state_json FROM company_lists WHERE id=?').get(first.id).state_json);assert.equal(state.noProgressRounds,1);
 });
+
+test('extend a reviewed list with a new allowance, retaining its matches and restarting the timing baseline',async t=>{
+ const f=await setup(t),waits=[];
+ f.env.COMPANY_LIST_TEST_SERVICES=services(10);
+ const start=await route(f,{...input,count:5,minimumScore:80},'owner',{},waits);
+ const first=(await start.json()).list;
+ await Promise.all(waits);
+ async function finish(){
+  for(let i=0;i<20;i++){
+   const list=await readCompanyList(f.env,workspaceId,first.id);
+   if(list.status==='complete')return list;
+   assert.ok(['running','queued'].includes(list.status),list.progress.reason);
+   await tick(f);
+  }
+  assert.fail('list did not finish');
+ }
+ const five=await finish();
+ assert.deepEqual(Object.keys(five.progress.run.milestones),['1','5']);
+ const extend={action:'extend',id:first.id,revision:five.revision,additional:5,budget:100};
+ assert.equal((await route(f,{...extend,additional:196})).status,400);
+ assert.equal((await route(f,{...extend,budget:0})).status,400);
+ const wake=[];
+ const response=await route(f,extend,'owner',{},wake);
+ assert.equal(response.status,200);
+ await Promise.all(wake);
+ assert.equal((await route(f,extend)).status,409);
+ const ten=await finish();
+ assert.equal(ten.criteria.count,10);
+ assert.equal(ten.progress.allowance,five.progress.operations+100);
+ assert.equal(ten.progress.run.baseline,5);
+ assert.equal(new Set(ten.results.map(r=>r.domain)).size,10);
+ for(const company of five.results)assert.deepEqual(ten.results.find(r=>r.domain===company.domain),company);
+});
+
+test('a reviewed company below the selected score threshold stays out of the ranked list',async t=>{
+ const f=await setup(t),base=services(1),waits=[];
+ f.env.COMPANY_LIST_TEST_SERVICES={...base,generate:async prompt=>{
+  const answer=await base.generate(prompt);
+  if(prompt.stage==='assess')answer.matches[0].strength=75;
+  return answer;
+ }};
+ const started=(await (await route(f,{...input,count:1,minimumScore:80},'owner',{},waits)).json()).list;
+ await Promise.all(waits);
+ for(let i=0;i<5;i++)await tick(f);
+ const list=await readCompanyList(f.env,workspaceId,started.id);
+ assert.equal(list.results.length,0);
+ assert.ok(list.incompleteChecks.some(check=>check.status==='rejected'&&check.reason.includes('below the required 80')));
+});
