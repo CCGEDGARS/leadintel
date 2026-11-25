@@ -2887,10 +2887,13 @@
       const headings=[];
       for(let index=0;index<lines.length;index++){
         if(!/^\s*(?:#{2,5}\s+|\*\*)/.test(lines[index])){
-          if(provenance.kind==='official'&&/medarbejdere|ledelse|team|staff/i.test(new URL(url).pathname)&&nameValid(plain(lines[index]))){
+          const pathname=new URL(url).pathname,staffPage=/medarbejdere|ledelse|team|staff/i.test(pathname),contactPage=!staffPage&&/kontakt|contact|yhteys/i.test(pathname);
+          if(provenance.kind==='official'&&(staffPage||contactPage)&&nameValid(plain(lines[index]))){
             let next=index+1;
             while(next<lines.length&&!lines[next].trim())next++;
-            if(roleValid(plain(lines[next]||'')))headings.push({index,endIndex:index,name:plain(lines[index])});
+            // Contact pages also carry testimonials and addresses: a plain name and role become a person only with a phone or e-mail in the card.
+            const reachable=()=>{for(let at=next+1,seen=0;at<lines.length&&seen<4;at++){if(!lines[at].trim())continue;seen++;if(/\]\((?:tel|mailto):/i.test(lines[at])||/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/.test(lines[at])||/^(?:tlf|tel|telefon|phone|mobil|mob|direct)\.?\s*:?\s*\+?\d/i.test(plain(lines[at])))return true;}return false;};
+            if(roleValid(plain(lines[next]||''))&&(staffPage||reachable()))headings.push({index,endIndex:index,name:plain(lines[index])});
           }
           continue;
         }
@@ -2916,7 +2919,7 @@
       for(let i=0;i<cards.length;i++){
         const card=cards[i],next=cards[i+1];
         let end=next?(roleBefore?next.roleIndex:next.index):lines.length;
-        for(let at=card.index+1;at<end;at++)if((/^\s*\[\s*$/.test(lines[at])&&/^\s*\]\(https?:\/\/[^/]+\/(?:[a-z]{2}\/?)?\)/i.test(lines[at+1]||''))||/^\s*(?:#{1,6}\s+|!\[)/.test(lines[at])||at>card.roleIndex&&nameValid(plain(lines[at]))||/^(?:footer|contact reception|switchboard|general enquiries|privacy policy)\b/i.test(plain(lines[at]))){end=at;break;}
+        for(let at=card.index+1;at<end;at++)if((/^\s*\[\s*$/.test(lines[at])&&/^\s*\]\(https?:\/\/[^/]+\/(?:[a-z]{2}\/?)?\)/i.test(lines[at+1]||''))||/^\s*(?:#{1,6}\s+|!\[)/.test(lines[at])||at>card.roleIndex&&nameValid(plain(lines[at]))&&plain(lines[at]).toLowerCase()!==String(card.name||'').toLowerCase()&&!/\]\(https?:\/\/(?:[\w-]+\.)?linkedin\.com\//i.test(lines[at])||/^(?:footer|contact reception|switchboard|general enquiries|privacy policy)\b/i.test(plain(lines[at]))){end=at;break;}
         const block=lines.slice(card.index,end).join('\n').slice(0,1200),emails=[...new Set((block.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi)||[]).map(value=>value.toLowerCase()))];
         const companyChannels=emails.map(email=>addChannel(email,card.name,card.name+' '+card.title+' '+block)).filter(Boolean);
         const phoneText=block.split('\n').filter(line=>!/reception|switchboard|general (?:enquiries|contact)|head\s*office/i.test(line)).join('\n');

@@ -65,6 +65,18 @@ test('a later sparse leadership page cannot clear a richer contact card',()=>{
  const rich=page('contact','### Jane Smith\nChief Executive Officer\n[+46 70 123 4567](tel:+46701234567)\n[Jane Smith](https://linkedin.com/in/jane-smith)\n[jane@legacy.example](mailto:jane@legacy.example)'),sparse=page('leadership','### Jane Smith\nChief Executive Officer');
  for(const rows of [[rich,sparse],[sparse,rich]]){const person=D.officialCompanyContactInventory(rows,company).contacts[0];assert.equal(person.publicPhone,'+46 70 123 4567');assert.equal(person.publicPhoneUrl,rich.url);assert.equal(person.publicLinkedinUrl,'https://linkedin.com/in/jane-smith');assert.equal(person.companyChannels[0].value,'jane@legacy.example');}
 });
+test('contact pages read plain staff cards with their own phone and e-mail and skip roles that do not qualify',()=>{
+ const candidate={company:'Example Steel A/S',domain:'steel.example',market:'Denmark',people:[]};
+ const markdown='# Kontakt Example Steel\n### Danmark\n**Administration**\nIndustrivej 7\n6640 Lunderskov\n[+45 7000 0000](tel:+4570000000)\n[info@steel.example](mailto:info@steel.example)\nAnna Jensen\nProcurement Engineer\n[+45 2000 0001](tel:+4520000001)\n[aj@steel.example](mailto:aj@steel.example)\nErik Larsen\nProduction Manager\n[+45 2000 0002](tel:+4520000002)\n[el@steel.example](mailto:el@steel.example)\nMette Holm\nProduction planner\n[+45 2000 0003](tel:+4520000003)\n[mh@steel.example](mailto:mh@steel.example)';
+ const result=D.officialCompanyContactInventory([{url:'https://steel.example/kontakt/',markdown,sourceRead:true}],candidate);
+ assert.deepEqual(result.contacts.map(p=>[p.name,p.title,p.publicPhone]),[['Anna Jensen','Procurement Engineer','+45 2000 0001'],['Erik Larsen','Production Manager','+45 2000 0002']]);
+ assert.deepEqual(result.contacts.map(p=>[...new Set([p.publicEmail,...(p.companyChannels||[]).map(c=>c.value)].filter(Boolean))]),[['aj@steel.example'],['el@steel.example']]);
+});
+test('a contact page needs a phone or e-mail inside the card before a name and role become a person',()=>{
+ const candidate={company:'Example Steel A/S',domain:'steel.example',market:'Denmark',people:[]};
+ const markdown='# Contact\nWhat customers say\nAnna Jensen\nProject Manager\nWe were very satisfied with the delivery and the welding quality.\n\nOpening hours\nMonday to Friday';
+ assert.deepEqual(D.officialCompanyContactInventory([{url:'https://steel.example/contact',markdown,sourceRead:true}],candidate).contacts,[]);
+});
 test('official contact extraction remains portable across company names and industries',()=>{
  for(const name of ['North Clinic','Cloud Software']){
   const candidate={company:name,domain:'brand.example'},result=D.officialCompanyContactInventory([{url:'https://brand.example/contact',sourceRead:true,markdown:'Medical Director\n### Maria Santos\n[office@legacy.example](mailto:office@legacy.example)'}],candidate);
