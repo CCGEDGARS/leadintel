@@ -7561,15 +7561,15 @@
       ]
     },
     {
-      "id": "buyer-confirmed-four-shortlist",
+      "id": "buyer-free-discovery-expand",
       "type": "text",
       "status": 200,
       "url": "/customer/discovery-ui.js",
       "contains": [
-        "confirmedBuyerShortlist",
+        "Free discovery finished",
+        "Expand web research · uses credits",
         "shortlistGapHtml",
         "Show other contacts",
-        "confirmed work email, phone or LinkedIn profile",
         "resumeIncomplete:refreshDossier"
       ]
     },

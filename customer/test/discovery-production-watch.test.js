@@ -287,7 +287,7 @@ const boundedDiscoveryRuntime = [
   'const supplied=LeadIntelDiscovery.safeBuyerReviewEvidence(LeadIntelDiscovery.buyerSupervisorEvidence(candidate.people,rows)) buyerResearchCandidates automatic contact research for all retained people top 4 ranked recommendations Contact checks complete: data-research-buyer data-research-remaining Unverified email patterns Profile matched automatically Phone source needs rechecking function matchBuyerRoleEvidence( publicPhoneSourceCheck',
   "type:'contact.linkedin_confirmed' channel:'linkedin' async function recheckBuyerEmailSources("
   ,'function buyerAgentHtml( Recheck with Buyer Agent Identity / employer: Company trigger:',
- "confirmedBuyerShortlist shortlistGapHtml Show other contacts confirmed work email, phone or LinkedIn profile resumeIncomplete:refreshDossier",
+ "Free discovery finished · Expand web research · uses credits shortlistGapHtml Show other contacts resumeIncomplete:refreshDossier",
 ].join('\n');
 
 test('production proof accepts the bounded staged Discovery runtime', async () => {
