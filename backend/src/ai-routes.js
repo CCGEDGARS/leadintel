@@ -47,8 +47,18 @@ async function audit(env,{workspaceId,userId,type,provider,metadata={}}){
   await env.DB.prepare(`INSERT INTO audit_events(id,workspace_id,user_id,event_type,entity_type,entity_id,metadata_json) VALUES(?,?,?,?,?,?,?)`).bind(uuid(),workspaceId,userId,type,'workspace_ai_integration',provider,JSON.stringify(metadata)).run();
 }
 async function connectionTrace(env,event){try{await audit(env,event);}catch{}}
+// What the provider answered, in a form that is safe to show and to keep: the HTTP status and the adapter's own code
+// (never the provider's sentence). Live, 24 Nov 2026: a customer's key was refused for a reached spending limit, the
+// test said only "connection check failed", and the audit row held nothing to read the reason from.
+function refusalFacts(cause){
+  const text=String(cause?.message||''),status=Number(text.match(/request failed \((\d{3})\)/i)?.[1])||0,code=(text.match(/code: ([a-z0-9_]+)/i)?.[1]||'').slice(0,60);
+  return {...(status&&{http_status:status}),...(code&&{provider_code:code})};
+}
 function verificationMessage(provider,cause){
-  return creditFailure(0,cause?.message)?`${PROVIDER_NAMES[provider]} request failed · code: credits_exhausted · Open Billing & credits, add API credits or review limits, then retry.`:`${PROVIDER_NAMES[provider]} connection check failed. Check the API key and model, then try again.`;
+  const name=PROVIDER_NAMES[provider],facts=refusalFacts(cause);
+  if(/billing_hard_limit_reached/.test(String(cause?.message||'')))return `${name} request failed · code: billing_hard_limit_reached · The account's spending limit is reached. Open Billing & credits, raise the limit, then retry.`;
+  if(creditFailure(0,cause?.message))return `${name} request failed · code: credits_exhausted · Open Billing & credits, add API credits or review limits, then retry.`;
+  return `${name} connection check failed${facts.http_status?` (error ${facts.http_status}${facts.provider_code?' · '+facts.provider_code:''})`:''}. Check the API key and model, then try again.`;
 }
 const OWNER_SESSION_GUARD="EXISTS(SELECT 1 FROM sessions s JOIN users u ON u.id=s.user_id JOIN workspace_members wm ON wm.user_id=u.id WHERE s.token_hash=? AND s.user_id=? AND s.expires_at>datetime('now') AND wm.workspace_id=? AND wm.role='owner')";
 async function deniedOwnerCommit(env,{workspaceId,user,provider,operationId,cors}){
@@ -195,7 +205,7 @@ export async function handleAiRoute(request,env,cors={}){
     let apiKey,model;try{apiKey=validateApiKey(body.api_key);model=validateModel(provider,body.model);}catch(cause){return error(cause.message,400,cors);}
     const previous=await env.DB.prepare('SELECT encrypted_api_key,model FROM workspace_ai_integrations WHERE workspace_id=? AND provider=?').bind(workspaceId,provider).first();
     await connectionTrace(env,{workspaceId,userId:access.user.id,type:'ai.provider_check_started',provider,metadata:{operation_id:operationId}});
-    try{await verifyProviderCredential({provider,apiKey,model});}catch(cause){await connectionTrace(env,{workspaceId,userId:access.user.id,type:'ai.provider_check_failed',provider,metadata:{operation_id:operationId}});return error(verificationMessage(provider,cause),422,cors);}
+    try{await verifyProviderCredential({provider,apiKey,model});}catch(cause){await connectionTrace(env,{workspaceId,userId:access.user.id,type:'ai.provider_check_failed',provider,metadata:{operation_id:operationId,...refusalFacts(cause)}});return error(verificationMessage(provider,cause),422,cors);}
     try{
       const key=await importAesKey(env.OAUTH_TOKEN_ENCRYPTION_KEY);const encrypted=await encryptSecret(apiKey,key);
       const statements=[];
@@ -228,7 +238,7 @@ export async function handleAiRoute(request,env,cors={}){
       await audit(env,{workspaceId,userId:access.user.id,type:'ai.provider_model_updated',provider,metadata:{model,active:Boolean(existing.active),operation_id:operationId}});
       return json({saved:true,provider,model,active:Boolean(existing.active),verified_at:new Date().toISOString()},200,cors);
     }catch(cause){
-      await connectionTrace(env,{workspaceId,userId:access.user.id,type:'ai.provider_check_failed',provider,metadata:{operation_id:operationId}});
+      await connectionTrace(env,{workspaceId,userId:access.user.id,type:'ai.provider_check_failed',provider,metadata:{operation_id:operationId,...refusalFacts(cause)}});
       if(/request failed|returned no text|model is invalid/i.test(String(cause?.message||'')))return error(verificationMessage(provider,cause),422,cors);
       return error('Unable to update AI provider model',500,cors);
     }

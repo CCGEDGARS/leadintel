@@ -46,7 +46,25 @@ const targetPlanning=criteria=>{
   +(Number.isInteger(max)&&max<=1000?' Look for small and mid-sized companies; do not search for large corporations or groups.':'');
 };
 
+// Which provider refused, and how. Read from the sanitized error text the reasoning adapters build ("Anthropic request
+// failed (400) · code: …") and from the search and read traces; kept beside the failure code so the page can name both.
+// Live, 24 Nov 2026: a customer's list stopped on their Anthropic spending limit and showed only "A research service is
+// temporarily unavailable"; nobody could tell which service, or why.
+const PROVIDER_NAMES={openai:'OpenAI',anthropic:'Anthropic',gemini:'Gemini',firecrawl:'Firecrawl'};
+function refusal(cause={},traces=[]){
+ const text=String(cause.message||''),named=text.match(/^(OpenAI|Anthropic|Gemini)\b/i)?.[1];
+ const trace=traces.find(t=>PROVIDER_NAMES[t?.provider]&&(t.status==='failed'||Number(t.httpStatus)>=400));
+ const id=named?named.toLowerCase():trace?.provider||'';
+ const status=Number(text.match(/request failed \((\d{3})\)/i)?.[1]||(named?0:trace?.httpStatus)||0)||0;
+ return {id,status,code:clean(text.match(/code: ([a-z0-9_]+)/i)?.[1]||'',60),text};
+}
 function failure(cause,events=[],operation=''){
+ const issue=classify(cause,events,operation),seen=refusal(cause,[...(cause.researchTrace||[]),...events]);
+ const kind=!PROVIDER_NAMES[seen.id]?'':issue.code==='funds'?(/billing_hard_limit_reached/.test(seen.text)?'spending_limit':'credits'):issue.code==='connection'?'key'
+  :issue.code==='rate_limit'?'rate_limit':issue.code==='provider_temporary'?([400,404,413,422].includes(seen.status)?'refused':'unavailable'):'';
+ return kind?{...issue,cause:{provider:PROVIDER_NAMES[seen.id],kind,...(seen.status&&{status:seen.status}),...(seen.code&&{code:seen.code})}}:issue;
+}
+function classify(cause,events=[],operation=''){
  const traces=[...(cause.researchTrace||[]),...events];
  // The reasoning and search adapters expose sanitized HTTP errors in their messages.
  const reportedStatus=message=>Number(String(message||'').match(/(?:request failed \(|\bHTTP )(\d{3})\b/i)?.[1]);
@@ -141,6 +159,8 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
   const safeEvent=r=>({provider:clean(r.provider,40),operation:clean(r.operation,30),status:clean(r.status,30),...(r.reason?{reason:clean(r.reason,180)}:{}),...(r.httpStatus?{httpStatus:r.httpStatus}:{}),...(Number.isFinite(r.results)?{results:r.results}:{})});
   const observe=r=>{operationEvents.push(safeEvent(r));};
   const search=services.search||createBuyerSourceSearch(env,row.workspace_id,{purpose:'company_list',guard,observe,scrapeResults:false,primaryTimeoutMs:12000});
+  // A reasoning call the provider refused keeps who refused, the HTTP status and the provider's own code on its receipt.
+  const refused=(r,e)=>{const seen=refusal(e);if(!seen.id)return;if(!r.provider)r.provider=seen.id;if(seen.status)r.http=seen.status;if(seen.code)r.providerCode=seen.code;};
   const operation=async(kind,target,fn)=>{
    await guard();if(controller.signal.aborted)throw error('Research slice finished.','slice_finished');
    if(s.operations>=s.allowance)throw error('Research allowance reached.','allowance',409);
@@ -152,7 +172,7 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
    try{
     const result=await Promise.race([Promise.resolve().then(()=>fn(signal,r)),canceled]);await guard();
     r.status='complete';s.operationTotals.complete++;s.failures=0;s.retryKey='';s.nextAttemptAt=0;s.failureCode='';return result;
-   }catch(e){r.status='failed';if(e.code)r.failure=clean(e.code,40);if(e.detail)r.detail=clean(e.detail,80);s.operationTotals.failed++;for(const trace of e.researchTrace||[])observe(trace);throw e;}
+   }catch(e){r.status='failed';if(e.code)r.failure=clean(e.code,40);if(e.detail)r.detail=clean(e.detail,80);refused(r,e);s.operationTotals.failed++;for(const trace of e.researchTrace||[])observe(trace);throw e;}
    finally{signal.removeEventListener('abort',abort);if(operationEvents.length)r.providers=operationEvents.slice(0,10);s.inFlight=null;}
   };
   const ask=async(prompt,signal,receipt,streamed=false)=>{
@@ -234,7 +254,7 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
      // A success ends the retry count of its own kind only: a page that reads well says nothing about the model.
      if(!s.retryKey||s.retryKey.startsWith(family)&&(family!=='model:'||answer)){s.failures=0;s.retryKey='';s.nextAttemptAt=0;s.failureCode='';}
      return result;
-    }catch(e){r.status='failed';if(e.code)r.failure=clean(e.code,40);if(e.detail)r.detail=clean(e.detail,80);s.operationTotals.failed++;for(const trace of e.researchTrace||[])events.push(safeEvent(trace));try{e.operationFailure=true;}catch{}throw e;}
+    }catch(e){r.status='failed';if(e.code)r.failure=clean(e.code,40);if(e.detail)r.detail=clean(e.detail,80);refused(r,e);s.operationTotals.failed++;for(const trace of e.researchTrace||[])events.push(safeEvent(trace));try{e.operationFailure=true;}catch{}throw e;}
     finally{
      signal.removeEventListener('abort',abort);if(events.length)r.providers=events.slice(0,10);s.flying=(s.flying||[]).filter(id=>id!==r.id);
      r.ms=Date.now()-sent;const own=Number.isInteger(lane.index),total=(s.operationTime||={})[family==='plan:'?'plan':kind]||={n:0,ms:0,wait:0,slowest:0};
@@ -428,7 +448,7 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
    if(stop?.allowance||s.operations>=s.allowance){await allowance();return [row.id];}
    if(stop?.end){s.failureCode=stop.code;s.phase=stop.phase;s.reason=stop.reason;s.nextAttemptAt=0;await checkpoint(stop.end);return [row.id];}
    if(stop?.issue){
-    const issue=stop.issue;s.failures=s.retryKey===stop.key?(s.failures||0)+1:1;s.retryKey=stop.key;s.failureCode=issue.code;
+    const issue=stop.issue;s.failures=s.retryKey===stop.key?(s.failures||0)+1:1;s.retryKey=stop.key;s.failureCode=issue.code;s.failureCause=issue.cause?{...issue.cause,for:issue.code}:null;
     if(issue.retry&&s.failures<3){s.nextAttemptAt=now+(s.failures===1?30000:120000);s.phase='retrying';s.reason=issue.reason+' Retrying automatically ('+s.failures+'/2); no extra allowance is granted.';await checkpoint('queued');}
     else{s.nextAttemptAt=0;s.reason=issue.retry?issue.reason+' Automatic retries stopped after three attempts.'+(issue.unusable?' Resume to try again.':' Check connections and resume.'):issue.reason;await checkpoint('incomplete');}
     return [row.id];
@@ -521,7 +541,7 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
    else if(e.code==='slice_finished'){await checkpoint('queued');}
    else{
     const issue=failure(e,operationEvents,lastOperation?.operation),key=[lastOperation?.operation,lastOperation?.target].join(':');
-    s.failures=s.retryKey===key?(s.failures||0)+1:1;s.retryKey=key;s.failureCode=issue.code;
+    s.failures=s.retryKey===key?(s.failures||0)+1:1;s.retryKey=key;s.failureCode=issue.code;s.failureCause=issue.cause?{...issue.cause,for:issue.code}:null;
     if((issue.skip||issue.retry&&s.failures>=3)&&lastOperation?.operation==='page_read'&&s.pending[0]){
      recordGap(s.pending[0],issue.reason);s.pending.shift();s.failures=0;s.retryKey='';s.failureCode='';s.nextAttemptAt=0;
      if(s.operations>=s.allowance)await allowance();

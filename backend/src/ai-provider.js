@@ -52,7 +52,7 @@ export function sanitizedUpstreamError(provider,status,payload={}){
   if(provider==='anthropic'){
     const reason=String(detail.message||'');let diagnostic;
     if(/credit balance (?:is )?too low|insufficient credits?|credits? (?:exhausted|depleted)/i.test(reason))diagnostic=['credits_exhausted','API balance too low. Open Billing & credits, add API credits, then retry.'];
-    else if(/(?:spend|spending|billing) limit/i.test(reason)&&/reach|exceed/i.test(reason))diagnostic=['billing_hard_limit_reached','API spending limit reached. Open Billing & credits, review limits, then retry.'];
+    else if(/(?:spend|spending|billing) limit|specified (?:workspace )?API usage limits?/i.test(reason)&&/reach|exceed/i.test(reason))diagnostic=['billing_hard_limit_reached','API spending limit reached. Open Billing & credits, review limits, then retry.'];
     else if(/model/i.test(reason)&&/not (?:exist|found|available)|no access|do not have access|does not exist/i.test(reason))diagnostic=['model_unavailable','Selected model unavailable. Check model access or use Advanced with an available model ID.'];
     else if(/thinking|output_config|max_tokens|temperature/i.test(reason))diagnostic=['invalid_parameter','Provider rejected request settings. Contact LeadIntel support.'];
     else if(Number(status)===400)diagnostic=['invalid_request_error','Provider rejected request settings. Check model access or contact LeadIntel support.'];
