@@ -408,7 +408,7 @@ function normalizeApolloPeopleSearch(body){
 function publicApolloBuyer(person={}){
   const name=clean(person.name||[person.first_name,person.last_name].filter(Boolean).join(' '),180);
   return {
-    id:clean(person.id||person.person_id,180),name,title:clean(person.title,180),seniority:clean(person.seniority,80),
+    id:clean(person.id||person.person_id,180),name,...(person.last_name_obfuscated?{last_name_obfuscated:clean(person.last_name_obfuscated,60)}:{}),title:clean(person.title,180),seniority:clean(person.seniority,80),
     organization_name:clean(person.organization?.name||person.organization_name,180),
     city:clean(person.city,120),country:clean(person.country,120),
     linkedin_url:clean(person.linkedin_url||person.linkedin_profile_url||person.linkedin,1000)

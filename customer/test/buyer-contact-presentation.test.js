@@ -191,5 +191,5 @@ test('the optional work-email search shows its own limit separately from the fre
  assert.equal(render().querySelector('[data-find-buyer-emails]'),null);
  ctx.window.LeadIntelAdditionalContacts={policy:()=>({enabled:true,provider:'treg',phoneEnabled:true,automaticBuyerLimit:3})};
  const doc=render();assert.equal(doc.querySelectorAll('[data-find-prospect-buyers]').length,1);
- const paid=doc.querySelector('[data-find-buyer-emails]');assert.equal(paid.dataset.paidEmailLimit,'3');assert.match(paid.textContent,/up to 3 work emails · uses credits/);
+ const paid=doc.querySelector('[data-find-buyer-emails]');assert.equal(paid.dataset.paidEmailLimit,'3');assert.match(doc.getElementById(paid.getAttribute('aria-describedby')).textContent,/up to \$0\.225 for 3 buyers/);assert.match(paid.textContent,/up to 3 work emails · uses credits/);
 });

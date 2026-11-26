@@ -72,6 +72,15 @@ export async function findPublicBuyerContactPages(candidate,{index,read,refresh,
    if(addresses.some(email=>text.includes(email)))return true;
    return name&&text.includes(name.toLowerCase());
   });
+  // Directory searches often rank policy PDFs before the company's staff page.
+  // For named searches prefer the result that actually mentions the person.
+  const priority=hit=>{
+   const text=(hit.title+' '+hit.description).toLowerCase();
+   if(addresses.some(email=>text.includes(email)))return 3;
+   if(name)return text.includes(name.toLowerCase())?2:0;
+   return /(?:team|leadership|management team|our people|staff|medarbejdere|ledelse|contact|kontakt)/i.test(hit.title+' '+new URL(hit.url).pathname)&&!/\.pdf$/i.test(new URL(hit.url).pathname)?2:0;
+  };
+  targets.sort((a,b)=>priority(b)-priority(a));
   for(const hit of targets.slice(0,2)){
    try{const page=await read(hit.url);if(!page?.sourceRead)readFailures++;}
    catch(error){if(interrupted(error))throw error;readFailures++;}
@@ -91,6 +100,15 @@ export async function findPublicBuyerContactPages(candidate,{index,read,refresh,
    const trace=D.tracePublicBuyers(profiles,candidate.company,{...profile,companyDomain:candidate.domain});
    if(trace.people.length)await addIdentities(trace.people);
   }
+ }
+ const masked=(candidate.buyerDiscovery?.pool||[]).filter(p=>p.identityStatus==='pending'&&p.identitySource==='apollo'&&p.surnameMask);
+ if(!indexUnavailable&&resolveDirectoryNames&&D.selectDecisionMakers(masked,profile,1).length){
+  const hits=await searchIndex('site:linkedin.com/company/ "'+candidate.domain+'"');
+  for(const hit of hits.filter(h=>/^https:\/\/(?:[a-z]{2,3}\.)?linkedin\.com\/company\/[\w%-]+\/?(?:[?#].*)?$/i.test(h.url)).slice(0,2)){
+   try{const page=await read(hit.url);if(!page?.sourceRead)readFailures++;}
+   catch(error){if(interrupted(error))throw error;readFailures++;}
+  }
+  await refresh();
  }
  if(!indexUnavailable&&resolveDirectoryNames)await resolveDirectoryNames(async query=>{
   if(indexUnavailable)throw Error('Public index unavailable');

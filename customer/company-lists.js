@@ -52,7 +52,8 @@
   if(config.qualityVersion===PROFILE_VERSION)return assessProfiles(raw,config,pages,now);
   const website=url(raw.website),host=domain(website),company=clean(raw.company,180);if(!host||!company||host===domain(config.profile.website)||config.references.some(r=>domain(r.website)===host)||raw.excluded===true)return null;
   const proof=e=>{const page=pages.find(p=>p.url===url(e?.url));return page&&contains(page.text,e.quote)?{url:page.url,quote:clean(e.quote,1000),readAt:page.readAt,date:clean(e.date,40)}:null;};
-  const identity=proof(raw.identity),location=proof(raw.location);if(!identity||domain(identity.url)!==host||!location||!config.markets.includes(raw.location?.market))return null;
+  const attributed=e=>config.qualityVersion===QUALITY_VERSION?attributedProof(proof(e),pages,host,company):proof(e);
+  const identity=proof(raw.identity),location=attributed(raw.location);if(!identity||domain(identity.url)!==host||!location||!config.markets.includes(raw.location?.market))return null;
   if(!clean(identity.quote).toLowerCase().includes(company.toLowerCase())&&!clean(identity.quote).toLowerCase().includes(host))return null;
   if(config.qualityVersion===QUALITY_VERSION){
    const text=clean(identity.quote).toLowerCase(),name=company.toLowerCase();let at=text.indexOf(name),named=false;
@@ -61,7 +62,7 @@
   }
   if(!clean(raw.location?.label)||!clean(location.quote).toLowerCase().includes(clean(raw.location.label).toLowerCase()))return null;
   const matches=[];
-  for(const s of config.signals){const m=(raw.matches||[]).find(x=>x.signalId===s.id),e=m&&proof(m);if(!e)continue;
+  for(const s of config.signals){const m=(raw.matches||[]).find(x=>x.signalId===s.id),e=m&&attributed(m);if(!e)continue;
    let reference=null,referenceEvidence=null;if(s.id==='lookalike'){reference=config.references.find(r=>r.id===m.referenceId&&r.evidence.some(x=>contains(x.quote,m.referenceQuote)));if(!reference)continue;referenceEvidence=reference.evidence.find(x=>contains(x.quote,m.referenceQuote));}
    const date=Date.parse(e.date),age=(now-date)/86400000;if(s.id!=='lookalike'&&(!Number.isFinite(date)||age< -1||age>365||!String(pages.find(p=>p.url===e.url)?.text||'').includes(e.date)))continue;
    const strength=Math.max(1,Math.min(100,Number(m.strength)||0));
@@ -71,7 +72,7 @@
   }
   if(!matches.length||config.mode==='all'&&matches.length!==config.signals.length)return null;
   const denominator=config.signals.reduce((n,s)=>n+config.weights[s.id],0),score=Math.round(matches.reduce((n,m)=>n+m.score*config.weights[m.signalId],0)/denominator);
-  const commercialProof=proof(raw.commercialFit),commercialFit=raw.commercialFit?.status==='supported'&&commercialProof&&clean(raw.commercialFit.reason)?{...commercialProof,reason:clean(raw.commercialFit.reason,700),status:'supported',buyingIntent:'unconfirmed'}:null;
+  const commercialProof=attributed(raw.commercialFit),commercialFit=raw.commercialFit?.status==='supported'&&commercialProof&&clean(raw.commercialFit.reason)?{...commercialProof,reason:clean(raw.commercialFit.reason,700),status:'supported',buyingIntent:'unconfirmed'}:null;
   return {company,website,domain:host,location:clean(raw.location.label,180)||raw.location.market,market:raw.location.market,score,matches,identity,locationEvidence:location,commercialFit,checkedAt:new Date(now).toISOString(),buyingIntent:'unconfirmed'};
  }
  function reviewResult(candidate,review,config,now=Date.now()){
@@ -158,6 +159,18 @@
   const text=quote.toLowerCase();name=name.toLowerCase();let at=text.indexOf(name);
   while(at>=0){if(!/[\p{L}\p{N}]/u.test(text[at-1]||'')&&!/[\p{L}\p{N}]/u.test(text[at+name.length]||''))return true;at=text.indexOf(name,at+1);}return false;
  }
+ // External pages can cover multiple companies. Keep a quote only when it
+ // identifies the target, or sits directly under a heading naming the target.
+ function attributedProof(proof,pages,host,company){
+  if(!proof||domain(proof.url)===host)return proof;
+  if(namedIdentity(proof.quote,company))return proof;
+  const page=pages.find(p=>p.url===proof.url);
+  const sections=String(page?.text||'').split(/(?=^#{1,6}\s+)/m);
+  return sections.some(section=>{
+   const heading=section.match(/^#{1,6}\s+([^\n]+)\n/);
+   return heading&&clean(heading[1]).toLowerCase()===company.toLowerCase()&&contains(section.slice(heading[0].length),proof.quote);
+  })?proof:null;
+ }
  function signalRule(matches,c){return matches.length>0&&(c.mode!=='all'||matches.length===c.signals.length);}
  function matchStrength(value){
   const score=typeof value==='string'?Number(value):value;
@@ -202,13 +215,14 @@
  function assessProfiles(raw,c,pages,now){
   const website=url(raw.website),host=domain(website),company=clean(raw.company,180);
   if(!host||!company||host===domain(c.profile.website)||c.references.some(r=>domain(r.website)===host)||raw.excluded===true)return null;
-  const identity=sourceProof(pages,raw.identity),location=sourceProof(pages,raw.location),commercial=sourceProof(pages,raw.commercialFit);
+  const attributed=e=>attributedProof(sourceProof(pages,e),pages,host,company);
+  const identity=sourceProof(pages,raw.identity),location=attributed(raw.location),commercial=attributed(raw.commercialFit);
   if(!identity||domain(identity.url)!==host||!namedIdentity(identity.quote,company)||!location||!c.markets.includes(raw.location?.market)||!clean(raw.location?.label)||!location.quote.toLowerCase().includes(clean(raw.location.label).toLowerCase()))return null;
   if(!commercial||raw.commercialFit?.status!=='supported'||!clean(raw.commercialFit.reason))return null;
   const signalMatches=[];
   if(c.signalMode!=='off')for(const s of c.signals){
    const m=(raw.signalMatches||[]).find(m=>m?.signalId===s.id);
-   const e=m&&datedProof(pages,m,now),strength=matchStrength(m?.strength);
+   const e=m&&attributedProof(datedProof(pages,m,now),pages,host,company),strength=matchStrength(m?.strength);
    if(!e||!clean(m.reason)||!strength)continue;
    const recency=e.age<=90?1:e.age<=180?.9:.75,source=domain(e.url)===host?1:.85;
    signalMatches.push({kind:'signal',signalId:s.id,name:s.name,...e,strength,score:Math.round(strength*recency*source),reason:clean(m.reason,700)});
@@ -217,7 +231,7 @@
   const profileMatches=[];
   for(const p of c.profiles){
    const m=(raw.profileMatches||[]).find(m=>m?.profileId===p.id);
-   const e=m&&sourceProof(pages,m),strength=matchStrength(m?.strength);
+   const e=m&&attributed(m),strength=matchStrength(m?.strength);
    if(!e||!clean(m.reason)||!strength)continue;
    const extra={};
    if(p.type==='lookalike'){
