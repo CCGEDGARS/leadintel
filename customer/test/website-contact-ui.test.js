@@ -91,3 +91,36 @@ test('paid email shows progress and the provider outcome beside the approved per
  press();await tick();finish({ok:true,json:async()=>({job,result:{contact:{work_email:'jesper@steel.example'},reason:'Work email verified.'}})});await tick();
  assert.match(cards()[0].querySelector('dd').textContent,/jesper@steel.example/);
 });
+
+test('paid phone displays progress and its own outcome on the selected contact, including after reopen',async t=>{
+ const w=new JSDOM('<div id="website-scanning-workspace"></div>',{url:'https://app.fixture.test/',runScripts:'outside-only'}).window;
+ t.after(()=>w.close());
+ w.LeadIntelWebsiteScanning=require('../website-scanning.js');
+ w.LeadIntelServerBridge={workspace:{id:'w'},session:{authenticated:true,user:{id:'owner'}}};
+ w.LeadIntelDialogs={confirm:async()=>true};
+ const people=['Jesper','Jan'].map(name=>({name,id:name,paidReadiness:{eligible:true}}));
+ const job={id:'j',companyId:'c',company:'Steel',domain:'steel.example',revision:7,status:'incomplete',managementLimit:5,people,counts:{discovered:2},sources:[],routes:[],channels:[],gaps:[],coverage:{}};
+ let finish,requests=0;
+ w.fetch=async(_url,options)=>{
+  if(options.method==='GET')return {ok:true,json:async()=>({job,paidPolicy:{provider:'treg',phoneEnabled:true,enabled:false}})};
+  requests++;assert.equal(JSON.parse(options.body).personId,'Jan');
+  return new Promise(resolve=>{finish=resolve;});
+ };
+ w.eval(fs.readFileSync(require.resolve('../website-contact-ui.js'),'utf8'));
+ await w.LeadIntelWebsiteContacts.open([{crmId:'c',name:'Steel',website:'https://steel.example/'}]);
+ const press=()=>w.document.querySelector('[data-contact-action="paid-phone"][data-person="Jan"]').click();
+ const cards=()=>[...w.document.querySelectorAll('.website-contact-person')];
+ assert.doesNotMatch(cards()[1].textContent,/not checked/i);
+ assert.match(cards()[1].textContent,/continue public research/i);
+ press();await tick();
+ assert.ok(cards()[1].querySelector('progress'));assert.equal(cards()[0].querySelector('progress'),null);
+ const contactData={phone:{status:'not_found'},lastAttempt:{phone:'not_found'}};
+ people[1].contactData=contactData;
+ finish({ok:true,json:async()=>({job,result:{contactData,reason:'Paid email search is off.'}})});await tick();
+ assert.match(cards()[1].textContent,/Treg returned no usable phone number/);
+ assert.doesNotMatch(cards()[1].textContent,/Paid email search is off/);
+ w.LeadIntelWebsiteContacts.close();
+ await w.LeadIntelWebsiteContacts.open([{crmId:'c',name:'Steel',website:'https://steel.example/'}]);
+ assert.match(cards()[1].textContent,/Treg returned no usable phone number/);
+ assert.equal(requests,1);
+});

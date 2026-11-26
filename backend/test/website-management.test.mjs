@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {buyerJobsFixture,workspaceId} from './buyer-research-jobs-fixture.mjs';
 import {upsertCrmCompany} from '../src/crm.js';
-import {startWebsiteContacts,readWebsiteContacts,publicWebsiteContacts} from '../src/website-contact-store.js';
+import {startWebsiteContacts,commandWebsiteContacts,readWebsiteContacts,publicWebsiteContacts} from '../src/website-contact-store.js';
 import {runWebsiteContactJobs} from '../src/website-contact-runner.js';
 import {managementLimit,managementShortlist,searchManagementIndex} from '../src/website-management.js';
 
@@ -20,6 +20,35 @@ test('shortlist checks published channels, excludes payroll and reuses a complet
  const [anna]=result.people;assert.equal(anna.publishedStaffCard.email,'anna@finance.example');assert.equal(anna.publishedStaffCard.phone,'12345678');assert.match(anna.publicLinkedinUrl,/anna-andersson/);assert.equal(anna.gmailMatches[0]?.email,'anna.work@gmail.com');assert.equal(anna.paidReadiness.eligible,true);assert.equal(reads.length,2);
  assert.equal((await startWebsiteContacts(f.env,context,body)).id,job.id);
  assert.ok(JSON.parse(row.state_json).tasks.every(t=>t.kind==='read'));
+});
+test('a missing public channel is searched for every shortlisted person and failures block paid lookups until resumed',async t=>{
+ const f=await buyerJobsFixture(t),context={workspaceId,userId:f.users.owner.id,role:'owner',sessionHash:f.users.owner.sessionTokenHash};
+ const detail=await upsertCrmCompany(f.DB,context,{company_name:'Finance Group',website:'https://finance.example/'});
+ const body={action:'shortlist',companyId:detail.company.id,managementLimit:2};
+ const job=await startWebsiteContacts(f.env,context,body);
+ let unavailable=true;
+ const services={read:async url=>({url,title:'Finance Group',markdown:url.endsWith('/team')?'# Finance Group team\n## Anna Andersson\n### Production Manager\n## Erik Hansen\n### Managing Director':'# Finance Group\nFinance Group provides financial services.',links:['https://finance.example/team']}),
+  publicIndex:async query=>{if(unavailable&&query.includes('telefon'))throw Error('Public index unavailable');return [];}};
+ async function finish(){
+  for(let i=0;i<12;i++){
+   await runWebsiteContactJobs(f.env,{jobId:job.id,services});
+   const row=await readWebsiteContacts(f.env,workspaceId,{id:job.id});
+   if(['complete','incomplete'].includes(row.status))return publicWebsiteContacts(row);
+  }
+  assert.fail('Shortlist did not finish');
+ }
+ const partial=await finish();
+ assert.equal(partial.people.length,2);
+ for(const p of partial.people){
+  assert.equal(p.freeChannelChecks.phone.status,'incomplete');
+  assert.equal(p.freeChannelChecks.gmail.queryLog.length,3);
+  assert.equal(p.paidReadiness.eligible,false);
+ }
+ unavailable=false;
+ await commandWebsiteContacts(f.env,context,{action:'resume',jobId:job.id,revision:partial.revision});
+ const completed=await finish();
+ assert.equal(completed.status,'complete');
+ for(const p of completed.people)for(const channel of ['email','gmail','phone','linkedin'])assert.equal(p.freeChannelChecks[channel].status,'searched');
 });
 test('cap and preferences apply before individual research',()=>{
  const names=['Anna Black','Bert Olsen','Cecilia Lind','David Brown','Erik Berg','Felix Turner','Grace Moore','Hugo Allen','Iris Green','John Wilson','Karen White','Laura Gray'];

@@ -48,11 +48,16 @@ export async function startWebsiteContacts(env,context,body){
  const limit=body.action==='shortlist'?managementLimit(body.managementLimit??10):null;
  const roles=limit?String(body.buyerRoles||'').slice(0,500):'';
  const old=await readWebsiteContacts(env,context.workspaceId,{companyId:company.id});
- if(old&&contactParse(old.input_json).company===company.company_name&&contactParse(old.input_json).domain===company.normalized_domain&&(!limit||contactParse(old.input_json).managementLimit===limit&&contactParse(old.input_json).buyerRoles===roles))return old;
+ if(old&&contactParse(old.input_json).company===company.company_name&&contactParse(old.input_json).domain===company.normalized_domain&&(!limit||contactParse(old.input_json).managementLimit===limit&&contactParse(old.input_json).buyerRoles===roles)){
+  const legacy=limit&&!contactParse(old.state_json).freeChannelReviewVersion&&['complete','incomplete'].includes(old.status)&&contactParse(old.state_json).people?.some(p=>!p.freeChannelChecks);
+  if(legacy)return commandWebsiteContacts(env,context,{action:'resume',jobId:old.id,revision:old.revision,upgradeFreeChecks:true});
+  return old;
+ }
  if(old&&contactActive(old.status)){if(old.requested_by!==context.userId&&context.role!=='owner')throw contactError('Another user is researching this company.');const canceled=await contactSql(env,`UPDATE website_contact_jobs SET status='canceled',lease_token=NULL,lease_until=0,revision=revision+1 WHERE id=? AND workspace_id=? AND revision=? AND EXISTS(SELECT 1 FROM sessions s JOIN workspace_members m ON m.user_id=s.user_id WHERE s.token_hash=? AND s.expires_at>datetime('now') AND m.workspace_id=? AND m.user_id=? AND m.role=?)`,old.id,context.workspaceId,old.revision,context.sessionHash,context.workspaceId,context.userId,context.role).run();if(!canceled.meta.changes)throw contactError('The previous research changed. Refresh its saved progress.');}
  const id=crypto.randomUUID(),input={company:company.company_name,domain:company.normalized_domain,website:'https://'+company.normalized_domain+'/',purpose:'website_contacts',paidResearch:false,...(limit?{managementLimit:limit,buyerRoles:roles}:{})};
  const state={phase:'discovery',label:'Read company website and find management first',people:[],sources:[],tasks:[],tools:[],gaps:[],discoveryStep:0,batchLimit:10,freeRevision:1,passStartedAt:Date.now(),passBudgetMs:WEBSITE_CONTACT_PASS_MS,coverage:{peopleLimit:300,sourceLimit:40,apolloPageLimit:4,exhaustive:false}};
  if(limit){
+  state.freeChannelReviewVersion=1;
   state.coverage.peopleLimit=limit;
   if(old&&contactParse(old.input_json).domain===input.domain&&contactParse(old.input_json).company===input.company){
    const previous=contactParse(old.state_json);
@@ -105,10 +110,11 @@ export async function commandWebsiteContacts(env,context,body){
   state.label='Checking identity · '+(person.publicName||person.name);
  }else{
  delete state.personCheck;
+ if(body.upgradeFreeChecks===true)state.freeChannelReviewVersion=1;
  const linkedinUpgrade=body.action==='check-linkedin';
  if(linkedinUpgrade&&row.status==='canceled')return row;
  if(body.personId&&!(state.people||[]).some(p=>String(p.id)===String(body.personId)))throw contactError('The selected contact changed.',404);
- if(!['incomplete','canceled'].includes(row.status)&&!(row.status==='complete'&&(body.refreshIdentities===true||linkedinUpgrade)))return row;
+ if(!['incomplete','canceled'].includes(row.status)&&!(row.status==='complete'&&(body.refreshIdentities===true||linkedinUpgrade||body.upgradeFreeChecks===true)))return row;
  if(linkedinUpgrade){state.linkedinReviewVersion=WEBSITE_LINKEDIN_REVIEW_VERSION;for(const person of state.people||[])if(!websiteLinkedInReviewCurrent(contactParse(row.input_json),person)){delete person.freeResearchStatus;if(person.contactResearch?.checks?.linkedin)person.contactResearch.checks.linkedin.profileMatchVersion=0;}}
  if(body.refreshIdentities===true){
   const input=contactParse(row.input_json),D=globalThis.LeadIntelDiscovery,queries=new Set();
