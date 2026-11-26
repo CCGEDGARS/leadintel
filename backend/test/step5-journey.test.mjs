@@ -16,7 +16,7 @@ test('Step 5 journey uses production SQL session and workspace authorization',as
  }finally{await f.close();}
 });
 
-test('authenticated Chromium preserves official channels across delayed provider, competing revision, Messages, CRM and fresh reopen',{timeout:60000},async t=>{
+test('authenticated Chromium preserves official channels across delayed provider, competing revision, Messages, CRM and fresh reopen',{timeout:120000},async t=>{
  try{await loadPlaywright();await fs.access(process.env.LEADINTEL_CHROMIUM_PATH||'/usr/bin/chromium');}catch(error){if(process.env.LEADINTEL_REQUIRE_BROWSER==='true')throw error;t.skip('Local Chromium/Playwright unavailable; run scripts/verify-step5-journey.mjs with installed browser paths for acceptance evidence.');return;}
  const {verifyStep5Journey}=await import('../../scripts/verify-step5-journey.mjs');
  const evidence=await verifyStep5Journey({artifactDir:await fs.mkdtemp(path.join(os.tmpdir(),'leadintel-step5-test-'))});

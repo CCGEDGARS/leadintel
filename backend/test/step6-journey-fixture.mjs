@@ -20,6 +20,7 @@ export async function step6Fixture(){
   // Brief display inputs in this controlled fixture are already English.
   const englishReview=String(body.instructions||'').includes('Translate every supplied value')&&Object.keys(data).length>0&&Object.values(data).every(value=>typeof value==='string');
   const request={kind:body.tools?'research':data.sources?'fields':data.context?.channel==='linkedin'?'linkedin':englishReview?'translation':'other',style:data.style||data.mode||null,status:'pending'};
+  if(englishReview)request.values=Object.values(data);
   providerRequests.push(request);
   if(request.kind==='fields'&&nextGate){const gate=nextGate;nextGate=null;gate.started();await gate.wait;}
   if(request.kind==='fields'&&nextFailure){const failure=nextFailure;nextFailure=null;request.status=failure;
