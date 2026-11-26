@@ -143,3 +143,21 @@ test('a retained buyer with a role hold is named beside the shortlist gap withou
   candidate.buyerResearchProgress.stages.review=false;assert.equal(ctx.buyerCompanyResearchAction(candidate).label,'Resume buyer research');
   candidate.buyerResearchProgress.stages.review=true;candidate.buyerResearchJob.personIds=['anna'];assert.equal(ctx.buyerCompanyResearchAction(candidate).label,'Resume buyer research','one person cannot establish full-company completion');
  });
+
+test('a finished free discovery reads as a checked website with web checks on expansion, not as unfinished checks',()=>{
+ const {ctx,candidate}=runtime();
+ candidate.publicContactStatus='error';
+ candidate.buyerResearchProgress={executionStatus:'needs_review',diagnostics:[{phase:'identities',code:'free_discovery_finished',reason:'Free website and register checks finished.'}]};
+ const summary=documentFor(ctx.renderSelectedProspects([candidate])).querySelector('.buyer-public-summary').textContent;
+ assert.match(summary,/Public research · Website checked/);
+ assert.match(summary,/only when you expand web research/);
+ assert.doesNotMatch(summary,/mandatory checks are unfinished|Checks incomplete/);
+});
+
+test('a collapsed company whose free discovery finished does not read as needing attention',()=>{
+ const {ctx,candidate}=runtime();
+ const other={...candidate,domain:'other.example',company:'Other',people:[...candidate.people],publicContactStatus:'error',buyerResearchProgress:{executionStatus:'needs_review',diagnostics:[{code:'free_discovery_finished'}]}};
+ const row=documentFor(ctx.renderSelectedProspects([candidate,other])).querySelector('[data-buyer-company="other.example"]').textContent;
+ assert.match(row,/Free discovery finished/);
+ assert.doesNotMatch(row,/needs attention/);
+});
