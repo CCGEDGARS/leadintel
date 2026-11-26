@@ -1,3 +1,4 @@
+import {researchProviderPair} from './research-provider-order.js';
 import {resolveWorkspaceServiceCredential} from './service-integrations.js';
 import {searchPerplexityWeb} from './perplexity-request.js';
 import {importAesKey,decryptSecret} from './oauth.js';
@@ -35,7 +36,7 @@ export async function routeResearchSearch({primary,specialist,signal}={}){
  cancelled(signal);
  if(specialist){try{const result=await specialist();cancelled(signal);return {...result,routing:{role:'research_specialist',reason:initial?'insufficient_evidence':'primary_unavailable'}};}catch(e){cancelled(signal);if(e?.name==='AbortError')throw e;cause=cause||e;if(initial)return {...initial,warning:'Research specialist unavailable; no additional evidence was established.'};}}
  if(initial)return initial;
- throw cause||Error('Connect Claude, OpenAI or Gemini for web research');
+ throw cause||Error('Connect a research provider for web research');
 }
 export async function workspaceCredential(env,workspaceId,provider){
  if(!env.OAUTH_TOKEN_ENCRYPTION_KEY)return null;
@@ -49,9 +50,10 @@ export async function observeSpecialist(env,workspaceId,credential,task,run,{gua
  // Retain the actual execution receipt, while stale/canceled work cannot update projections.
  let stopped;
  try{await guard();cancelled(signal);}catch(e){stopped=e;}
- await env.DB.prepare('INSERT INTO audit_events(id,workspace_id,user_id,event_type,entity_type,entity_id,metadata_json) VALUES(?,?,?,?,?,?,?)').bind(crypto.randomUUID(),workspaceId,null,stopped?'ai.specialist_superseded':'ai.specialist_completed','workspace_ai_integration',credential.provider,JSON.stringify({task,model:credential.model,input_tokens:result.usage?.input_tokens||0,output_tokens:result.usage?.output_tokens||0,...(stopped?{outcome:'completed_after_context_stopped'}:{})})).run();
+ await env.DB.prepare('INSERT INTO audit_events(id,workspace_id,user_id,event_type,entity_type,entity_id,metadata_json) VALUES(?,?,?,?,?,?,?)').bind(crypto.randomUUID(),workspaceId,null,stopped?'ai.specialist_superseded':'ai.specialist_completed',credential.provider==='perplexity'?'workspace_service_integration':'workspace_ai_integration',credential.provider,JSON.stringify({task,model:credential.model,input_tokens:result.usage?.input_tokens||0,output_tokens:result.usage?.output_tokens||0,...(stopped?{outcome:'completed_after_context_stopped'}:{})})).run();
  if(stopped)throw stopped;
- await env.DB.prepare('UPDATE workspace_ai_integrations SET last_used_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND provider=?').bind(workspaceId,credential.provider).run();
+ const table=credential.provider==='perplexity'?'workspace_service_integrations':'workspace_ai_integrations';
+ await env.DB.prepare(`UPDATE ${table} SET last_used_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND provider=?`).bind(workspaceId,credential.provider).run();
  return result;
 }
 export async function searchWorkspaceResearch(env,workspaceId,{query,maxResults=5,purpose='general',signal,fetchImpl=fetch,guard=()=>{},skipPerplexity=false}){
@@ -59,15 +61,15 @@ export async function searchWorkspaceResearch(env,workspaceId,{query,maxResults=
  const rows=(await env.DB.prepare('SELECT provider,active FROM workspace_ai_integrations WHERE workspace_id=?').bind(workspaceId).all()).results||[];
  const settings=await env.DB.prepare('SELECT primary_provider,secondary_provider FROM workspace_research_settings WHERE workspace_id=?').bind(workspaceId).first()||{};
  const connected=['openai','anthropic','gemini'].filter(p=>rows.some(row=>row.provider===p));
- const perplexity=!skipPerplexity&&[settings.primary_provider,settings.secondary_provider].includes('perplexity')
+ const perplexity=!skipPerplexity
   ?await resolveWorkspaceServiceCredential(env,workspaceId,'perplexity'):null;
  if(perplexity?.configured)connected.push('perplexity');
  const preferred=skipPerplexity&&settings.primary_provider==='perplexity'
   ?connected.find(provider=>provider===settings.secondary_provider):settings.primary_provider;
- const primary=preferred||rows.find(row=>row.active)?.provider||connected[0];
- if(!connected.includes(primary))throw Object.assign(Error(preferred?'Selected main researcher is not connected. Review research settings before retrying.':'Connect Claude, OpenAI or Google Gemini in Settings before running research discovery. No search was started.'),{status:409,code:'AI_SEARCH_PROVIDER_NOT_CONNECTED'});
+ const {main:primary,second}=researchProviderPair(connected,preferred,skipPerplexity&&settings.primary_provider==='perplexity'?null:settings.secondary_provider,rows.find(row=>row.active)?.provider);
+ if(!connected.includes(primary))throw Object.assign(Error(preferred?'Selected main researcher is not connected. Review research settings before retrying.':'Connect a research provider in Settings before running research discovery. No search was started.'),{status:409,code:'AI_SEARCH_PROVIDER_NOT_CONNECTED'});
  // At most one connected fallback per query; a single provider is sufficient for discovery.
- const secondary=[settings.secondary_provider,'gemini','anthropic','openai'].find(p=>p!==primary&&connected.includes(p));
+ const secondary=connected.includes(second)?second:undefined;
  const attempts=[];
  const search=async(provider,task)=>{
   await guard();cancelled(signal);const connection=provider==='perplexity'?perplexity:await workspaceCredential(env,workspaceId,provider);

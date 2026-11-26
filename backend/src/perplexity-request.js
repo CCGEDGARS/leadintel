@@ -61,3 +61,17 @@ export async function searchPerplexityWeb(env,workspaceId,{credential,query,maxR
   });
   return {provider:'perplexity',web_search:true,results,sources:results.map(({url,title})=>({url,title}))};
 }
+
+export async function extractPerplexityEvidence({apiKey,model,prompt,signal,fetchImpl=fetch}){
+ const response=await fetchImpl('https://api.perplexity.ai/chat/completions',{
+  method:'POST',headers:{Authorization:'Bearer '+apiKey,'Content-Type':'application/json'},signal,
+  body:JSON.stringify({model,disable_search:true,max_tokens:3000,messages:[
+   {role:'system',content:'Extract sourced business facts only from the supplied passages. Return JSON.'},
+   {role:'user',content:prompt}
+  ]})
+ });
+ if(!response.ok)throw Error('Perplexity extraction request failed ('+response.status+')');
+ const result=await response.json(),choice=result.choices?.[0];
+ if(choice?.finish_reason!=='stop'||!choice.message?.content)throw Error('Incomplete Perplexity extraction');
+ return {text:choice.message.content,usage:{input_tokens:result.usage?.prompt_tokens,output_tokens:result.usage?.completion_tokens}};
+}

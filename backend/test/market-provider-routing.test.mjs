@@ -64,15 +64,19 @@ test('Perplexity research selection saves, reloads, searches and falls back usin
  let searchStatus=200,dossier=false;
  const f=await step1Fixture({externalFetch:async (url,options)=>{
   if(url.hostname==='factory.example')return new Response('<html><body><main><p>Alex Smith is Operations Director at Example. Example manufactures industrial valves and pumps for manufacturing and water treatment customers.</p></main></body></html>',{headers:{'Content-Type':'text/html'}});
-  if(url.hostname==='generativelanguage.googleapis.com'){
-   if(!dossier)return grounded();
-   assert.equal(JSON.parse(options.body).tools,undefined);
-   return Response.json({candidates:[{finishReason:'STOP',content:{parts:[{text:JSON.stringify({
-    people:[{name:'Alex Smith',title:'Operations Director',organization:'Example',status:'current',evidenceId:'s0p0'}],facts:[],channels:[]
-   })}]}}]});
+  if(url.hostname==='api.openai.com'){
+   assert.equal(dossier,false,'the Perplexity dossier must extract its own evidence');
+   const row={url:'https://factory.example/news',title:'Factory',description:'Factory plans',date:''};
+   return Response.json({output:[{type:'web_search_call',status:'completed',action:{sources:[row]}},{type:'message',content:[{type:'output_text',text:JSON.stringify({results:[row]})}]}]});
   }
   if(url.hostname!=='api.perplexity.ai')return null;
   assert.equal(new Headers(options.headers).get('Authorization'),'Bearer pplx-workspace-test-key');
+  if(url.pathname==='/chat/completions'){
+   assert.equal(dossier,true);
+   const body=JSON.parse(options.body);assert.equal(body.disable_search,true);assert.equal(body.model,'sonar');
+   assert.match(body.messages[1].content,/Alex Smith is Operations Director/);
+   return Response.json({choices:[{finish_reason:'stop',message:{content:JSON.stringify({people:[{name:'Alex Smith',title:'Operations Director',organization:'Example',status:'current',evidenceId:'s0p0'}],facts:[],channels:[]})}}]});
+  }
   const {query,max_results}=JSON.parse(options.body);
   if(Array.isArray(query))return Response.json({error:{type:'invalid_request'}},{status:400});
   if(dossier){
@@ -87,25 +91,25 @@ test('Perplexity research selection saves, reloads, searches and falls back usin
    :Response.json({error:'Unavailable'},{status:searchStatus});
  }});
  try{
-  await f.connectControlledAi('gemini');
+  await f.connectControlledAi('openai');
   const endpoint=f.origin+'/api/integrations/ai/research-settings?workspace_id='+workspaceId;
-  const save=()=>fetch(endpoint,{method:'PUT',headers,body:JSON.stringify({primary:'perplexity',secondary:'gemini'})});
+  const save=()=>fetch(endpoint,{method:'PUT',headers,body:JSON.stringify({primary:'perplexity',secondary:'openai'})});
   assert.equal((await save()).status,409);
   const connected=await fetch(f.origin+'/api/integrations/services/provider?workspace_id='+workspaceId,{method:'PUT',headers,body:JSON.stringify({provider:'perplexity',api_key:'pplx-workspace-test-key'})});
   assert.equal(connected.status,200);
   assert.equal((await save()).status,200);
-  assert.deepEqual(await (await fetch(endpoint,{headers})).json(),{primary_provider:'perplexity',secondary_provider:'gemini'});
+  assert.deepEqual(await (await fetch(endpoint,{headers})).json(),{primary_provider:'perplexity',secondary_provider:'openai'});
   const response=await search(f),result=await response.json();
   assert.equal(response.status,200);
   assert.equal(result.provider,'perplexity');
   assert.deepEqual(result.attempts.map(r=>[r.provider,r.status]),[['perplexity','complete']]);
   assert.equal(result.results[0].evidenceKind,'search_excerpt');
   assert.equal(f.DB.raw.prepare("SELECT count(*) AS n FROM audit_events WHERE event_type='service.perplexity_search'").get().n,1);
-  assert.equal(f.DB.raw.prepare('SELECT provider FROM workspace_ai_integrations WHERE active=1').get().provider,'gemini');
+  assert.equal(f.DB.raw.prepare('SELECT provider FROM workspace_ai_integrations WHERE active=1').get().provider,'openai');
   searchStatus=503;
   const fallback=await (await search(f)).json();
-  assert.equal(fallback.provider,'gemini');
-  assert.deepEqual(fallback.attempts.map(r=>[r.provider,r.status]),[['perplexity','failed'],['gemini','complete']]);
+  assert.equal(fallback.provider,'openai');
+  assert.deepEqual(fallback.attempts.map(r=>[r.provider,r.status]),[['perplexity','failed'],['openai','complete']]);
   searchStatus=200;
   dossier=true;
   const dossierUrl=f.origin+'/api/ai/company-dossier?workspace_id='+workspaceId;
