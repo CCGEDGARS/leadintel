@@ -35,6 +35,25 @@ test('two different LinkedIn profiles with one name stay two people',()=>{
  assert.equal(merged.length,2);
 });
 
+// Live, 26 Nov 2026 (two control companies): one person printed as "Søren V. Andersen" on the contact page and
+// "Søren Vestergaard Andersen" in the register, or "Kasper Nohns" on a profile and "Kasper Vedam Nohns" on the
+// contact page, was shown twice. Invented people.
+const at=(id,name,title,extra={})=>({id,name,publicName:name,title,organization,...extra});
+test('a middle initial or a missing middle name is one person in a compatible role',()=>{
+ assert.equal(D.mergeBuyerPool([],[at('a','Bent V. Mørk','Direktør - Salg - Adm'),at('b','Bent Vestergaard Mørk','Direktør')],{}).length,1);
+ assert.equal(D.mergeBuyerPool([],[at('c','Ivar Nohn','Technical Manager Electronic',{publicLinkedinUrl:'https://www.linkedin.com/in/ivar-nohn-1'}),at('d','Ivar Vedel Nohn','Technical Manager Steering')],{}).length,1);
+ assert.equal(D.mergeBuyerPool([],[at('e','Boerge Mørk','Manager / Owner'),at('f','Børge Vestergaard Mørk','Direktør')],{}).length,1,'a transliterated letter (oe = ø) is the same name');
+ // Live order: the register's "Direktør" and a profile's "Owner" merge first, then the contact page's variant arrives.
+ assert.equal(D.mergeBuyerPool([],[at('o','Bent Vestergaard Mørk','Direktør'),at('p','Bent Vestergaard Mørk','Owner'),at('q','Bent V. Mørk','Direktør - Salg - Adm')],{}).length,1);
+});
+
+test('name variants in unrelated roles, with another first name or another profile stay apart',()=>{
+ assert.equal(D.mergeBuyerPool([],[at('g','Bent Mørk','Lagermedarbejder'),at('h','Bent V. Mørk','Salgschef')],{}).length,2);
+ assert.equal(D.mergeBuyerPool([],[at('i','Kim Lund','Warehouse Manager'),at('j','Kim L. Lund','Sales Manager')],{}).length,2);
+ assert.equal(D.mergeBuyerPool([],[at('k','Bent Mørk','Direktør'),at('l','Jens Mørk','Direktør')],{}).length,2);
+ assert.equal(D.mergeBuyerPool([],[at('m','Bent Mørk','Direktør',{publicLinkedinUrl:'https://www.linkedin.com/in/bent-1'}),at('n','Bent V. Mørk','Direktør',{publicLinkedinUrl:'https://www.linkedin.com/in/bent-2'})],{}).length,2);
+});
+
 test('the same name at another company stays another person',()=>{
  const merged=D.mergeBuyerPool([],[person('x','CEO'),{...person('y','CEO'),organization:'Harbour Steel A/S'}],{});
  assert.equal(merged.length,2);

@@ -97,6 +97,25 @@
   // One LinkedIn profile is one identity whatever host or letter case a source printed
   // (dk.linkedin.com/in/x and www.linkedin.com/in/X are the same profile). Used to compare, never to display.
   function linkedInProfileKey(value){const url=normalizeLinkedInUrl(value);return url?url.replace(/^https?:\/\/(?:[a-z]{2,3}\.)?linkedin\.com\//i,'https://www.linkedin.com/').toLowerCase():"";}
+  // "Søren V. Andersen", "Søren Vestergaard Andersen" and "Soeren Andersen" can be one person: the same first and last
+  // name (ø/oe, å/aa, æ/ae read alike) with a middle name missing or given as its initial.
+  function buyerNameVariant(a,b){
+    const parts=value=>clean(value).toLowerCase().replace(/ø/g,'oe').replace(/å/g,'aa').replace(/æ/g,'ae').split(/\s+/).map(part=>part.replace(/\.$/,'')).filter(Boolean);
+    const x=parts(a),y=parts(b);
+    if(x.length<2||y.length<2||x.join(' ')===y.join(' ')||x[0]!==y[0]||x[x.length-1]!==y[y.length-1])return false;
+    const mx=x.slice(1,-1),my=y.slice(1,-1);
+    if(!mx.length||!my.length)return true;
+    return mx.length===my.length&&mx.every((part,i)=>part===my[i]||part.length===1&&my[i].startsWith(part)||my[i].length===1&&part.startsWith(my[i]));
+  }
+  // For a name variant only: a title one of whose parts leads the company ("Manager / Owner", "Direktør").
+  const LEADING_TITLE_PART=/^(?:owner|co-owner|ejer|medejer|indehaver|founder|co-founder|stifter|ceo|managing director|adm\.?\s*direktør|administrerende direktør|direktør)$/iu;
+  function variantLeadsCompany(person={}){return isExecutiveBuyer(person)||clean(person.title).split(/\s*[\/,&–—-]\s*|\s+(?:og|and)\s+/iu).some(part=>LEADING_TITLE_PART.test(part.trim()));}
+  // Two titles share a role word that is not generic ("Technical Manager Steering" and "Technical Manager Electronic").
+  const GENERIC_ROLE_WORDS=new Set(['manager','management','director','head','the','and','senior','junior','assistant','lead','chief','officer','specialist','medarbejder','ansvarlig','chef','leder']);
+  function sharedRoleWord(a,b){
+    const words=value=>new Set(clean(value).toLowerCase().split(/[^\p{L}]+/u).filter(word=>word.length>2&&!GENERIC_ROLE_WORDS.has(word)));
+    const x=words(a),y=words(b);return [...x].some(word=>y.has(word));
+  }
   function normalizeLinkedInUrl(value){
     const url=normalizeUrl(value);if(!url)return "";
     try{
@@ -1802,9 +1821,13 @@
       const full=clean(person.publicName||person.name).toLowerCase(),url=linkedInProfileKey(person.publicLinkedinUrl||person.linkedin_url);
       const same=[...merged.entries()].filter(([oldKey,old])=>{
         if(person.id&&(old.id===person.id||(aliases.get(oldKey)?.has(person.id)||(old.identitySourceIds||[]).includes(person.id)||(person.identitySourceIds||[]).includes(old.id))&&full===clean(old.publicName||old.name).toLowerCase())){const oldProfile=linkedInProfileKey(old.publicLinkedinUrl||old.linkedin_url);return (!url||!oldProfile||url===oldProfile)&&(!person.organization||!old.organization||companyNameMatches(person.organization,old.organization));}
-        const oldUrl=linkedInProfileKey(old.publicLinkedinUrl||old.linkedin_url);
+        const oldUrl=linkedInProfileKey(old.publicLinkedinUrl||old.linkedin_url),oldFull=clean(old.publicName||old.name).toLowerCase();
+        const sameEmployer=!person.organization||!old.organization||companyNameMatches(person.organization,old.organization);
+        // A name variant (middle name missing or an initial) needs the same profile or two compatible roles; a
+        // missing title is never enough for it.
+        if(full!==oldFull)return buyerNameVariant(full,oldFull)&&(!url||!oldUrl||url===oldUrl)&&sameEmployer&&(url&&oldUrl&&url===oldUrl||variantLeadsCompany(person)&&variantLeadsCompany(old)||sharedRoleWord(person.title,old.title));
         // Two titles that both lead the company ("CEO", "Administrerende direktør", "Ejer") are one role for one name.
-        return full.split(/\s+/).length>=2&&full===clean(old.publicName||old.name).toLowerCase()&&(!url||!oldUrl||url===oldUrl)&&(!person.organization||!old.organization||companyNameMatches(person.organization,old.organization))&&(url&&oldUrl&&url===oldUrl||!person.title||!old.title||Boolean(roleRelevance(person,[old.title]))||isExecutiveBuyer(person)&&isExecutiveBuyer(old));
+        return full.split(/\s+/).length>=2&&(!url||!oldUrl||url===oldUrl)&&sameEmployer&&(url&&oldUrl&&url===oldUrl||!person.title||!old.title||Boolean(roleRelevance(person,[old.title]))||isExecutiveBuyer(person)&&isExecutiveBuyer(old));
       });
       // A newly discovered exact profile may connect two earlier source rows.
       // Collapse only a consistent full identity; a namesake/profile disagreement
