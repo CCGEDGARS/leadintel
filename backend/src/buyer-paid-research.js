@@ -28,6 +28,12 @@ export async function capturePaidContinuationScope(env,context,candidate,intent,
  if(snapshot.buyerResearch?.jobId!==jobId||paidBuyerScope(paidSnapshotCandidate(candidate,detail))!==paidBuyerScope(candidate))return null;
  await guard();return {row,hash:await paidContinuationScopeHash(row)};
 }
+export function workEmailSearchComplete(candidate,intent,contactOptions){
+ if(candidate.publicResearch?.paidResearch?.status!=='complete')return false;
+ const group=P.targetGroup(candidate,{automaticBuyerLimit:intent.automaticBuyerLimit});
+ return group.length>0&&group.every(person=>contactOptions.confirmedEmail(person))
+  &&D.buyerResearchCoveragePassed(candidate,{contactOptions,researchPeople:group,allowPartialRoster:true});
+}
 export async function buyerPaidIntent(env,workspaceId,requested,candidate){
  if(!requested)return null;
  const policy=await readAdditionalContactPolicy(env,workspaceId),company=await findCrmCompanyByDomain(env.DB,workspaceId,candidate.domain);

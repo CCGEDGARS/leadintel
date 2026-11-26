@@ -103,7 +103,7 @@ export async function findPublicBuyerContactPages(candidate,{index,read,refresh,
  for(const person of missing){
   if(indexUnavailable)break;
   const current=candidate.people?.find(p=>p.id===person.id);
-  if(!current||current.publicEmail||D.confirmedBuyerContactData(candidate,current).email)continue;
+  if(!current||D.listedBuyerEmailSource(candidate,current)?.email||D.confirmedBuyerContactData(candidate,current).email)continue;
   const addresses=D.rankedEmailGuesses(current,candidate.domain,colleagues).slice(0,3).map(row=>row.email);
   if(!addresses.length)continue;
   await lookup(addresses.map(email=>'"'+email+'"').join(' OR '),current.publicName||current.name,addresses);

@@ -1,6 +1,6 @@
 import {buyerRunWindow,BUYER_RUN_WINDOW_REASON} from './buyer-research-window.js';
 import {stmt,parse,authoritySql,standaloneBuyerDiscovery,lost,workspaceBuyerContext,readBuyerJob,publicBuyerJob,recoverInterruptedContactJob} from './buyer-research-store.js';
-import {runBuyerPaidResearch,PAID_PRIORITY_RESEARCH_REQUIRED} from './buyer-paid-research.js';
+import {runBuyerPaidResearch,workEmailSearchComplete,PAID_PRIORITY_RESEARCH_REQUIRED} from './buyer-paid-research.js';
 import {storageFailure} from './workspace-storage.js';
 import {loadBuyerContactContext} from './buyer-contact-context.js';
 import {sha256} from './security.js';
@@ -160,6 +160,12 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
   const settleQuality=async()=>{
    const quality=input.paidResearch?(await publicBuyerJob(env,{...row,result_json:JSON.stringify(candidate)})).quality:D.buyerQualityAssessment(candidate,{contactOptions});
    const scopedComplete=input.scope==='selected_buyers'&&quality.researchPassed&&quality.aiReviewStatus==='complete'&&!(candidate.publicResearch.conflicts||[]).length;
+   if(input.paidResearch?.workEmailSearch){
+    const completed=quality.aiReviewStatus==='complete'&&workEmailSearchComplete(candidate,input.paidResearch,contactOptions);
+    status=completed?'complete':'needs_review';
+    if(!completed)diagnostics.push({phase:'paid',reason:candidate.publicResearch?.paidResearch?.status==='blocked'?candidate.publicResearch.paidResearch.reason:'Work-email search finished with one or more unresolved buyer checks or addresses.',at:new Date().toISOString()});
+    return;
+   }
    status=(quality.passed||scopedComplete)&&(!input.paidResearch||['complete','disabled'].includes(candidate.publicResearch?.paidResearch?.status))?'complete':'needs_review';
    if(status==='needs_review')diagnostics.push({phase:'quality',reason:quality.gaps.join(' · ').slice(0,600),at:new Date().toISOString()});
   };

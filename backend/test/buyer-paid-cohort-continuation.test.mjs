@@ -105,8 +105,8 @@ test('explicit email-only search verifies a small researched team with the appro
  const intent=JSON.parse((await f.row()).input_json).paidResearch;
  assert.deepEqual([intent.workEmailSearch,intent.automaticBuyerLimit,intent.email,intent.phone],[true,2,true,false]);
  for(let i=0;i<24&&['queued','running'].includes((await f.row()).status);i++)await f.tick();
- const saved=JSON.parse((await f.row()).result_json).publicResearch.paidResearch;
- assert.equal(saved.status,'complete',JSON.stringify(saved));assert.equal(f.calls.filter(c=>c.url.includes('email.find')).length,2);
+ const terminal=await f.row(),saved=JSON.parse(terminal.result_json).publicResearch.paidResearch;
+ assert.equal(terminal.status,'complete',JSON.stringify(terminal.diagnostic_json));assert.equal(saved.status,'complete',JSON.stringify(saved));assert.equal(f.calls.filter(c=>c.url.includes('email.find')).length,2);
  assert.equal(f.calls.filter(c=>c.url.includes('phone.find')).length,0);
  const detail=await getCrmCompany(f.DB,f.context,f.c.crmId);assert.equal(detail.contacts.filter(c=>c.email_status==='verified').length,2);
 });
