@@ -2,16 +2,16 @@ import '../../customer/company-dossier.js';
 import {workspaceCredential,observeSpecialist} from './ai-task-routing.js';
 import {generateText} from './ai-provider.js';
 import {searchDossierProvider} from './dossier-provider-search.js';
-import {searchPerplexityWeb} from './perplexity-request.js';
+import {researchProviderPair} from './research-provider-order.js';
+import {searchPerplexityWeb,extractPerplexityEvidence} from './perplexity-request.js';
 import {readPublicBuyerPage,resolveWorkspaceServiceCredential} from './service-integrations.js';
 const D=globalThis.LeadIntelCompanyDossier;
 const names=['openai','anthropic','gemini'];
 export function chooseResearchers(connections,settings={}){
  const map=new Map(connections.filter(c=>D.PROVIDERS.includes(c.provider)).map(c=>[c.provider,c]));
- const primary=settings.primary||connections.find(c=>c.active)?.provider||names.find(n=>map.has(n));
+ const {main:primary,second}=researchProviderPair([...map.keys()],settings.primary,settings.secondary,settings.active||connections.find(c=>c.active)?.provider);
  if(!map.has(primary))throw Object.assign(Error('Selected main researcher is not connected. No research started.'),{status:409});
  if(settings.secondary&&settings.secondary===primary)throw Object.assign(Error('Choose a different second researcher.'),{status:400});
- const second=settings.secondary||['gemini','anthropic','openai'].find(p=>p!==primary&&map.has(p));
  if(!map.has(second))throw Object.assign(Error('Connect two different research providers in Settings before dossier research. No research started.'),{status:409});
  return [map.get(primary),map.get(second),...connections.filter(c=>c.provider!==primary&&c.provider!==second)];
 }
@@ -111,16 +111,19 @@ export async function researchWorkspaceDossier(env,workspaceId,company,{signal,g
  await guard();if(signal?.aborted)throw Object.assign(Error('Dossier canceled'),{status:499});
  const settings=await dossierSettings(env,workspaceId),connections=(await Promise.all(names.map(p=>workspaceCredential(env,workspaceId,p)))).filter(Boolean);
  const active=await env.DB.prepare('SELECT provider FROM workspace_ai_integrations WHERE workspace_id=? AND active=1 LIMIT 1').bind(workspaceId).first();
- const selected={primary:settings.primary_provider||active?.provider,secondary:settings.secondary_provider||undefined};
- if([selected.primary,selected.secondary].includes('perplexity')){
-  const credential=await resolveWorkspaceServiceCredential(env,workspaceId,'perplexity');
-  if(!credential.configured)throw Object.assign(Error('Reconnect Perplexity or change your research settings before running company research.'),{status:409});
-  if(!connections.some(c=>c.provider===active?.provider))throw Object.assign(Error('Choose a main AI engine in Settings to extract company evidence from Perplexity search results.'),{status:409});
-  connections.push(credential);
- }
- const providerSignature=JSON.stringify([D.PLAN_VERSION,selected,connections.map(c=>[c.provider,c.model]),...(connections.some(c=>c.provider==='perplexity')?[active.provider]:[])]),contextKey=D.contextKey(company);
+ const selected={primary:settings.primary_provider||undefined,secondary:settings.secondary_provider||undefined,active:active?.provider};
+ const credential=await resolveWorkspaceServiceCredential(env,workspaceId,'perplexity');
+ if(credential.configured)connections.push({...credential,model:'sonar'});
+ const ordered=chooseResearchers(connections,selected);
+ const providerSignature=JSON.stringify([D.PLAN_VERSION,ordered.map(c=>[c.provider,c.model])]),contextKey=D.contextKey(company);
+ // Reuse earlier checkpoints when the previous resolver chose the same researchers.
+ const legacyConnections=connections.filter(c=>c.provider!=='perplexity');
+ const legacyPrimary=selected.primary||selected.active||legacyConnections[0]?.provider;
+ const legacySecond=selected.secondary||['gemini','anthropic','openai'].find(p=>p!==legacyPrimary&&legacyConnections.some(c=>c.provider===p));
+ const legacySignature=ordered[0].provider===legacyPrimary&&ordered[1].provider===legacySecond&&![legacyPrimary,legacySecond].includes('perplexity')
+  ?JSON.stringify([D.PLAN_VERSION,{primary:selected.primary||selected.active,secondary:selected.secondary},legacyConnections.map(c=>[c.provider,c.model])]):null;
  const saved=await env.DB.prepare('SELECT payload_json,successful_json FROM workspace_company_dossiers WHERE workspace_id=? AND domain=?').bind(workspaceId,D.domain(company.domain)).first();
- let prior;try{const parsed=JSON.parse(saved?.payload_json||'null');if(!company.force&&parsed?.contextKey===contextKey&&parsed?.providerSignature===providerSignature)prior=parsed;}catch{}
+ let prior;try{const parsed=JSON.parse(saved?.payload_json||'null');if(!company.force&&parsed?.contextKey===contextKey&&(parsed.providerSignature===providerSignature||(legacySignature&&parsed.providerSignature===legacySignature)))prior=parsed;}catch{}
  let expectedPayload=saved?.payload_json||null;
  const onCheckpoint=async result=>{
   await guard();if(signal?.aborted)throw Object.assign(Error('Dossier canceled'),{status:499});
@@ -133,7 +136,6 @@ export async function researchWorkspaceDossier(env,workspaceId,company,{signal,g
   if(Number(committed?.meta?.changes||0)!==1){await guard();throw Object.assign(Error('Company dossier changed during research. Refresh to continue from the retained evidence.'),{status:409});}
   expectedPayload=payload;
  };
- const extractionEngine=connections.find(c=>c.provider===active?.provider);
  const result=await runDossierResearch({connections,settings:selected,company,signal,guard,prior,onCheckpoint,maxProvidersPerRequest:company.incremental===true?1:Infinity,...(providerTimeoutMs?{timeoutMs:Math.max(1000,Math.min(180000,providerTimeoutMs))}:{}),
   search:(c,q,s,family)=>c.provider==='perplexity'
    ?searchPerplexityWeb(env,workspaceId,{credential:c,query:[
@@ -143,7 +145,7 @@ export async function researchWorkspaceDossier(env,workspaceId,company,{signal,g
    ].join(' ').slice(0,4000),maxResults:8,purpose:'company_dossier',signal:s})
    :observeSpecialist(env,workspaceId,c,'company_dossier_web_search',()=>searchDossierProvider(c,q,{signal:s}),{guard,signal:s}),
   read:readSource||((u,s)=>readPublicBuyerPage(env,workspaceId,u,{purpose:'company_dossier',signal:s,directTimeoutMs:3000,firecrawlTimeoutMs:12000,totalTimeoutMs:18000})),
-  extract:(researcher,p,s)=>{const c=researcher.provider==='perplexity'?extractionEngine:researcher;return observeSpecialist(env,workspaceId,c,'company_dossier_extraction',()=>generateText({...c,prompt:p,system:'Extract sourced business facts. No invented facts. Return JSON.',maxOutputTokens:c.provider==='gemini'?6000:3000,responseFormat:c.provider==='gemini'?'json':undefined,signal:s,reasoningEffort:'low'}),{guard,signal:s}).then(r=>r.text);}
+  extract:(c,p,s)=>observeSpecialist(env,workspaceId,c,'company_dossier_extraction',()=>c.provider==='perplexity'?extractPerplexityEvidence({...c,prompt:p,signal:s}):generateText({...c,prompt:p,system:'Extract sourced business facts. No invented facts. Return JSON.',maxOutputTokens:c.provider==='gemini'?6000:3000,responseFormat:c.provider==='gemini'?'json':undefined,signal:s,reasoningEffort:'low'}),{guard,signal:s}).then(r=>r.text)
  });
  if(result.status!=='complete'){try{const previous=D.safe(JSON.parse(saved?.successful_json||'null'),company.domain);if(previous?.contextKey===contextKey)result.previousSuccessful=previous;}catch{}}
  return result;
