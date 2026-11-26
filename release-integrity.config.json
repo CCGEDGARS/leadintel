@@ -10106,7 +10106,9 @@
       "status": 200,
       "contains": [
         "Off profiles have no influence on this list",
-        "Research operation limit for this run",
+        "Optional research operation limit",
+        "Research continues toward the target while useful searches remain.",
+        "Recent search attempts:",
         "Show all ",
         "cl-blocker"
       ]
