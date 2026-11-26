@@ -7,7 +7,7 @@ import {sha256} from './security.js';
 import {researchWorkspaceDossier} from './company-dossier.js';
 import {findPublicBuyerContactPages,searchManagementIndex} from './website-management.js';
 import {createBuyerSourceSearch,searchPublicPeople} from './buyer-source-search.js';
-import {unheldProfilePeople,publicPeopleQueries} from './public-profile-people.js';
+import {unheldProfilePeople,publicPeopleQueries,publicPeopleCountry,isPublicProfileRow} from './public-profile-people.js';
 import {PERPLEXITY_MAX_RESULTS} from './perplexity-request.js';
 import {buyerCreditWindowKey,buyerCreditLimitFor,createBuyerCreditMeter,readBuyerCredits} from './buyer-research-credits.js';
 import {fetchDirectPublicPage,readPublicBuyerPage,searchWorkspaceApolloPeople,requireWorkspaceServiceCredential} from './service-integrations.js';
@@ -128,19 +128,23 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
    const normalized=searchRows(rows);
    return {rows:normalized,providers:rows.searchProviders||[],researchTrace:rows.researchTrace||[]};
   }));
-  // B3, 26 Nov 2026: one public people request per job, answered with the workspace's own Perplexity key (the request
-  // shape that found a company's current people by hand). Only metered Expand research reaches the phase that calls
-  // it; a workspace without the key sends nothing. The answer is a reusable task receipt like any search.
+  // B3, 26 Nov 2026: the company's public people queries, each on its own with the target's country bias, answered with
+  // the workspace's own Perplexity key (live, five queries sharing one request's 20 results drifted to a namesake abroad).
+  // Only metered Expand research reaches the phase that calls it; a workspace without the key sends nothing. Each answer
+  // is a reusable task receipt that keeps only personal profile and directory person rows.
   const searchPeople=async()=>{
    const queries=publicPeopleQueries(candidate,input.roles||[],{D});if(!queries.length)return;
    let lookup=services.peopleSearch;
    if(!lookup){
     let credential;try{credential=await requireWorkspaceServiceCredential(env,row.workspace_id,'perplexity');}catch{return;}
     if(!credential?.apiKey)return;
-    lookup=(values,signal)=>searchPublicPeople(env,row.workspace_id,values,{credential,observe,signal});
+    const country=publicPeopleCountry(candidate.market);
+    lookup=(query,signal)=>searchPublicPeople(env,row.workspace_id,query,{credential,country,observe,signal});
    }
-   try{await task('search','Public people · '+queries.join(' | '),async()=>{const found=await lookup(queries,controller.signal);return {rows:searchRows(Array.isArray(found)?found:[],PERPLEXITY_MAX_RESULTS),providers:['perplexity']};});}
-   catch(error){if(error.code==='CANCELED'||controller.signal.aborted)throw error;}
+   for(const query of queries){
+    try{await task('search','Public people · '+query,async()=>{const found=await lookup(query,controller.signal);return {rows:searchRows((Array.isArray(found)?found:[]).filter(isPublicProfileRow),PERPLEXITY_MAX_RESULTS),providers:['perplexity']};});}
+    catch(error){if(error.code==='CANCELED'||controller.signal.aborted)throw error;}
+   }
   };
   const read=async url=>task('read',C.url(url),async()=>{
    let raw;try{raw=await (services.read||(siteOnly?((url,signal)=>fetchDirectPublicPage(url,{signal:AbortSignal.any([signal,AbortSignal.timeout(8000)])})):null)||((url,signal)=>readPublicBuyerPage(env,row.workspace_id,url,{signal,totalTimeoutMs:18000,directTimeoutMs:3000,firecrawlTimeoutMs:12000,meter:creditMeter})))(url,controller.signal);}catch(error){for(const entry of error.researchTrace||[])observe(entry);throw error;}

@@ -26,10 +26,17 @@ test('blank queries are dropped and an all-blank request is refused without send
  await assert.rejects(requestPerplexitySearch({},W,{credential:KEY,query:['',' '],fetchImpl:async()=>assert.fail('nothing is sent')}),/Perplexity connection is required/);
 });
 
+test('a country bias is sent as an ISO code and anything else is left out',async()=>{
+ const bodies=[];const fetchImpl=async(url,init)=>{bodies.push(JSON.parse(init.body));return Response.json({results:[]});};
+ await requestPerplexitySearch({},W,{credential:KEY,query:'q',maxResults:20,country:'dk',fetchImpl});
+ await requestPerplexitySearch({},W,{credential:KEY,query:'q',maxResults:20,country:'Denmark',fetchImpl});
+ assert.deepEqual(bodies,[{query:'q',max_results:20,country:'DK'},{query:'q',max_results:20}]);
+});
+
 test('the public people search returns Perplexity rows as search excerpts and reports the attempt',async t=>{
  const DB=storageDb();t.after(()=>DB.raw.close());const seen=[];let body;
- const rows=await searchPublicPeople({DB},W,['Fjord Staal A/S LinkedIn medarbejder','Fjord Staal A/S direktør ledelse'],{credential:KEY,observe:entry=>seen.push(entry),fetchImpl:async(url,init)=>{body=JSON.parse(init.body);return Response.json({results:[{url:'https://www.linkedin.com/in/ida-larsen-1',title:'Ida Larsen | LinkedIn',snippet:'**Ida Larsen**\n'+'x'.repeat(500),last_updated:'2026-11-02'},{url:'not a url',title:'x',snippet:'y'}]});}});
- assert.deepEqual(body,{query:['Fjord Staal A/S LinkedIn medarbejder','Fjord Staal A/S direktør ledelse'],max_results:20});
+ const rows=await searchPublicPeople({DB},W,'Fjord Staal A/S LinkedIn medarbejder',{credential:KEY,country:'DK',observe:entry=>seen.push(entry),fetchImpl:async(url,init)=>{body=JSON.parse(init.body);return Response.json({results:[{url:'https://www.linkedin.com/in/ida-larsen-1',title:'Ida Larsen | LinkedIn',snippet:'**Ida Larsen**\n'+'x'.repeat(500),last_updated:'2026-11-02'},{url:'not a url',title:'x',snippet:'y'}]});}});
+ assert.deepEqual(body,{query:'Fjord Staal A/S LinkedIn medarbejder',max_results:20,country:'DK'});
  assert.equal(rows.length,1);
  assert.equal(rows[0].url,'https://www.linkedin.com/in/ida-larsen-1');assert.equal(rows[0].evidenceKind,'search_excerpt');
  assert.equal(rows[0].searchProvider,'perplexity');assert.equal(rows[0].lastUpdated,'2026-11-02');
@@ -41,7 +48,7 @@ test('the public people search returns Perplexity rows as search excerpts and re
 
 test('a failed people search is reported, thrown and not priced',async t=>{
  const DB=storageDb();t.after(()=>DB.raw.close());const seen=[];
- await assert.rejects(searchPublicPeople({DB},W,['q'],{credential:KEY,observe:entry=>seen.push(entry),fetchImpl:async()=>new Response('{}',{status:500})}),/HTTP 500/);
+ await assert.rejects(searchPublicPeople({DB},W,'q',{credential:KEY,observe:entry=>seen.push(entry),fetchImpl:async()=>new Response('{}',{status:500})}),/HTTP 500/);
  assert.equal(seen.length,1);assert.equal(seen[0].status,'failed');assert.equal(seen[0].httpStatus,500);
  assert.equal(receipts(DB)[0].listPriceUsdMicros,0);
 });

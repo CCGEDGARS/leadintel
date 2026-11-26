@@ -103,13 +103,13 @@ export function createBuyerSourceSearch(env,workspaceId,{guard=async()=>{},obser
  };
 }
 // B3, 26 Nov 2026 (owner gate: LeadIntel itself must find the current people that a manual Perplexity search found):
-// one request carrying the company's public people queries, answered with the workspace's own Perplexity key only.
-// There is no fallback provider: this pass runs beside the shared search, it does not replace it. Rows are search
-// excerpts, never source reads, so contact evidence still requires reading the page itself.
-export async function searchPublicPeople(env,workspaceId,queries,{credential,observe=()=>{},signal,fetchImpl=fetch,timeoutMs=15000}={}){
+// one public people query with up to 20 results and the target's country bias, answered with the workspace's own
+// Perplexity key only. There is no fallback provider: this pass runs beside the shared search, it does not replace it.
+// Rows are search excerpts, never source reads, so contact evidence still requires reading the page itself.
+export async function searchPublicPeople(env,workspaceId,query,{credential,country,observe=()=>{},signal,fetchImpl=fetch,timeoutMs=15000}={}){
  const timeout=AbortSignal.timeout(timeoutMs),failed=reason=>observe({provider:'perplexity',operation:'search',status:'failed',reason:String(reason).slice(0,180)});
  let response;
- try{response=await requestPerplexitySearch(env,workspaceId,{credential,query:queries,maxResults:PERPLEXITY_MAX_RESULTS,signal:signal?AbortSignal.any([signal,timeout]):timeout,fetchImpl,purpose:'buyer_research'});}
+ try{response=await requestPerplexitySearch(env,workspaceId,{credential,query,maxResults:PERPLEXITY_MAX_RESULTS,country,signal:signal?AbortSignal.any([signal,timeout]):timeout,fetchImpl,purpose:'buyer_research'});}
  catch(error){if(signal?.aborted)throw signal.reason||error;failed(error.message||'Perplexity people search unavailable');throw error;}
  if(!response.ok){observe({provider:'perplexity',operation:'search',status:'failed',reason:`Perplexity people search HTTP ${response.status}`,httpStatus:response.status});throw Error(`Perplexity people search HTTP ${response.status}`);}
  const payload=await response.json().catch(()=>null);

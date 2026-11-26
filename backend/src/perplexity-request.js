@@ -31,11 +31,13 @@ function retryWaitMs(response){
   return Math.max(0,Math.min(RETRY_WAIT_MAX_MS,ms));
 }
 const pause=(ms,signal)=>new Promise((resolve,reject)=>{const timer=setTimeout(resolve,ms);signal.addEventListener('abort',()=>{clearTimeout(timer);reject(signal.reason);},{once:true});});
-export async function requestPerplexitySearch(env,workspaceId,{credential,query,maxResults=10,signal,fetchImpl=fetch,purpose='interactive_research',sleep=pause}={}){
+export async function requestPerplexitySearch(env,workspaceId,{credential,query,maxResults=10,country,signal,fetchImpl=fetch,purpose='interactive_research',sleep=pause}={}){
   // A single query is sent as a string, as before; a list is sent as up to five non-blank queries.
   const queries=(Array.isArray(query)?query:[query]).map(value=>String(value??'').trim()).filter(Boolean).slice(0,PERPLEXITY_MAX_QUERIES);
   if(!workspaceId||!credential?.apiKey||!queries.length)throw Error('A workspace Perplexity connection is required');
   const payload={query:Array.isArray(query)?queries:String(query),max_results:Math.max(1,Math.min(PERPLEXITY_MAX_RESULTS,Math.floor(Number(maxResults)||10)))};
+  // A country bias (ISO 3166-1 alpha-2) leans results to one country; it is not a strict filter (API reference, 26 Nov 2026).
+  const iso=String(country||'').trim().toUpperCase();if(/^[A-Z]{2}$/.test(iso))payload.country=iso;
   const requestSignal=signal||AbortSignal.timeout(20000);requestSignal.throwIfAborted();
   const fingerprint=await sha256(JSON.stringify([workspaceId,'search',payload.max_results,payload.query]));
   for(let attempt=1;;attempt++){

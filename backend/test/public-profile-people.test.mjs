@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../../customer/discovery-engine.js';
-import {readPublicProfilePeople,unheldProfilePeople,publicPeopleQueries,PUBLIC_PEOPLE_MAX_QUERIES} from '../src/public-profile-people.js';
+import {readPublicProfilePeople,unheldProfilePeople,publicPeopleQueries,publicPeopleCountry,isPublicProfileRow,PUBLIC_PEOPLE_MAX_QUERIES} from '../src/public-profile-people.js';
 
 // Owner gate, 26 Nov 2026: LeadIntel itself must find the current people that a manual Perplexity search found. Three
 // of them were only in public profile excerpts ("**Role**" / "**Employer**" / "March 2023 - Present"), which no reader
@@ -88,15 +88,38 @@ test('Danish buyer-role words are the local titles, one per role family',()=>{
  assert.equal(queries[2],'"Fjord Staal" indkøbschef driftschef projektleder værkfører');
 });
 
-test('the people request asks like the manual search: management, employees, buyer roles, register number, country',()=>{
+test('the people search asks like the manual search: management, employees, buyer roles, register number, country, chair',()=>{
  const queries=publicPeopleQueries({...target,buyerDiscovery:{registerManagement:{id:'12345678'}}},['Executive leadership','Production Manager','Project Manager','Procurement Manager']);
- assert.deepEqual(queries,['Fjord Staal A/S direktør ledelse','Fjord Staal A/S LinkedIn medarbejder','"Fjord Staal" produktionschef projektleder indkøbschef','Fjord Staal A/S CVR 12345678 bestyrelse direktion','"Fjord Staal" Denmark manager']);
+ assert.deepEqual(queries,['Fjord Staal A/S direktør ledelse','Fjord Staal A/S LinkedIn medarbejder','"Fjord Staal" produktionschef projektleder indkøbschef','Fjord Staal A/S CVR 12345678 bestyrelse direktion','"Fjord Staal" Denmark manager','"Fjord Staal" bestyrelsesformand']);
  assert.ok(queries.length<=PUBLIC_PEOPLE_MAX_QUERIES);
  assert.ok(queries.every(q=>!/\bsite:|\sOR\s/.test(q)),'no search-engine operators');
 });
 
 test('other markets get English words, and a register label only with a number',()=>{
  const queries=publicPeopleQueries({company:'Harbor Clinics Ltd',domain:'harbor-clinics.example',market:'United Kingdom'},['Operations Director']);
- assert.deepEqual(queries,['Harbor Clinics Ltd CEO management team','Harbor Clinics Ltd LinkedIn employees','"Harbor Clinics" operations director','Harbor Clinics Ltd board of directors','"Harbor Clinics" United Kingdom manager']);
+ assert.deepEqual(queries,['Harbor Clinics Ltd CEO management team','Harbor Clinics Ltd LinkedIn employees','"Harbor Clinics" operations director','Harbor Clinics Ltd board of directors','"Harbor Clinics" United Kingdom manager','"Harbor Clinics" chairman of the board']);
  assert.deepEqual(publicPeopleQueries({market:'Denmark'},['CEO']),[]);
+});
+
+// Live, 26 Nov 2026: five queries sharing one request's 20 results drifted to a namesake company abroad and missed two
+// current project managers; the same queries sent one by one with the country bias found them.
+test('the search country follows the target market and is left out when unknown',()=>{
+ assert.equal(publicPeopleCountry('Denmark'),'DK');assert.equal(publicPeopleCountry('United Kingdom'),'GB');
+ assert.equal(publicPeopleCountry('latvia'),'LV');assert.equal(publicPeopleCountry('Atlantis'),'');assert.equal(publicPeopleCountry(''),'');
+});
+
+test('a directory person page names a current role at the target; another employer does not count',()=>{
+ const org=(slug,title,text='Fjord Staal puts the customer first.')=>({url:`https://theorg.com/org/fjord-staal/org-chart/${slug}`,title,description:text.slice(0,300),markdown:text,lastUpdated:'2026-11-22',evidenceKind:'search_excerpt',searchProvider:'perplexity'});
+ const {people}=readPublicProfilePeople([org('mads-holm','Mads Holm - Investor/chair at Fjord-Staal | The Org'),org('per-moe','Per Moe - CFO at Harbour Steel | The Org')],target);
+ assert.deepEqual(people.map(p=>[p.name,p.title,p.publicNameUrl]),[['Mads Holm','Investor/chair','https://theorg.com/org/fjord-staal/org-chart/mads-holm']]);
+ assert.equal(people[0].identityEvidence.kind,'public_directory');assert.equal(people[0].identityEvidence.quote,'Mads Holm - Investor/chair at Fjord-Staal');
+ assert.equal(people[0].organization,'Fjord Staal A/S');assert.equal(people[0].linkedinIdentityEvidence,undefined,'a directory page is not a LinkedIn profile');
+});
+
+test('only personal profile and directory person pages are kept from the people search',()=>{
+ assert.equal(isPublicProfileRow({url:'https://dk.linkedin.com/in/ida-larsen-1'}),true);
+ assert.equal(isPublicProfileRow({url:'https://theorg.com/org/fjord-staal/org-chart/mads-holm'}),true);
+ assert.equal(isPublicProfileRow({url:'https://www.linkedin.com/company/fjord-staal'}),false);
+ assert.equal(isPublicProfileRow({url:'https://theorg.com/org/fjord-staal'}),false);
+ assert.equal(isPublicProfileRow({url:'https://fjord-staal.example/om-os/'}),false);
 });

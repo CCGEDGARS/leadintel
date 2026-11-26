@@ -17,26 +17,30 @@ async function identitiesJob(t){
  return {f,job};
 }
 
-test('Expand asks one public people request and keeps the current people its profiles name, not former ones',async t=>{
+test('Expand sends each public people query on its own and keeps the current people that profiles name, not former ones',async t=>{
  const {f,job}=await identitiesJob(t);const asked=[];
- const peopleSearch=async queries=>{asked.push(queries);return [
+ const peopleSearch=async query=>{asked.push(query);return /LinkedIn/.test(query)?[
   profileRow('sara-holm-1','Sara Holm','- **Head of Procurement**\n**Forge Industries**\nMarch 2023 - Present'),
-  profileRow('nils-berg-2','Nils Berg','- **Head of Procurement**\n**Forge Industries**\nJuly 2019 - October 2024 · 5 years 4 months')
- ];};
+  profileRow('nils-berg-2','Nils Berg','- **Head of Procurement**\n**Forge Industries**\nJuly 2019 - October 2024 · 5 years 4 months'),
+  {url:'https://www.linkedin.com/company/forge-industries',title:'Forge Industries | LinkedIn',description:'Company page',markdown:'Company page',evidenceKind:'search_excerpt',searchProvider:'perplexity'}
+ ]:/chairman/.test(query)?[{url:'https://theorg.com/org/forge-industries/org-chart/eva-lind',title:'Eva Lind - Chair at Forge Industries | The Org',description:'Board',markdown:'Board',evidenceKind:'search_excerpt',searchProvider:'perplexity'}]:[];};
  await run(f.env,{jobId:job.id,services:services({peopleSearch})});
- assert.equal(asked.length,1,'one people request per job');
- assert.ok(asked[0].length>=1&&asked[0].length<=5,JSON.stringify(asked[0]));
- assert.ok(asked[0].every(query=>!/\bsite:|\sOR\s/.test(query)),'no search-engine operators: '+JSON.stringify(asked[0]));
+ assert.equal(asked.length,6,'one request per people query: '+JSON.stringify(asked));
+ assert.ok(asked.every(query=>typeof query==='string'&&!/\bsite:|\sOR\s/.test(query)),'plain queries without operators: '+JSON.stringify(asked));
  const saved=JSON.parse((await readBuyerJob(f.env,workspaceId,{id:job.id})).result_json);
  const sara=saved.people.find(person=>person.name==='Sara Holm');
  assert.ok(sara,'the current profile person is saved: '+JSON.stringify(saved.people.map(person=>[person.name,person.title])));
  assert.equal(sara.title,'Head of Procurement');assert.equal(sara.organization,'Forge Industries');
  assert.equal(sara.publicNameUrl,'https://www.linkedin.com/in/sara-holm-1');assert.equal(sara.identityEvidence?.kind,'public_profile');
+ const eva=saved.people.find(person=>person.name==='Eva Lind');
+ assert.ok(eva,'the chair from a directory person page is saved: '+JSON.stringify(saved.people.map(person=>[person.name,person.title])));
+ assert.equal(eva.identityEvidence?.kind,'public_directory');
  assert.ok(!saved.people.some(person=>person.name==='Nils Berg'),'a former employee stays out');
  assert.ok(saved.people.some(person=>person.id==='robert'),'the kept buyer stays');
- const task=f.DB.raw.prepare("SELECT status,result_json FROM buyer_research_tasks WHERE job_id=? AND request_value LIKE 'Public people%'").get(job.id);
- assert.equal(task?.status,'complete','the people answer is a reusable task receipt');
- assert.equal(JSON.parse(task.result_json).rows.length,2);
+ const tasks=f.DB.raw.prepare("SELECT status,request_value,result_json FROM buyer_research_tasks WHERE job_id=? AND request_value LIKE 'Public people%'").all(job.id);
+ assert.equal(tasks.length,6,'each query is its own reusable task receipt');assert.ok(tasks.every(task=>task.status==='complete'));
+ const linkedIn=tasks.find(task=>/LinkedIn/.test(task.request_value));
+ assert.deepEqual(JSON.parse(linkedIn.result_json).rows.map(row=>row.url),['https://www.linkedin.com/in/sara-holm-1','https://www.linkedin.com/in/nils-berg-2'],'only personal profile and directory person rows are kept');
 });
 
 test('a person the job already holds keeps the evidence it has',async t=>{
