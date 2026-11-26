@@ -43,6 +43,22 @@ test('Expand sends each public people query on its own and keeps the current peo
  assert.deepEqual(JSON.parse(linkedIn.result_json).rows.map(row=>row.url),['https://www.linkedin.com/in/sara-holm-1','https://www.linkedin.com/in/nils-berg-2'],'only personal profile and directory person rows are kept');
 });
 
+test('a profile person stays in the buyer pool when the ten shown places are already taken',async t=>{
+ // Live, 26 Nov 2026 (a control company): ten staff from the contact page filled the shown places, and a current board
+ // chair read from a public profile was ranked below them and dropped from both the shown list and the pool.
+ const f=await buyerJobsFixture(t);
+ const staff=Array.from({length:10},(_,i)=>({id:'staff-'+i,name:['Alma','Bent','Carl','Dorte','Erik','Freja','Gorm','Hanne','Ivar','Jonna'][i]+' '+['Holm','Lund','Berg','Dahl','Krog','Wind','Sand','Bach','Moe','Rask'][i],publicName:'',title:'Head of Procurement',organization:'Forge Industries',publicNameUrl:'https://forge.example/team',kept:true}));
+ staff.forEach(person=>{person.publicName=person.name;});
+ f.body.candidate={...f.body.candidate,people:staff};
+ const job=await startBuyerJob(f.env,workspaceId,f.users.owner,f.body);
+ f.DB.raw.prepare("UPDATE buyer_research_jobs SET phase='identities' WHERE id=?").run(job.id);
+ const peopleSearch=async query=>/LinkedIn/.test(query)?[profileRow('eva-lind-9','Eva Lind','- **Chairman of the Board**\n**Forge Industries**\nMarch 2022 - Present')]:[];
+ await run(f.env,{jobId:job.id,services:services({peopleSearch})});
+ const saved=JSON.parse((await readBuyerJob(f.env,workspaceId,{id:job.id})).result_json);
+ assert.ok((saved.buyerDiscovery?.pool||[]).some(person=>person.name==='Eva Lind'),'the chair is kept in the pool: '+JSON.stringify((saved.buyerDiscovery?.pool||[]).map(person=>person.name)));
+ assert.ok(saved.people.length<=10);
+});
+
 test('a person the job already holds keeps the evidence it has',async t=>{
  const {f,job}=await identitiesJob(t);
  const peopleSearch=async()=>[profileRow('robert-lund-3','Robert Lund','- **Procurement Lead**\n**Forge Industries**\nJanuary 2021 - Present')];

@@ -282,6 +282,9 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
     await resolveDirectoryNames(search,identityRows);
     const trace=D.tracePublicBuyers(identityRows,candidate.company,{...input.profile,companyDomain:candidate.domain});
     const profiled=unheldProfilePeople(identityRows,candidate,{D});
+    // Profile people join the pool first, as the free index's identities do: the ten shown are ranked from everyone
+    // found, and a person ranked below them stays in the pool instead of being dropped.
+    if(profiled.length)candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),pool:D.mergeBuyerPool(candidate.buyerDiscovery?.pool||candidate.people||[],profiled,input.profile)};
     candidate.people=D.retainBuyerIdentities(D.mergeBuyerPool(candidate.people||[],[...trace.people,...profiled],input.profile),input.profile,candidate).slice(0,10);acquirePeople();phase=nextPhase[phase];}
    }else if(phase==='contacts'){
     if(candidate.people?.length){
