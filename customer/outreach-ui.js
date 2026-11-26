@@ -1,6 +1,6 @@
 import './creator-library.js?v=20261105-single-script-v1&character-contract=20261107-v1';
 import './language-pack-catalogue.js?v=20261027-v1';
-import './language-pack-ui.js?v=20261027-v1';
+import './language-pack-ui.js?v=20261027-v1&research-reading=20261126-v1';
 import './translation-preview.js?v=20261027-v1&messages-reliability=20261031-v1';
 import './storyselling-native.js?v=20261026-native-v3';
 import './message-draft-history.js?v=20261102-first-recipient-v1&step6-journey=20261102-v1';

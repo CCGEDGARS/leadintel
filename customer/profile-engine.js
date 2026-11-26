@@ -397,6 +397,7 @@
       step:[1,2,3,4,5,6,7].includes(Number(value.step))?Number(value.step):1,
       website:normalizeUrl(value.website),
       ...(typeof value.setupWebsiteDraft==='string'?{setupWebsiteDraft:normalizeUrl(value.setupWebsiteDraft)}:{}),
+      ...(typeof value.researchResultsLanguage==='string'?{researchResultsLanguage:value.researchResultsLanguage.slice(0,12)}:{}),
       targetMarkets,
       additionalLinks:unique((value.additionalLinks||[]).map(normalizeUrl).filter(Boolean)).slice(0,8),
       documents:docs,

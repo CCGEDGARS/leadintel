@@ -1,9 +1,10 @@
 import './monitoring-manager.js?v=20261111-categories-v1&monitoring-ux=20261117-v1&opportunity-inbox=20261119-v1';
 import './monitoring-inbox.js?v=20261110-universal-v1&monitoring-categories=20261111-v1&inbox-buttons=20261111-v1&monitoring-filter=20261114-v2&monitoring-ux=20261117-v1&opportunity-inbox=20261119-v1';
+import './research-reading-language.js';
 import './language-pack-catalogue.js?v=20261027-v1';
-import './language-pack-ui.js?v=20261027-v1';
+import './language-pack-ui.js?v=20261027-v1&research-reading=20261126-v1';
 import './company-brain.js?v=20261001-adaptive-business-context-v1&strategy=20261001-v2&profile-review=20261001-v2&profile-repair=20261002-v1&profile-audit=20261030-v1&profile-adviser=20261101-v1&confirmed-profile=20261104-v1';
-import './content-language.js?v=20260924-workspace-content-english-v1&kazakhstan-support=20261024-v1&country-language=20261027-v1&brief-retry=20261108-v1';
+import './content-language.js?v=20260924-workspace-content-english-v1&kazakhstan-support=20261024-v1&country-language=20261027-v1&brief-retry=20261108-v1&research-reading=20261126-v1';
 import './content-variants.js?v=20260929-public-first-email-v1&app-dialogs=20261017-v1';
 import './business-identity.js?v=20260924-workspace-profile-english-v1&startup-token-scan=20261016-v1&confirmed-profile=20261104-v1';
 import './reference-customers.js?v=20261030-reference-reliability-v1';
@@ -170,6 +171,15 @@ function renderTargetMarkets(){
   const countrySelect=$("target-country");if(countrySelect&&countrySelect.options.length<2){for(const country of LeadIntelProfile.TARGET_COUNTRIES){const option=document.createElement('option');option.value=country;option.textContent=country;countrySelect.appendChild(option);}}
   const keys=new Set(selected.map(item=>item.toLowerCase()));
   document.querySelectorAll("[data-target-market]").forEach(button=>{const active=keys.has(String(button.dataset.targetMarket||"").toLowerCase());button.classList.toggle("selected",active);button.setAttribute("aria-pressed",active?"true":"false");});
+  const reading=window.LeadIntelResearchReading;
+  const select=$("research-results-language");
+  if(reading&&select){
+    state.researchResultsLanguage=reading.configure(selected,state.researchResultsLanguage);
+    select.onchange=()=>{
+      state.researchResultsLanguage=reading.configure(selected,select.value);
+      saveState();
+    };
+  }
   const target=$("selected-target-markets");
   if(target)target.innerHTML=selected.length?selected.map(item=>`<button class="selected-market-chip" type="button" data-remove-target-market="${esc(item)}" aria-label="Remove ${esc(item)}"><span>${esc(item)}</span><b aria-hidden="true">×</b></button>`).join(""):`<span class="market-empty-selection">Choose at least one country to continue.</span>`;
   if($("selected-market-count"))$("selected-market-count").textContent=`${selected.length} selected`;
@@ -178,7 +188,7 @@ function renderTargetMarkets(){
 function setTargetMarkets(markets){
   const next=LeadIntelProfile.normalizeTargetCountries(markets);
   if(JSON.stringify(next)===JSON.stringify(state.targetMarkets)){renderTargetMarkets();return;}
-  state.targetMarkets=next;invalidateStrategicOutputs(false);saveState();renderTargetMarkets();
+  state.targetMarkets=next;invalidateStrategicOutputs(false);renderTargetMarkets();saveState();
   window.dispatchEvent(new CustomEvent("leadintel:target-markets-changed",{detail:{markets:[...next]}}));
 }
 function toggleTargetMarket(value){
