@@ -10,6 +10,15 @@ import {journeyFixture,loadPlaywright,sessionToken,workspaceId,sourceUrl} from '
 const require=createRequire(import.meta.url),D=require('../../customer/discovery-engine.js');
 const completedChecks=p=>Object.fromEntries(Object.entries(p.contactResearch.checks).filter(([,check])=>check.status==='complete'));
 
+async function verifyDisplayedRolePriorities(page,candidate){
+ const expected=D.rankedBuyerShortlist(candidate.people,{decisionMakers:candidate.buyerRoles},candidate).priorityIds;
+ const controls=page.locator('.selected-prospect-buyers > .buyer-shortlist-group > .selected-prospect-people > li [data-recheck-buyer]');
+ await controls.nth(3).waitFor();
+ assert.equal(expected.length,4);
+ assert.deepEqual(await controls.evaluateAll(nodes=>nodes.map(node=>node.dataset.personId)),expected);
+ return page.locator('.selected-prospect-person');
+}
+
 test('HTTP and registered scheduler complete the visible four before hidden work and retain every receipt after browser reopen',{timeout:120000},async t=>{
  let chromium;try{({chromium}=await loadPlaywright());await fs.access(process.env.LEADINTEL_CHROMIUM_PATH||'/usr/bin/chromium');}catch(error){if(process.env.LEADINTEL_REQUIRE_BROWSER==='true')throw error;t.skip('Chromium unavailable; required by buyer evidence CI.');return;}
  const names=['Alex Smith','Blair Jones','Cameron West','Drew North','Evan Green','Frank White','Grace Hall','Harper South'],titles=['Chief Executive Officer','Chief Operating Officer','Head of Procurement','Operations Director','Procurement Manager','Global Project Manager','Planning Supervisor','Engineering Manager'],stamp=new Date().toISOString();
@@ -38,7 +47,7 @@ test('HTTP and registered scheduler complete the visible four before hidden work
    const context=await browser.newContext({viewport:{width,height:1100}});await context.route('**/*',route=>new URL(route.request().url()).origin===f.origin?route.continue():route.abort());await context.addCookies([{name:'leadintel_session',value:sessionToken,url:f.origin}]);
    const page=await context.newPage();page.setDefaultTimeout(15000);page.on('pageerror',error=>errors.push(error.message));await page.goto(f.origin+'/customer/');await page.waitForFunction(()=>window.LeadIntelServerBridge?.ready);await page.locator('[data-workflow-stage="5"] strong').click();await page.locator('#step-5.active').waitFor();
    await page.waitForFunction(()=>{const c=discovery.selectedProspects.find(c=>c.domain==='forge.example');return ['p4','p5','p6','p7'].every(id=>c?.people.find(p=>p.id===id)?.contactResearch?.checks?.gmail?.status==='complete');});
-   const cards=page.locator('.selected-prospect-buyers > .buyer-shortlist-group > .selected-prospect-people > li');assert.equal(await cards.count(),4);
+   const cards=await verifyDisplayedRolePriorities(page,job.candidate);
    for(const id of ['p4','p5','p6','p7']){const card=cards.filter({has:page.locator('[data-recheck-buyer][data-person-id="'+id+'"]')});for(const channel of ['company','phone','gmail'])assert.equal(await card.locator('[data-contact-channel="'+channel+'"]').getAttribute('data-contact-status'),'not_found',id+' '+channel+' reflects completed no-match checks');assert.equal(await card.locator('[data-keep-buyer]').isDisabled(),true,'completed research does not invent an email recipient');}
    assert.equal(await page.locator('.buyer-other-contacts').getAttribute('open'),null);assert.equal(await page.evaluate(()=>LeadIntelWorkspacePersistence.saveWorkspace()),true);await context.close();
   }
@@ -93,8 +102,8 @@ test('saved provider-only contacts retain free priority through authenticated fo
     const context=await browser.newContext({viewport:{width:1440,height:1100}});await context.route('**/*',route=>new URL(route.request().url()).origin===f.origin?route.continue():route.abort());await context.addCookies([{name:'leadintel_session',value:sessionToken,url:f.origin}]);
     const page=await context.newPage();page.setDefaultTimeout(15000);await page.goto(f.origin+'/customer/');await page.waitForFunction(()=>window.LeadIntelServerBridge?.ready);await page.locator('[data-workflow-stage="5"] strong').click();await page.locator('#step-5.active').waitFor();
     await page.waitForFunction(()=>{const c=discovery.selectedProspects.find(c=>c.domain==='forge.example');return ['p4','p5','p6','p7'].every(id=>c?.people.find(p=>p.id===id)?.contactResearch?.checks?.gmail?.status==='complete');});
-    const cards=page.locator('.selected-prospect-buyers > .buyer-shortlist-group > .selected-prospect-people > li');await page.waitForFunction(()=>document.querySelectorAll('.selected-prospect-buyers > .buyer-shortlist-group > .selected-prospect-people > li').length===4);
-    for(const id of ['p4','p5','p6','p7']){const card=cards.filter({has:page.locator('[data-recheck-buyer][data-person-id="'+id+'"]')});assert.equal(await card.count(),1,id+' stays in the actual displayed CRM cohort');await page.waitForFunction(id=>{const b=document.querySelector('[data-keep-buyer][data-person-id=\"'+id+'\"]');return b&&!b.disabled;},id).catch(error=>{throw Error(id+' Proceed did not settle: '+error.message);});assert.equal(await card.locator('[data-keep-buyer]').isDisabled(),false);}
+    const cards=await verifyDisplayedRolePriorities(page,final);
+    for(const id of ['p4','p5','p6','p7']){const card=cards.filter({has:page.locator('[data-recheck-buyer][data-person-id="'+id+'"]')});assert.equal(await card.count(),1,id+' retains a card for its saved CRM receipt');await page.waitForFunction(id=>{const b=document.querySelector('[data-keep-buyer][data-person-id=\"'+id+'\"]');return b&&!b.disabled;},id).catch(error=>{throw Error(id+' Proceed did not settle: '+error.message);});assert.equal(await card.locator('[data-keep-buyer]').isDisabled(),false);}
     await context.close();
    }finally{await browser.close();}
   }

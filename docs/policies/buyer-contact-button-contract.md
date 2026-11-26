@@ -1,5 +1,10 @@
 # Buyer contact buttons — owner-approved contract, 31 October 2026
 
+## 26 November 2026 amendment for standalone company Refresh
+
+Find buyers and Refresh buyers run free public discovery, including when the workspace has enabled a paid provider and saved spending limits. Expand web research authorizes metered public-source research only. A paid contact lookup requires separate explicit approval for that lookup or paid workflow. Reopening a result grants no new spending permission. This supersedes the earlier automatic paid continuation instructions for standalone company Refresh.
+
+
 ## Proceed navigation amendment — 17 November 2026
 
 The owner clarified that the per-buyer **Proceed** action must open the next step. One click persists the exact accepted recipient and opens **Messages (Step 6)** through the existing guarded handoff. It must not merely add a checkmark and require another click on the footer. Clicking an already-selected buyer opens that same recipient again. Keep the footer as an alternate entry point.

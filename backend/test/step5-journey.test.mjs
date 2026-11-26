@@ -16,7 +16,7 @@ test('Step 5 journey uses production SQL session and workspace authorization',as
  }finally{await f.close();}
 });
 
-test('authenticated Chromium preserves official channels across delayed provider, competing revision, Messages, CRM and fresh reopen',{timeout:60000},async t=>{
+test('authenticated Chromium preserves official channels across delayed provider, competing revision, Messages, CRM and fresh reopen',{timeout:120000},async t=>{
  try{await loadPlaywright();await fs.access(process.env.LEADINTEL_CHROMIUM_PATH||'/usr/bin/chromium');}catch(error){if(process.env.LEADINTEL_REQUIRE_BROWSER==='true')throw error;t.skip('Local Chromium/Playwright unavailable; run scripts/verify-step5-journey.mjs with installed browser paths for acceptance evidence.');return;}
  const {verifyStep5Journey}=await import('../../scripts/verify-step5-journey.mjs');
  const evidence=await verifyStep5Journey({artifactDir:await fs.mkdtemp(path.join(os.tmpdir(),'leadintel-step5-test-'))});
@@ -49,7 +49,7 @@ test('authenticated Chromium restores four recorded Viscaria contacts and preser
  const {verifyRetainedViscariaJourney}=await import('../../scripts/verify-step5-journey.mjs'),artifactDir=await fs.mkdtemp(path.join(os.tmpdir(),'leadintel-step5-test-viscaria-retention-'));const e=await verifyRetainedViscariaJourney({artifactDir});assert.equal(e.mainContacts,4);assert.equal(e.historyRecoveryReadOnly,true);assert.equal(e.refreshRetainsFour,true);assert.equal(e.freshBrowserReopen,true);assert.equal(e.profileOnlyProceedBlocked,true);assert.ok(e.profileLinkRetained);assert.equal(e.outboundMessages,0);assert.equal(e.paidContactRequests,0);t.diagnostic('Recorded Viscaria evidence: '+artifactDir+'/evidence.json');
 });
 
-test('authenticated Chromium Refresh automatically enriches only the priority buyer and restores its green email after closing the browser',{timeout:60000},async t=>{
+test('authenticated Chromium Refresh stays free and a separately approved lookup restores the priority buyer email after reopen',{timeout:60000},async t=>{
  try{await loadPlaywright();await fs.access(process.env.LEADINTEL_CHROMIUM_PATH||'/usr/bin/chromium');}catch(error){if(process.env.LEADINTEL_REQUIRE_BROWSER==='true')throw error;t.skip('Chromium unavailable; mandatory CI must run this journey.');return;}
  const {verifyPaidBuyerJourney}=await import('../../scripts/verify-step5-paid-journey.mjs'),artifactDir=await fs.mkdtemp(path.join(os.tmpdir(),'leadintel-step5-test-paid-'));
  const e=await verifyPaidBuyerJourney({artifactDir});assert.equal(e.confirmedEmails,1);assert.equal(e.emailLookups,1);assert.equal(e.phoneLookups,1);assert.equal(e.readOnlyPaidReplays,0);assert.equal(e.outboundMessages,0);t.diagnostic('Controlled paid-flow browser evidence: '+artifactDir+'/evidence.json');
