@@ -30,21 +30,21 @@ test('the list form offers five companies and still opens on ten',async t=>{
  assert.deepEqual([...sizes.options].map(option=>option.value),['5','10','20','50','100','200','custom']);
  assert.equal(sizes.value,'10');
  assert.equal(h.find('[name="count"]').hidden,true);
- assert.equal(h.find('[name="budget"]').value,String(M.recommendedBudget(10)),'the allowance it opens with is the one for ten');
+ assert.equal(h.find('[name="budget"]').value,'','the operation limit is optional');
 });
 
-test('choosing five sets the allowance for five, and the list that starts asks for five',async t=>{
+test('choosing five requests five verified companies without an operation limit by default',async t=>{
  let sent;
  const h=open(t,(_params,body)=>{sent=body;return {error:'Strategy changed. Reopen Build company list.'};});
  await h.click('new');
  h.change('preset','5');
  assert.equal(h.find('[name="count"]').hidden,true,'five is a listed size, not the custom field');
- assert.equal(h.find('[name="budget"]').value,String(M.recommendedBudget(5)));
- assert.equal(h.find('#company-list-allowance-note').hidden,true,'the allowance covers five companies');
+ assert.equal(h.find('[name="budget"]').value,'');
+ assert.equal(h.find('#company-list-allowance-note').hidden,true,'an unlimited run has no operation warning');
  await h.click('review');
  assert.match(h.find('#company-list-preview').textContent,/My company list · 5 companies/);
  await h.click('start');
- assert.equal(sent.count,5);assert.equal(sent.budget,M.recommendedBudget(5));
+ assert.equal(sent.count,5);assert.equal(sent.budget,undefined);
 });
 
 test('an allowance the user typed is kept when the size changes to five',async t=>{

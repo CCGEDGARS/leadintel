@@ -171,3 +171,17 @@ test('a scheduled retry counts down locally',async t=>{
  h.second(3);
  assert.equal(h.part('estimate'),'Next retry in 0:27');
 });
+
+test('the progress panel shows the selected researcher and the providers that attempted discovery',async t=>{
+ const searchReceipt={...receipt('search','steel manufacturers Denmark',58),providers:[
+  {operation:'search',provider:'gemini',status:'failed',results:0},
+  {operation:'search',provider:'perplexity',status:'succeeded',results:4},
+  {operation:'search',provider:'firecrawl',status:'skipped'}
+ ]};
+ const h=await open(t,list({receipts:[searchReceipt],progress:{mainResearcher:'gemini',runToTarget:true}}),59);
+ assert.equal(h.part('now'),'Now: web search with Perplexity · 1 s ago');
+ const text=h.find('#company-list-content').textContent;
+ assert.match(text,/Main researcher: Gemini. Recent search attempts: Gemini, Perplexity\./);
+ assert.match(text,/Gemini failed \(0 results\).*Perplexity succeeded \(4 results\)/);
+ assert.doesNotMatch(text,/40 \/ 400 research operations|Recent search attempts:[^.]*Firecrawl/);
+});

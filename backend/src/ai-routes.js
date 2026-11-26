@@ -437,9 +437,9 @@ export async function searchWorkspaceBuyerContact(env,workspaceId,{company,domai
   return result;
 }
 
-export async function searchWorkspaceWeb(env,workspaceId,query,{signal,skipPerplexity}={}){
+export async function searchWorkspaceWeb(env,workspaceId,query,{signal,skipPerplexity,guard}={}){
   if(!encryptionConfigured(env))return {results:[],status:'unavailable'};
-  const result=await searchWorkspaceResearch(env,workspaceId,{query,maxResults:8,purpose:'contact_research',skipPerplexity,signal:signal?AbortSignal.any([signal,AbortSignal.timeout(25000)]):AbortSignal.timeout(25000)});
+  const result=await searchWorkspaceResearch(env,workspaceId,{query,maxResults:8,purpose:'contact_research',skipPerplexity,guard,signal:signal?AbortSignal.any([signal,AbortSignal.timeout(25000)]):AbortSignal.timeout(25000)});
   return {...result,status:'complete'};
 }
 

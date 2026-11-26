@@ -1,5 +1,6 @@
 import {reserveReasoning,researchPrompt} from './company-list-spend.js';
 import '../../customer/company-lists.js';
+import {dossierSettings} from './company-dossier.js';
 import {createBuyerSourceSearch} from './buyer-source-search.js';
 import {readPublicBuyerPage} from './service-integrations.js';
 import {productionProvider} from './copilot-service.js';
@@ -74,7 +75,7 @@ const targetPlanning=criteria=>{
 // failed (400) · code: …") and from the search and read traces; kept beside the failure code so the page can name both.
 // Live, 24 Nov 2026: a customer's list stopped on their Anthropic spending limit and showed only "A research service is
 // temporarily unavailable"; nobody could tell which service, or why.
-const PROVIDER_NAMES={openai:'OpenAI',anthropic:'Anthropic',gemini:'Gemini',firecrawl:'Firecrawl'};
+const PROVIDER_NAMES={openai:'OpenAI',anthropic:'Anthropic',gemini:'Gemini',firecrawl:'Firecrawl',perplexity:'Perplexity'};
 function refusal(cause={},traces=[]){
  const text=String(cause.message||''),named=text.match(/^(OpenAI|Anthropic|Gemini)\b/i)?.[1];
  const trace=traces.find(t=>PROVIDER_NAMES[t?.provider]&&(t.status==='failed'||Number(t.httpStatus)>=400));
@@ -213,22 +214,26 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
   };
   // A change that must be stored by the very next write: a kept company together with its evidence row.
   const commit=change=>{const next=writes.then(async()=>{change();await write();});writes=next.catch(()=>{});return next;};
+  const atAllowance=()=>!criteria.runToTarget&&s.operations>=s.allowance;
+  const mainResearcher=!services.search&&!criteria.taskId?(await dossierSettings(env,row.workspace_id)).primary_provider:null;
+  s.mainResearcher=mainResearcher||null;
   let lastOperation=null,operationEvents=[];
   const held=new Set();   // pages a lane is working on; always empty in the one-lane loop
   const safeEvent=r=>({provider:clean(r.provider,40),operation:clean(r.operation,30),status:clean(r.status,30),...(r.reason?{reason:clean(r.reason,180)}:{}),...(r.httpStatus?{httpStatus:r.httpStatus}:{}),...(Number.isFinite(r.results)?{results:r.results}:{})});
   const observe=r=>{operationEvents.push(safeEvent(r));};
   const beforeGrounded=async()=>{
    const cap=s.groundedLimit??3;
-   if((s.groundedQueries||0)>=cap)throw error('The paid AI web-search allowance is used. Review results before approving more searches.','search_budget');
+   if(criteria.taskId&&(s.groundedQueries||0)>=cap)throw error('The paid AI web-search allowance is used. Review results before approving more searches.','search_budget');
    s.groundedQueries=(s.groundedQueries||0)+1;
    await checkpoint();
   };
-  const search=services.search||createBuyerSourceSearch(env,row.workspace_id,{purpose:'company_list',guard,observe,beforeGrounded,scrapeResults:false,primaryTimeoutMs:12000});
+  const makeSearch=observe=>services.search||createBuyerSourceSearch(env,row.workspace_id,{purpose:'company_list',guard,observe,beforeGrounded,preferGrounded:Boolean(mainResearcher&&mainResearcher!=='perplexity'),scrapeResults:false,primaryTimeoutMs:12000});
+  const search=makeSearch(observe);
   // A reasoning call the provider refused keeps who refused, the HTTP status and the provider's own code on its receipt.
   const refused=(r,e)=>{const seen=refusal(e);if(!seen.id)return;if(!r.provider)r.provider=seen.id;if(seen.status)r.http=seen.status;if(seen.code)r.providerCode=seen.code;};
   const operation=async(kind,target,fn)=>{
    await guard();if(controller.signal.aborted)throw error('Research slice finished.','slice_finished');
-   if(s.operations>=s.allowance)throw error('Research allowance reached.','allowance',409);
+   if(atAllowance())throw error('Research allowance reached.','allowance',409);
    const r={id:++s.operations,operation:kind,target:clean(target,500),status:'started',at:new Date().toISOString()};
    s.operationTotals.started++;s.receipts.push(r);s.receipts=s.receipts.slice(-250);s.inFlight={id:r.id,operation:kind,target:r.target};lastOperation=r;operationEvents=[];
    await checkpoint();
@@ -256,9 +261,9 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
     receipt.transport=stream?'stream':'json';
     const baseline=s.yieldBaseline||{checked:0,matches:0};
     if(s.results.length>baseline.matches)s.yieldBaseline={checked:s.checked,matches:s.results.length};
-    else if(s.checked-baseline.checked>=20)throw error('Research paused after 20 source assessments without a new verified match. Review the criteria before continuing.','research_yield');
+    else if(criteria.taskId&&s.checked-baseline.checked>=20)throw error('Research paused after 20 source assessments without a new verified match. Review the criteria before continuing.','research_yield');
     const payload=JSON.stringify(prompt);
-    const settleSpend=reserveReasoning(s,model,system+payload,3500);
+    const settleSpend=reserveReasoning(s,model,system+payload,3500,{enforceLimit:Boolean(criteria.taskId)});
     await checkpoint();
     signal.throwIfAborted();
     let result;
@@ -351,7 +356,7 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
    // stored, because every later write asks it again.
    const laneOperation=async(lane,kind,target,fn)=>{
     if(stop||controller.signal.aborted)throw error('Research slice finished.','slice_finished');
-    if(s.operations>=s.allowance)throw error('Research allowance reached.','allowance',409);
+    if(atAllowance())throw error('Research allowance reached.','allowance',409);
     const r={id:++s.operations,operation:kind,target:clean(target,500),status:'started',at:new Date().toISOString()};
     s.operationTotals.started++;s.receipts.push(r);s.receipts=s.receipts.slice(-250);(s.flying||=[]).push(r.id);lane.last=r;const recorded=Date.now();
     // `answer`: a model answer about a page. A register check or a search plan says nothing about those.
@@ -493,7 +498,7 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
     const index=s.queryIndex++,q=s.queries[index],me={last:null,events:[]};let searched=false;
     try{
      const rows=await laneOperation(me,'search',q,async(signal,receipt,events)=>{
-      const run=services.search||createBuyerSourceSearch(env,row.workspace_id,{purpose:'company_list',guard,beforeGrounded,observe:r=>events.push(safeEvent(r)),scrapeResults:false,primaryTimeoutMs:12000});
+      const run=makeSearch(r=>events.push(safeEvent(r)));
       const found=await run(q,{limit:10,signal}),rows=Array.isArray(found)?found:found?.results;if(!Array.isArray(rows))throw error('Search response needs retry.','invalid_response');return rows;
      });
      searched=true;
@@ -517,7 +522,7 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
     const me={last:null,events:[]};
     if(s.roundStart){s.noProgressRounds=(s.seen.length===s.roundStart.seen&&s.results.length===s.roundStart.matches)?(s.noProgressRounds||0)+1:0;s.roundStart=null;}
     const maxRounds=Math.max(10,Math.ceil(criteria.count/5));
-    if(s.round>=maxRounds||s.noProgressRounds>=3||s.seen.length>=4000){drained={end:'incomplete',code:'search_exhausted',phase:'exhausted',reason:'The bounded search plan finished below target. Saved matches passed their checks; no weaker matches were added to fill the list.'};return;}
+    if((!criteria.runToTarget&&s.round>=maxRounds)||s.noProgressRounds>=3||s.seen.length>=4000){drained={end:'incomplete',code:'search_exhausted',phase:'exhausted',reason:'The bounded search plan finished below target. Saved matches passed their checks; no weaker matches were added to fill the list.'};return;}
     try{
      const prompt={stage:'plan',criteria:modelCriteria(criteria),previousQueries:s.queries,alreadyMatched:s.results.map(r=>r.company),gaps:s.reviews.slice(-12),round:s.round,instructions:profilePlanning+targetPlanning(criteria)};
      const plan=await laneOperation(me,'analysis','search plan',(signal,receipt)=>ask(prompt,signal,receipt,true)).catch(recoverInitialPlan);
@@ -542,7 +547,7 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
     const me={index,last:null,events:[]};
     while(!stop&&!controller.signal.aborted&&clock()-start<windowMs-10000){
      if(s.results.length>=criteria.count){halt({done:true});break;}
-     if(s.operations>=s.allowance){halt({allowance:true});break;}
+     if(atAllowance()){halt({allowance:true});break;}
      refill();
      const task=claim();
      if(!task){
@@ -570,7 +575,7 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
    if(broken)throw broken;
    if(stop?.fatal)throw stop.fatal;
    if(s.results.length>=criteria.count){s.reason='Requested number of matching companies reached';s.phase='done';s.failureCode='';await checkpoint('complete');return [row.id];}
-   if(stop?.allowance||s.operations>=s.allowance){await allowance();return [row.id];}
+   if(stop?.allowance||atAllowance()){await allowance();return [row.id];}
    if(stop?.end){s.failureCode=stop.code;s.phase=stop.phase;s.reason=stop.reason;s.nextAttemptAt=0;await checkpoint(stop.end);return [row.id];}
    if(stop?.issue){
     const issue=stop.issue;s.failures=s.retryKey===stop.key?(s.failures||0)+1:1;s.retryKey=stop.key;s.failureCode=issue.code;s.failureCause=issue.cause?{...issue.cause,for:issue.code}:null;
@@ -586,7 +591,7 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
   try{
    await guard();
    if(s.results.length>=criteria.count){s.reason='Requested number of matching companies reached';s.phase='done';s.failureCode='';await checkpoint('complete');return [row.id];}
-   if(s.operations>=s.allowance){await allowance();return [row.id];}
+   if(atAllowance()){await allowance();return [row.id];}
    // One lane is the loop below, unchanged. More lanes are for lists under the current profile policy only.
    const laneCount=Math.max(1,Math.min(8,Math.floor(Number(lanes)||1)));
    if(laneCount>1&&profilePolicy){
@@ -655,14 +660,14 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
     }else{
      if(s.roundStart){s.noProgressRounds=(s.seen.length===s.roundStart.seen&&s.results.length===s.roundStart.matches)?(s.noProgressRounds||0)+1:0;s.roundStart=null;}
      const maxRounds=Math.max(10,Math.ceil(criteria.count/5));
-     if(s.round>=maxRounds||s.noProgressRounds>=3||s.seen.length>=4000){s.failureCode='search_exhausted';s.phase='exhausted';s.reason='The bounded search plan finished below target. Saved matches passed their checks; no weaker matches were added to fill the list.';await checkpoint('incomplete');return [row.id];}
+     if((!criteria.runToTarget&&s.round>=maxRounds)||s.noProgressRounds>=3||s.seen.length>=4000){s.failureCode='search_exhausted';s.phase='exhausted';s.reason='The bounded search plan finished below target. Saved matches passed their checks; no weaker matches were added to fill the list.';await checkpoint('incomplete');return [row.id];}
      const plan=await generate({stage:'plan',criteria:modelCriteria(criteria),previousQueries:s.queries,alreadyMatched:s.results.map(r=>r.company),gaps:s.reviews.slice(-12),round:s.round,instructions:profilePolicy?profilePlanning+targetPlanning(criteria):'Return {queries:[strings]}. Plan at most eight distinct company searches for ONLY selected signals and target markets. For Lookalike, use selected reference source-backed operations, products and relevant purchasing applications; no unrelated hiring, investment or tender requirement. Reference countries are not target markets. Use local business language and English. Diversify relevant industry subsegments and official company sites, trade associations and specialist sources. Avoid previous queries and matched companies. Resolve the supplied evidence gaps where useful. Never invent company names. Empty queries only when no further useful research is justified.'}).catch(recoverInitialPlan);
      const queries=newQueries(plan,s.queries);
      s.round++;s.roundStart={seen:s.seen.length,matches:s.results.length};s.queries.push(...queries);s.phase=queries.length?'researching':'exhausted';s.reason=queries.length?(profilePolicy?'Researching your selected profiles and buying signals':'Researching your selected signals'):'No further useful queries. Completed matches are retained; review the criteria.';
      if(!queries.length)s.failureCode='search_exhausted';await checkpoint(queries.length?'running':'incomplete');if(!queries.length)return [row.id];
     }
     if(s.results.length>=criteria.count){s.reason='Requested number of matching companies reached';s.phase='done';s.failureCode='';await checkpoint('complete');return [row.id];}
-    if(s.operations>=s.allowance){await allowance();return [row.id];}
+    if(atAllowance()){await allowance();return [row.id];}
    }
    await checkpoint('queued');
   }catch(e){
@@ -675,18 +680,18 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
     s.failures=s.retryKey===key?(s.failures||0)+1:1;s.retryKey=key;s.failureCode=issue.code;s.failureCause=issue.cause?{...issue.cause,for:issue.code}:null;
     if((issue.skip||issue.retry&&s.failures>=3)&&lastOperation?.operation==='page_read'&&s.pending[0]){
      recordGap(s.pending[0],issue.reason);s.pending.shift();s.failures=0;s.retryKey='';s.failureCode='';s.nextAttemptAt=0;
-     if(s.operations>=s.allowance)await allowance();
+     if(atAllowance())await allowance();
      else{s.reason='Continuing research; an unreadable source remains recorded in incomplete checks.';await checkpoint('queued');}
     }else if(issue.unusable&&s.failures>=2&&['analysis','evidence_review'].includes(lastOperation?.operation)&&lastOperation.target!=='search plan'&&s.pending[0]){
      // The same page with the same question gets the same refused answer: one retry, then move on.
      recordGap(s.pending[0],'This source could not be assessed: the reasoning answer was unusable twice.');s.pending.shift();s.failures=0;s.retryKey='';s.failureCode='';s.nextAttemptAt=0;
-     if(s.operations>=s.allowance)await allowance();
+     if(atAllowance())await allowance();
      else{s.reason='Continuing research; a source that could not be assessed remains recorded in incomplete checks.';await checkpoint('queued');}
-    }else if(issue.retry&&s.operations>=s.allowance)await allowance();
+    }else if(issue.retry&&atAllowance())await allowance();
     else if(issue.retry&&s.failures<3){s.nextAttemptAt=now+(s.failures===1?30000:120000);s.phase='retrying';s.reason=issue.reason+' Retrying automatically ('+s.failures+'/2); no extra allowance is granted.';await checkpoint('queued');}
     else{
      s.nextAttemptAt=0;s.reason=issue.retry?issue.reason+' Automatic retries stopped after three attempts.'+(issue.unusable?' Resume to try again.':' Check connections and resume.'):issue.reason;
-     if(s.operations>=s.allowance)s.reason+=' The research allowance was also reached.';
+     if(atAllowance())s.reason+=' The research allowance was also reached.';
      await checkpoint('incomplete');
     }
    }

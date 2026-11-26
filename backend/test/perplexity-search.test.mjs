@@ -157,3 +157,23 @@ test('cancellation stops Perplexity work instead of becoming a provider failure'
  const search=createBuyerSourceSearch({},'w',{guard:async()=>{if(canceled)throw Error('Canceled');},credential:async()=>({apiKey:'fixture'}),perplexityCredential:async()=>KEY,grounded:async()=>assert.fail('No fallback after cancellation'),fetchImpl:route({sent,perplexity:()=>{canceled=true;return new Response('{}',{status:503});},firecrawl:()=>assert.fail('No Firecrawl after cancellation')})});
  await assert.rejects(search('person'),/Canceled/);assert.deepEqual(sent,['perplexity']);
 });
+
+test('company discovery honors an explicitly selected grounded researcher before Perplexity and keeps attempt receipts',async()=>{
+ const sent=[],trace=[];
+ let primaryFails=false;
+ const search=createBuyerSourceSearch({},'w',{
+  purpose:'company_list',preferGrounded:true,observe:r=>trace.push(r),perplexityCredential:async()=>KEY,
+  grounded:async(_env,_workspace,_query,options)=>{
+   assert.equal(options.skipPerplexity,true);
+   const attempts=[{provider:'gemini',status:primaryFails?'failed':'complete',resultCount:primaryFails?0:1}];
+   if(primaryFails)throw Object.assign(Error('Temporary provider failure'),{researchAttempts:attempts});
+   return {status:'complete',provider:'gemini',attempts,results:[{url:'https://example.org/company'}]};
+  },
+  fetchImpl:route({sent,perplexity:()=>Response.json({results:results(1)})})
+ });
+ assert.equal((await search('manufacturers'))[0].searchProvider,'gemini');
+ assert.deepEqual(sent,[]);
+ primaryFails=true;
+ assert.equal((await search('manufacturers'))[0].searchProvider,'perplexity');
+ assert.deepEqual(trace.map(r=>[r.provider,r.status]),[['gemini','succeeded'],['gemini','failed'],['perplexity','succeeded']]);
+});

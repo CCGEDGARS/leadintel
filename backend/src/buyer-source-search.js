@@ -9,7 +9,7 @@ const LINKEDIN_PROFILE_SEARCH=/\bsite:\s*(?:[a-z]{2,3}\.)?linkedin\.com\b/i;
 // fallbacks as before, and a workspace without that key sends exactly what it sent before, with nothing reported about
 // Perplexity. A Perplexity row carries the page's query-relevant text as a search excerpt. It is never a source read,
 // so first-party contact evidence still requires reading the page itself.
-export function createBuyerSourceSearch(env,workspaceId,{guard=async()=>{},observe=()=>{},credential=requireWorkspaceServiceCredential,perplexityCredential=requireWorkspaceServiceCredential,grounded=searchWorkspaceWeb,fetchImpl=fetch,signal,scrapeResults=true,primaryTimeoutMs=25000,purpose='buyer_research',meter,beforeGrounded}={}){
+export function createBuyerSourceSearch(env,workspaceId,{guard=async()=>{},observe=()=>{},credential=requireWorkspaceServiceCredential,perplexityCredential=requireWorkspaceServiceCredential,grounded=searchWorkspaceWeb,fetchImpl=fetch,signal,scrapeResults=true,primaryTimeoutMs=25000,purpose='buyer_research',meter,beforeGrounded,preferGrounded=false}={}){
  let unavailable=false,connection,perplexityUnavailable=false,perplexity;
  const rowsWithSource=(rows,provider)=>{const values=rows.map(row=>({...row,buyerSource:provider,searchProvider:provider}));Object.defineProperty(values,'searchProviders',{value:[provider]});return values;};
  // The short description keeps the length of an ordinary search snippet (readers check it for former/supplier
@@ -40,6 +40,29 @@ export function createBuyerSourceSearch(env,workspaceId,{guard=async()=>{},obser
     if(rows.length){primaryRows=rowsWithSource(rows,'perplexity');primaryProvider='perplexity';}else perplexityEmpty=true;
    }catch(error){await check();observe({provider:'perplexity',operation:'search',status:'failed',reason:String(error.message||'Perplexity search unavailable').slice(0,180),...(httpStatus?{httpStatus}:{})});}
   };
+  let groundedEmpty;
+  const observeGrounded=attempts=>{
+   if(purpose!=='company_list')return;
+   for(const a of attempts||[])observe({provider:a.provider,operation:'search',status:a.status==='failed'?'failed':'succeeded',results:a.resultCount,reason:a.reason});
+  };
+  const askGrounded=async()=>{
+   try{
+    const result=await grounded(env,workspaceId,query,{signal:querySignal,skipPerplexity:true,guard:check});await check();
+    if(result.status!=='complete'||result.web_search===false||!Array.isArray(result.results))throw Error('Grounded public research unavailable');
+    observeGrounded(result.attempts);
+    if(purpose!=='company_list'||!result.attempts?.length)observe({provider:purpose==='company_list'&&result.provider?result.provider:'grounded',operation:'search',status:'succeeded',results:result.results.length});
+    return rowsWithSource(result.results,purpose==='company_list'&&result.provider?result.provider:'grounded');
+   }catch(error){
+    await check();observeGrounded(error.researchAttempts);
+    if(purpose!=='company_list'||!error.researchAttempts?.length)observe({provider:'grounded',operation:'search',status:'failed',reason:'Grounded public research unavailable'});
+   }
+  };
+  if(preferGrounded){
+   if(beforeGrounded)await beforeGrounded();
+   const answer=await askGrounded();
+   if(answer?.length)return answer;
+   if(answer)groundedEmpty=answer;
+  }
   // LinkedIn profile searches keep Firecrawl first. Perplexity titles a profile "<name> | LinkedIn" without the role
   // and company that the headline reader needs (live run 26 Nov 2026: 40 such rows, none with a role or company;
   // Firecrawl titles carry "Name - Role - Company"). Perplexity answers them only when Firecrawl cannot.
@@ -61,16 +84,21 @@ export function createBuyerSourceSearch(env,workspaceId,{guard=async()=>{},obser
   }
   if(linkedInProfiles&&!primaryRows.length){const answer=await askPerplexity();if(answer)return answer;}
   await check();
-  if(beforeGrounded){
-   try{await beforeGrounded();}catch(error){if(primaryRows.length)return primaryRows;throw error;}
-   await check();
+  if(!preferGrounded){
+   if(beforeGrounded){
+    try{await beforeGrounded();}catch(error){if(primaryRows.length)return primaryRows;throw error;}
+    await check();
+   }
+   const secondary=await askGrounded();
+   if(secondary){
+    if(!primaryRows.length)return secondary;
+    const combined=[...new Map([...secondary,...primaryRows].map(row=>[row.url,row])).values()].slice(0,limit);Object.defineProperty(combined,'searchProviders',{value:[primaryProvider,...secondary.searchProviders]});return combined;
+   }
   }
-  try{
-   const result=await grounded(env,workspaceId,query,{signal:querySignal,skipPerplexity:true});await check();
-   if(result.status!=='complete'||result.web_search===false||!Array.isArray(result.results))throw Error('Grounded public research unavailable');
-   observe({provider:'grounded',operation:'search',status:'succeeded',results:result.results.length});
-   const secondary=rowsWithSource(result.results,'grounded');if(!primaryRows.length)return secondary;
-   const combined=[...new Map([...secondary,...primaryRows].map(row=>[row.url,row])).values()].slice(0,limit);Object.defineProperty(combined,'searchProviders',{value:[primaryProvider,'grounded']});return combined;
-  }catch(error){await check();observe({provider:'grounded',operation:'search',status:'failed',reason:'Grounded public research unavailable'});if(primaryRows.length)return primaryRows;if(empty)return rowsWithSource([],'firecrawl');if(perplexityEmpty)return rowsWithSource([],'perplexity');throw Error('Public contact research unavailable; resume unfinished checks after restoring a search provider.');}
+  if(primaryRows.length)return primaryRows;
+  if(empty)return rowsWithSource([],'firecrawl');
+  if(perplexityEmpty)return rowsWithSource([],'perplexity');
+  if(groundedEmpty)return groundedEmpty;
+  throw Error('Public source search unavailable; resume unfinished checks after restoring a search provider.');
  };
 }

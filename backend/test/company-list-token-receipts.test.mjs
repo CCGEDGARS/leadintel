@@ -81,29 +81,24 @@ test('a list researched through the test reasoning service keeps no token counts
  assert.equal(list.status,'complete');assert.equal(Object.hasOwn(state,'modelUse'),false);
 });
 
-test('a scheduler wake after restart cannot overspend a list and resume needs explicit new funds',async t=>{
+test('a legacy spend-paused list resumes toward the target without another dollar approval',async t=>{
  const {f,served}=await setup(t,{answer:priced});
  const {id}=await start(f);
  const state=stateOf(f,id);
- Object.assign(state,{phase:"planning",results:[],pending:[],queries:[],queryIndex:0,seen:[],round:0,roundStart:null,noProgressRounds:0});
- state.reasoningSpend={used:999999,limit:1000000};
- f.DB.raw.prepare("UPDATE company_lists SET status='queued',state_json=?,lease_until=0 WHERE id=?").run(JSON.stringify(state),id);
- const before=served.length;
- await tick(f);
- const paused=await readCompanyList(f.env,workspaceId,id);
- assert.equal(paused.failureCode,'research_spend',paused.progress.reason);
- assert.equal(paused.status,'incomplete');
- assert.equal(served.length,before);
- await tick(f);
- assert.equal(served.length,before);
- const response=await request(f,{action:'resume',id,revision:paused.revision});
- assert.equal(response.status,400);
- assert.equal(stateOf(f,id).reasoningSpend.limit,1000000);
- const waits=[];
- const accepted=await request(f,{action:'resume',id,revision:paused.revision,additionalReasoningUsd:1},{},waits);
- assert.equal(accepted.status,200,await accepted.clone().text());
+ Object.assign(state,{phase:'planning',results:[],pending:[],queries:[],queryIndex:0,seen:[],round:0,roundStart:null,noProgressRounds:0,
+  checked:20,yieldBaseline:{checked:0,matches:0},operations:100,allowance:100,failureCode:'research_spend',
+  reasoningSpend:{used:999999,limit:1000000}});
+ f.DB.raw.prepare("UPDATE company_lists SET status='incomplete',state_json=?,lease_until=0 WHERE id=?").run(JSON.stringify(state),id);
+ const before=served.length,paused=await readCompanyList(f.env,workspaceId,id),waits=[];
+ const resumed=await request(f,{action:'resume',id,revision:paused.revision},{},waits);
+ assert.equal(resumed.status,200,await resumed.clone().text());
+ assert.equal((await resumed.json()).list.progress.runToTarget,true);
  await Promise.all(waits);
- assert.equal(stateOf(f,id).reasoningSpend.limit,2000000);
+ const complete=await finish(f,id);
+ assert.equal(complete.status,'complete',complete.progress.reason);
+ assert.equal(complete.results.length,1);
+ assert.ok(complete.progress.operations>100);
+ assert.ok(complete.progress.reasoningSpend.used>1000000);
  assert.ok(served.length>before);
 });
 
@@ -118,18 +113,4 @@ test('parallel calls reserve once per attempt, retaining reservations after fail
  assert.equal(state.reasoningSpend.used,1500);
  const page={url:'https://example.org',text:'Cited https://example.org/contact',links:['https://example.org/contact','https://example.org/jobs','https://example.org/jobs'],receipt:{providers:['internal']}};
  assert.deepEqual(researchPrompt({pages:[page]}).pages,[{url:page.url,text:page.text,links:['https://example.org/jobs']}]);
-});
-
-test('twenty unsuccessful source assessments pause the scheduler before another reasoning call',async t=>{
- const {f,served}=await setup(t,{answer:priced});
- const {id}=await start(f);
- const state=stateOf(f,id);
- Object.assign(state,{results:[],pending:[],queries:[],queryIndex:0,seen:[],round:0,roundStart:null,noProgressRounds:0,checked:20,yieldBaseline:{checked:0,matches:0}});
- f.DB.raw.prepare("UPDATE company_lists SET status='queued',state_json=?,lease_until=0 WHERE id=?").run(JSON.stringify(state),id);
- const before=served.length;
- await tick(f);
- const paused=await readCompanyList(f.env,workspaceId,id);
- assert.equal(paused.failureCode,'research_yield',paused.progress.reason);
- assert.equal(paused.status,'incomplete');
- assert.equal(served.length,before);
 });
