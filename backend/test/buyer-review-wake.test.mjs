@@ -6,8 +6,8 @@ import {startBuyerJob,readBuyerJob} from '../src/buyer-research-store.js';
 import {runBuyerResearchJobs} from '../src/buyer-research-runner.js';
 import {importAesKey,encryptSecret} from '../src/oauth.js';
 
-test('HTTP Resume defers the 45-second AI review to cron without consuming its phase allowance or replaying saved sources',async t=>{
- const f=await buyerJobsFixture(t),j=await startBuyerJob(f.env,workspaceId,f.users.owner,f.body);
+test('Selected-buyer HTTP Resume defers the 45-second AI review to cron without consuming its phase allowance or replaying saved sources',async t=>{
+ const f=await buyerJobsFixture(t),j=await startBuyerJob(f.env,workspaceId,f.users.owner,{...f.body,personIds:[f.candidate.people[0].id]});
  f.env.OAUTH_TOKEN_ENCRYPTION_KEY=Buffer.alloc(32,23).toString('base64');
  const encrypted=await encryptSecret('controlled-review-key',await importAesKey(f.env.OAUTH_TOKEN_ENCRYPTION_KEY));
  f.DB.raw.prepare("INSERT INTO workspace_ai_integrations(workspace_id,provider,encrypted_api_key,key_hint,model,active) VALUES(?,'openai',?,'test','gpt-6.1-sol',1)").run(workspaceId,encrypted);

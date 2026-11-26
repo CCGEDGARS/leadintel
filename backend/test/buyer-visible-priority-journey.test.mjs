@@ -104,7 +104,7 @@ test('saved provider-only contacts retain free priority through authenticated fo
   f.DB.raw.prepare("UPDATE buyer_research_jobs SET status='needs_review',phase='done',result_json=? WHERE id=?").run(JSON.stringify(final),id);
   const observed=await fetch(f.origin+'/api/buyers/research?workspace_id='+workspaceId+'&job_id='+id,{headers:{Cookie:'leadintel_session='+sessionToken}}),retained=(await observed.json()).job;
   assert.equal(retained.progress.stages.contacts,false);assert.equal(retained.quality.researchPassed,false);assert.equal(retained.resumePhase,'contacts');
-  const resume=await fetch(f.origin+'/api/buyers/research?workspace_id='+workspaceId,{method:'POST',headers:{Cookie:'leadintel_session='+sessionToken,'Content-Type':'application/json'},body:JSON.stringify({action:'resume',jobId:id,expectedRevision:retained.revision})});assert.equal(resume.status,200);assert.equal((await resume.json()).job.phase,'contacts');
+  const resume=await fetch(f.origin+'/api/buyers/research?workspace_id='+workspaceId,{method:'POST',headers:{Cookie:'leadintel_session='+sessionToken,'Content-Type':'application/json'},body:JSON.stringify({action:'resume',jobId:id,expectedRevision:retained.revision})});assert.equal(resume.status,200);assert.equal((await resume.json()).job.phase,'official');
   assert.equal(f.DB.raw.prepare('SELECT count(*) n FROM additional_contact_attempts').get().n,4,'free refresh adds no paid dispatch');
  }finally{await f.close();}
 });
