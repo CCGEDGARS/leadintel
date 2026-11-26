@@ -77,6 +77,27 @@ test('a contact page needs a phone or e-mail inside the card before a name and r
  const markdown='# Contact\nWhat customers say\nAnna Jensen\nProject Manager\nWe were very satisfied with the delivery and the welding quality.\n\nOpening hours\nMonday to Friday';
  assert.deepEqual(D.officialCompanyContactInventory([{url:'https://steel.example/contact',markdown,sourceRead:true}],candidate).contacts,[]);
 });
+test('a published phone stays with a person whose name has a middle name or an initial',()=>{
+ const url='https://steel.example/kontakt/',markdown='Anna Marie Jensen\nIndkøbschef\n[+45 2000 0001](tel:+4520000001)\n[amj@steel.example](mailto:amj@steel.example)\nErik B. Larsen\nProduktionschef\n[+45 2000 0002](tel:+4520000002)\n[ebl@steel.example](mailto:ebl@steel.example)';
+ const people=[{id:'p1',name:'Anna Marie Jensen',title:'Indkøbschef',publicPhone:'+45 2000 0001',publicPhoneUrl:url},{id:'p2',name:'Erik B. Larsen',title:'Produktionschef',publicPhone:'+45 2000 0002',publicPhoneUrl:url}];
+ const result=D.matchPublicBuyerDetails(people,[{url,markdown,sourceRead:true,extractedAt:'2026-11-26T08:00:00.000Z'}],'steel.example','Example Steel A/S');
+ assert.deepEqual(result.map(p=>[p.name,p.publicPhone,p.publicPhoneSourceCheck?.status]),[['Anna Marie Jensen','+45 2000 0001','attributed'],['Erik B. Larsen','+45 2000 0002','attributed']]);
+});
+test('a plain staff card on the company contact page proves its one initials or name address',()=>{
+ const url='https://steel.example/kontakt/',markdown='# Kontakt\n[+45 7000 0000](tel:+4570000000)\n[info@steel.example](mailto:info@steel.example)\nAnna Marie Jensen\nIndkøbschef\n[+45 2000 0001](tel:+4520000001)\n[amj@steel.example](mailto:amj@steel.example)\nErik Larsen\nProduktionschef\n[+45 2000 0002](tel:+4520000002)\n[erik.larsen@steel.example](mailto:erik.larsen@steel.example)';
+ const people=[{id:'p1',name:'Anna Marie Jensen',title:'Indkøbschef'},{id:'p2',name:'Erik Larsen',title:'Produktionschef'}];
+ const result=D.matchPublicBuyerDetails(people,[{url,markdown,sourceRead:true,extractedAt:'2026-11-26T08:00:00.000Z'}],'steel.example','Example Steel A/S');
+ assert.deepEqual(result.map(p=>[p.name,p.publicEmail]),[['Anna Marie Jensen','amj@steel.example'],['Erik Larsen','erik.larsen@steel.example']]);
+});
+test('a plain name inside prose or a card with a sentence before the address proves no address',()=>{
+ const url='https://steel.example/kontakt/';
+ const prose='Ask our buyer Anna Marie Jensen\nIndkøbschef\n[amj@steel.example](mailto:amj@steel.example)';
+ const sentence='Anna Marie Jensen\nIndkøbschef\nFor orders please write to my colleague.\n[amj@steel.example](mailto:amj@steel.example)';
+ for(const markdown of [prose,sentence]){
+  const [person]=D.matchPublicBuyerDetails([{id:'p1',name:'Anna Marie Jensen',title:'Indkøbschef'}],[{url,markdown,sourceRead:true,extractedAt:'2026-11-26T08:00:00.000Z'}],'steel.example','Example Steel A/S');
+  assert.equal(person.publicEmail||'','');
+ }
+});
 test('official contact extraction remains portable across company names and industries',()=>{
  for(const name of ['North Clinic','Cloud Software']){
   const candidate={company:name,domain:'brand.example'},result=D.officialCompanyContactInventory([{url:'https://brand.example/contact',sourceRead:true,markdown:'Medical Director\n### Maria Santos\n[office@legacy.example](mailto:office@legacy.example)'}],candidate);

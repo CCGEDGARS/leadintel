@@ -231,7 +231,14 @@
     const open=decodePublishedEmailText(String(row.markdown||row.content||'')).replace(/\r/g,'').replace(/\[([^\]]*)\]\(mailto:([^)?\s]+)[^)]*\)/gi,'$1 $2 ').replace(/\[([^\]]+)\]\([^)]*\)/g,'$1');
     // The heading or bold start is checked on this reading of the page, at the occurrence that is walked: with mailto
     // targets visible the name's first occurrence can be another one than in the text the caller looked at.
-    const at=open.indexOf(name);if(at<0||!/^\s*(?:#{1,6}\s*|\*{1,2})$/u.test(open.slice(open.lastIndexOf('\n',at)+1,at)))return '';
+    // Contact pages often print every name as a plain line. Only where the page never shows this person's name as a heading
+    // or in bold, a plain name starts a card, and only when the line before it closes a block (nothing, a heading, a picture
+    // or the previous card's phone or address): a heading card stays the one that is walked and prose still proves nothing.
+    const at=open.indexOf(name);if(at<0)return '';
+    const lineStart=open.lastIndexOf('\n',at)+1,prefix=open.slice(lineStart,at),before=open.slice(0,lineStart).replace(/\s+$/,'').split('\n').pop()||'';
+    const headingNamed=new RegExp('^[ \\t]*(?:#{1,6}[ \\t]*|\\*{1,2})'+name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'mu').test(decodePublishedEmailText(String(row.markdown||row.content||'')).replace(/\[([^\]]*)\]\([^)]*\)/g,'$1'));
+    const plainStart=!headingNamed&&prefix.trim()===''&&(before===''||/^\s*(?:#{1,6}\s|!\[)/.test(before)||/(?:@[\w-]+(?:\.[\w-]+)+|\d[\d\s().-]{5,}\d)\s*$/.test(before));
+    if(!/^\s*(?:#{1,6}\s*|\*{1,2})$/u.test(prefix)&&!plainStart)return '';
     const plainLine=line=>line.replace(/^[-+*•>]\s+/,'').replace(/[*_]/g,'').replace(/\s+/g,' ').trim();
     const lines=open.slice(at+name.length,at+name.length+1500).replace(/^\*{1,2}/,'').trimStart().split('\n').map(plainLine).filter(Boolean);
     if(!lines.length||lines[0].toLowerCase()!==title.toLowerCase())return '';
@@ -266,9 +273,10 @@
       if(local===first||emailLocalPatterns(person).some(pattern=>pattern.local===local))return {email:emails[0],url:normalizeUrl(row.url||row.metadata?.sourceURL),quote:clean(name+' '+role+' '+bounded).slice(0,700)};
     }
     // Not an address that resembles the name: the strict card reads the page for itself (it sees mailto targets and the
-    // portrait line, which `bounded` above does not) and names the card's one address, which must be the initials.
-    const email=staffInitialsCard(person,row,host);
-    if(!email||!staffEmailInitials(person).includes(email.split('@')[0]))return null;
+    // portrait line, which `bounded` above does not) and names the card's one address, which must be the initials or, when
+    // `bounded` ran into the next plain card, an address that resembles the name.
+    const email=staffInitialsCard(person,row,host),cardLocal=email.split('@')[0];
+    if(!email||!(staffEmailInitials(person).includes(cardLocal)||cardLocal===emailNameParts(person)?.first||emailLocalPatterns(person).some(pattern=>pattern.local===cardLocal)))return null;
     // The proof kept for an initials address is the card's name, the person's title and the address: what the saved
     // evidence is read back as (acceptedOfficialBuyerEmail), with nothing of the card's other lines or of a neighbour.
     return {email,url:normalizeUrl(row.url||row.metadata?.sourceURL),quote:clean(name+' '+title+' '+email)};
@@ -480,9 +488,12 @@
         // address and the employer. A generated summary cannot establish contact ownership.
         if(!official&&(!fullName||!body||!company||!body.toLowerCase().includes(company.toLowerCase())||!sourcedBuyerEmails(person,domain,[{url,markdown:body}],company).some(item=>item.email.endsWith('@'+domain))))continue;
         const text=(body||[row.title,row.description].filter(Boolean).join('\n')).slice(0,64000);
-        const pattern=new RegExp(`\\b${first.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")}\\s+([\\p{Lu}][\\p{L}'’.-]{2,})(?=$|[^\\p{L}'’.-])`,"giu");
+        // A known full name is matched with all its parts, so a middle name or initial ("Anna Marie Jensen", "Erik B. Larsen")
+        // still finds the person's own card; a first name alone keeps matching the next capitalised word.
+        const escapeName=value=>value.replace(/[.*+?^${}()|[\]\\]/g,"\\$&"),rest=fullName?clean(person.name).split(/\s+/).slice(1).map(escapeName).join('\\s+'):"[\\p{Lu}][\\p{L}'’.-]{2,}";
+        const pattern=new RegExp(`\\b${escapeName(first)}\\s+(${rest})(?=$|[^\\p{L}'’.-])`,"giu");
         for(const match of text.matchAll(pattern)){
-          const last=match[1],name=`${first} ${last}`;
+          const last=match[1].replace(/\s+/g,' '),name=`${first} ${last}`;
           if(generic.has(last.toLowerCase())||fullName&&name.toLowerCase()!==clean(person.name).toLowerCase())continue;
           const nearby=text.slice(Math.max(0,match.index-90),Math.min(text.length,match.index+name.length+130));
           const roleWords=clean(person.title).toLowerCase().split(/[^\p{L}]+/u).filter(word=>word.length>=3);
