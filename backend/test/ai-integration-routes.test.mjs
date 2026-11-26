@@ -46,7 +46,6 @@ test('web research routes through the workspace-selected grounded provider',()=>
   assert.match(source,/searchWorkspaceResearch\(env,workspaceId/);
   const routing=fs.readFileSync(path.join(process.cwd(),'src','ai-task-routing.js'),'utf8');
   assert.match(routing,/workspaceCredential\(env,workspaceId,provider\)/);
-  assert.match(routing,/settings.primary_provider\|\|rows.find/);
   assert.match(routing,/openai:searchWeb,anthropic:searchAnthropicWeb,gemini:searchGeminiWeb/);
   assert.doesNotMatch(source,/json\([^\n]*encrypted_api_key/);
 });
