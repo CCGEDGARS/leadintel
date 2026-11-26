@@ -139,7 +139,12 @@ export async function handleCompanyListsRoute(request,env,cors={},ctx){
      if(!Number.isInteger(body.additional)||body.additional<1||s.results.length+body.additional>200)throw fail('Choose an additional count within the 200-company list limit.',400);
      if(criteria.taskId)throw fail('Use the parent task to manage this research.');
      criteria.count=s.results.length+body.additional;
-     criteria.runToTarget=true;
+     if(body.budget!=null){
+      if(!Number.isInteger(body.budget)||body.budget<10||body.budget>5000)throw fail('Choose 10 to 5,000 research operations.',400);
+      criteria.budget=body.budget;
+      s.allowance=s.operations+body.budget;
+      delete criteria.runToTarget;
+     }else criteria.runToTarget=true;
      s.saveCursor=0;
      s.phase='researching';
      s.noProgressRounds=0;
