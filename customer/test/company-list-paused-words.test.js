@@ -42,10 +42,10 @@ test('the recommended allowance is forty operations a company, never under a hun
  assert.equal(M.recommendedBudget(200),5000);
 });
 
-test('the list form opens with the allowance recommended for ten',async t=>{
+test('the list form opens without an operation limit',async t=>{
  const h=await panel(t,null);await h.click('new');
  assert.equal(h.find('[name="preset"]').value,'10');
- assert.equal(h.find('[name="budget"]').value,'400');
+ assert.equal(h.find('[name="budget"]').value,'');
 });
 
 test('a list that used its allowance says what it found, in plain words, and offers one button',async t=>{
@@ -57,7 +57,7 @@ test('a list that used its allowance says what it found, in plain words, and off
  assert.equal(message.classList.contains('cl-blocker'),false,'a pause is not an error');
  assert.doesNotMatch(h.find('#company-list-content').textContent,/allowance reached|Resume grants/i);
  assert.equal(h.find('[data-cl="resume"]').textContent,'Keep searching');
- assert.equal(h.find('#company-list-content .cl-continue-note').textContent,'Continues for up to 200 more research steps.');
+ assert.equal(h.find('#company-list-content .cl-continue-note').textContent,'Continues toward your target with the saved criteria.');
  await h.click('resume');
  assert.equal(sent.action,'resume');
 });

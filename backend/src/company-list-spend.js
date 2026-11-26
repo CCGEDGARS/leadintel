@@ -25,11 +25,12 @@ export function spendLedger(state) {
   }
   return state.reasoningSpend;
 }
-export function reserveReasoning(state, model, text, maxOutput) {
+export function reserveReasoning(state, model, text, maxOutput, {enforceLimit=true}={}) {
+  if (!enforceLimit && !rates.has(model)) return () => {};
   const ledger = spendLedger(state);
   // One token per UTF-8 byte plus message framing is a conservative input reservation.
   const reserved = price(model, new TextEncoder().encode(text).length + 256, maxOutput);
-  if (ledger.used + reserved > ledger.limit) throw pause('Research paused before the next AI call would exceed the estimated reasoning budget.');
+  if (enforceLimit && ledger.used + reserved > ledger.limit) throw pause('Research paused before the next AI call would exceed the estimated reasoning budget.');
   ledger.used += reserved;
   return usage => {
     if (usage?.input_tokens > 0 && usage?.output_tokens > 0) {

@@ -11,7 +11,7 @@ const sql=(env,q,...v)=>env.DB.prepare(q).bind(...v),parse=(v,f={})=>{try{return
 const active=s=>['queued','running'].includes(s),fail=(m,status=409)=>Object.assign(Error(m),{status});
 const clean=(v,n=500)=>String(v??'').replace(/\s+/g,' ').trim().slice(0,n);
 export async function companyListOptions(env,workspaceId){const options=M.options((await getCustomerState(env,workspaceId)).payload?.main||{});return {...options,contextFingerprint:await sha256(JSON.stringify(options))};}
-function publicList(row,s){if(!row)return null;const criteria=parse(row.input_json);return {id:row.id,name:criteria.name,criteria,status:row.status,saved:Boolean(row.saved),revision:row.revision,results:criteria.kind==='search_snapshot'?M.inScoreOrder(s.results||[]):M.ranked(s.results||[]),progress:{reasoningSpend:s.reasoningSpend||null,run:s.run||null,count:s.resultCount??s.results?.length??0,target:criteria.count,operations:s.operations||0,allowance:s.allowance||criteria.budget,checked:s.checked||0,reason:row.last_error==='storage_full'?'Workspace storage is full. Completed research is retained; free storage before resuming.':s.reason||'',phase:s.phase||'planning',nextAttemptAt:s.nextAttemptAt||0,pending:s.pendingCount??s.pending?.length??0,operationTotals:s.operationTotals||null},failureCode:s.failureCode||row.last_error||'',failureCause:s.failureCause&&s.failureCause.for===s.failureCode?{provider:s.failureCause.provider,kind:s.failureCause.kind,...(s.failureCause.status&&{status:s.failureCause.status}),...(s.failureCause.code&&{code:s.failureCause.code})}:null,receipts:s.receipts||[],incompleteChecks:(s.reviews||[]).filter(r=>r.status!=='resolved'),createdAt:row.created_at,updatedAt:row.updated_at};}
+function publicList(row,s){if(!row)return null;const criteria=parse(row.input_json);return {id:row.id,name:criteria.name,criteria,status:row.status,saved:Boolean(row.saved),revision:row.revision,results:criteria.kind==='search_snapshot'?M.inScoreOrder(s.results||[]):M.ranked(s.results||[]),progress:{reasoningSpend:s.reasoningSpend||null,runToTarget:!criteria.taskId&&Boolean(criteria.runToTarget),mainResearcher:s.mainResearcher||null,run:s.run||null,count:s.resultCount??s.results?.length??0,target:criteria.count,operations:s.operations||0,allowance:s.allowance||criteria.budget,checked:s.checked||0,reason:row.last_error==='storage_full'?'Workspace storage is full. Completed research is retained; free storage before resuming.':s.reason||'',phase:s.phase||'planning',nextAttemptAt:s.nextAttemptAt||0,pending:s.pendingCount??s.pending?.length??0,operationTotals:s.operationTotals||null},failureCode:s.failureCode||row.last_error||'',failureCause:s.failureCause&&s.failureCause.for===s.failureCode?{provider:s.failureCause.provider,kind:s.failureCause.kind,...(s.failureCause.status&&{status:s.failureCause.status}),...(s.failureCause.code&&{code:s.failureCause.code})}:null,receipts:s.receipts||[],incompleteChecks:(s.reviews||[]).filter(r=>r.status!=='resolved'),createdAt:row.created_at,updatedAt:row.updated_at};}
 async function loadEvidence(env,row,entries){
  const refs=entries.filter(r=>r.evidenceId);
  if(!refs.length)return entries;
@@ -65,6 +65,7 @@ export async function startCompanyList(env,workspaceId,user,raw,trusted=null){
  if(!trusted&&options.profileConfigurationPresent&&!Object.hasOwn(raw,'profileIds'))throw fail('Reload Build company list to choose the active targeting profiles and buying signals.');
  const criteria=M.configuration(raw,options);if(raw.minimumScore===80)criteria.minimumScore=80;
  if(trusted?.taskId)criteria.taskId=trusted.taskId;
+ else if(raw.budget==null)criteria.runToTarget=true;
  if(trusted?.id){const retained=await readCompanyList(env,workspaceId,trusted.id);if(retained)return retained;}
  const count=await sql(env,'SELECT COUNT(*) n FROM company_lists WHERE workspace_id=?',workspaceId).first();if(count.n>=50)throw fail('Keep up to 50 company lists. Delete an unused list before creating another.');
  const existing=await sql(env,"SELECT id FROM company_lists WHERE workspace_id=? AND status IN ('queued','running')",workspaceId).first();if(existing)throw fail('A company list is already building. Open it or pause it first.');
@@ -101,7 +102,7 @@ export async function handleCompanyListsRoute(request,env,cors={},ctx){
    if(u.searchParams.has('search_snapshot')){const fingerprint=u.searchParams.get('search_snapshot');if(!/^[a-f0-9]{64}$/.test(fingerprint))throw fail('Invalid saved-list reference.',400);return respond({list:await readCompanyList(env,workspaceId,'search_'+await sha256(workspaceId+'\0'+fingerprint))});}
    if(u.searchParams.has('id'))return respond({list:await readCompanyList(env,workspaceId,u.searchParams.get('id'))});
    const rows=await sql(env,`SELECT id,status,saved,revision,created_at,updated_at,last_error,
-    json_object('name',json_extract(input_json,'$.name'),'kind',json_extract(input_json,'$.kind'),'crmList',json_extract(input_json,'$.crmList'),'taskId',json_extract(input_json,'$.taskId'),'count',json_extract(input_json,'$.count'),'budget',json_extract(input_json,'$.budget')) AS input_json,
+    json_object('name',json_extract(input_json,'$.name'),'kind',json_extract(input_json,'$.kind'),'crmList',json_extract(input_json,'$.crmList'),'taskId',json_extract(input_json,'$.taskId'),'runToTarget',json_extract(input_json,'$.runToTarget'),'count',json_extract(input_json,'$.count'),'budget',json_extract(input_json,'$.budget')) AS input_json,
     json_object('reasoningSpend',json_extract(state_json,'$.reasoningSpend'),'run',json_extract(state_json,'$.run'),'resultCount',json_array_length(state_json,'$.results'),'pendingCount',json_array_length(state_json,'$.pending'),'operations',json_extract(state_json,'$.operations'),'allowance',json_extract(state_json,'$.allowance'),'checked',json_extract(state_json,'$.checked'),'reason',json_extract(state_json,'$.reason'),'phase',json_extract(state_json,'$.phase'),'nextAttemptAt',json_extract(state_json,'$.nextAttemptAt'),'operationTotals',json_extract(state_json,'$.operationTotals')) AS state_json
     FROM company_lists WHERE workspace_id=? ORDER BY created_at DESC,rowid DESC LIMIT 50`,workspaceId).all();return respond({lists:(rows.results||[]).map(row=>{const l=publicList(row,parse(row.state_json));return {id:l.id,name:l.name,kind:l.criteria.kind,taskOwned:Boolean(l.criteria.taskId),crmList:Boolean(l.criteria.crmList||l.saved),status:l.status,saved:l.saved,progress:l.progress,updatedAt:l.updatedAt};})});
   }
@@ -136,10 +137,9 @@ export async function handleCompanyListsRoute(request,env,cors={},ctx){
     if(extending){
      if(active(row.status)||!s.results.length)throw fail('Pause research and find at least one company before adjusting this list.');
      if(!Number.isInteger(body.additional)||body.additional<1||s.results.length+body.additional>200)throw fail('Choose an additional count within the 200-company list limit.',400);
-     if(!Number.isInteger(body.budget)||body.budget<10||body.budget>5000)throw fail('Choose 10 to 5,000 research operations.',400);
+     if(criteria.taskId)throw fail('Use the parent task to manage this research.');
      criteria.count=s.results.length+body.additional;
-     criteria.budget=body.budget;
-     s.allowance=s.operations+body.budget;
+     criteria.runToTarget=true;
      s.saveCursor=0;
      s.phase='researching';
      s.noProgressRounds=0;
@@ -170,16 +170,15 @@ export async function handleCompanyListsRoute(request,env,cors={},ctx){
      }
      s.sizeEvidenceRecoveryApplied=true;
     }
-    if(body.action==='resume'&&s.failureCode==='research_spend'){
+    if(criteria.taskId&&body.action==='resume'&&s.failureCode==='research_spend'){
      if(body.additionalReasoningUsd!==1)throw fail('Approve the additional $1 reasoning allowance before resuming.',400);
      const ledger=spendLedger(s);ledger.limit=Math.max(ledger.limit,ledger.used)+spendIncrement;
     }
-    if(body.action==='resume'&&s.failureCode==='search_budget'){
+    if(criteria.taskId&&body.action==='resume'&&s.failureCode==='search_budget'){
      if(body.additionalGroundedQueries!==3)throw fail('Approve three additional AI web searches before resuming.',400);
      s.groundedLimit=(s.groundedLimit??3)+3;
     }
-    if(extending)s.groundedLimit=(s.groundedLimit??3)+3;
-    if(extending){const ledger=spendLedger(s);ledger.limit=Math.max(ledger.limit,ledger.used)+spendIncrement;}
+    if(!criteria.taskId&&body.action==='resume'&&['research_spend','research_yield','search_budget','allowance'].includes(s.failureCode))criteria.runToTarget=true;
     if(s.failureCode==='research_yield'||extending)s.yieldBaseline={checked:s.checked||0,matches:s.results.length};
     if(body.action==='resume'||extending){s.recoveryProbe=Boolean(s.failureCause?.status>=500||s.failureCode==='registry_offline');s.run={startedAt:Date.now(),baseline:s.results.length,milestones:{}};const other=await sql(env,"SELECT id FROM company_lists WHERE workspace_id=? AND status IN ('queued','running') AND id<>?",workspaceId,row.id).first();if(other)throw fail('Pause the other running list first.');if(s.operations>=s.allowance)s.allowance=s.operations+criteria.budget;s.nextAttemptAt=0;s.retryKey='';s.failures=0;s.failureCode='';s.modelStreak=0;s.searchStreak=0;s.reason='Continuing saved research';if(s.phase==='exhausted'){s.phase='planning';s.round=0;s.noProgressRounds=0;s.roundStart=null;}}
     else s.reason='Paused by you; completed research is retained';
