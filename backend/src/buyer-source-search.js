@@ -9,12 +9,12 @@ const LINKEDIN_PROFILE_SEARCH=/\bsite:\s*(?:[a-z]{2,3}\.)?linkedin\.com\b/i;
 // fallbacks as before, and a workspace without that key sends exactly what it sent before, with nothing reported about
 // Perplexity. A Perplexity row carries the page's query-relevant text as a search excerpt. It is never a source read,
 // so first-party contact evidence still requires reading the page itself.
+const rowsWithSource=(rows,provider)=>{const values=rows.map(row=>({...row,buyerSource:provider,searchProvider:provider}));Object.defineProperty(values,'searchProviders',{value:[provider]});return values;};
+// The short description keeps the length of an ordinary search snippet (readers check it for former/supplier
+// wording near the company); the whole extract is the row's page text.
+const perplexityRows=results=>results.filter(row=>/^https?:\/\//i.test(String(row?.url||''))).map(row=>{const text=String(row.snippet||'');return {url:row.url,title:String(row.title||''),description:text.slice(0,300),markdown:text,...(row.date?{publishedDate:row.date}:{}),...(row.last_updated?{lastUpdated:row.last_updated}:{}),evidenceKind:'search_excerpt'};});
 export function createBuyerSourceSearch(env,workspaceId,{guard=async()=>{},observe=()=>{},credential=requireWorkspaceServiceCredential,perplexityCredential=requireWorkspaceServiceCredential,grounded=searchWorkspaceWeb,fetchImpl=fetch,signal,scrapeResults=true,primaryTimeoutMs=25000,purpose='buyer_research',meter,beforeGrounded,preferGrounded=false}={}){
  let unavailable=false,connection,perplexityUnavailable=false,perplexity;
- const rowsWithSource=(rows,provider)=>{const values=rows.map(row=>({...row,buyerSource:provider,searchProvider:provider}));Object.defineProperty(values,'searchProviders',{value:[provider]});return values;};
- // The short description keeps the length of an ordinary search snippet (readers check it for former/supplier
- // wording near the company); the whole extract is the row's page text.
- const perplexityRows=results=>results.filter(row=>/^https?:\/\//i.test(String(row?.url||''))).map(row=>{const text=String(row.snippet||'');return {url:row.url,title:String(row.title||''),description:text.slice(0,300),markdown:text,...(row.date?{publishedDate:row.date}:{}),...(row.last_updated?{lastUpdated:row.last_updated}:{}),evidenceKind:'search_excerpt'};});
  return async function search(query,{limit=8,diversify=false,signal:requestSignal}={}){
   const querySignal=requestSignal&&signal?AbortSignal.any([signal,requestSignal]):requestSignal||signal,check=async()=>{if(querySignal?.aborted)throw querySignal.reason||Error('Public source search canceled');await guard();};
   await check();let empty=false,primaryRows=[],primaryProvider='firecrawl',perplexityEmpty=false;
@@ -101,4 +101,20 @@ export function createBuyerSourceSearch(env,workspaceId,{guard=async()=>{},obser
   if(groundedEmpty)return groundedEmpty;
   throw Error('Public source search unavailable; resume unfinished checks after restoring a search provider.');
  };
+}
+// B3, 26 Nov 2026 (owner gate: LeadIntel itself must find the current people that a manual Perplexity search found):
+// one request carrying the company's public people queries, answered with the workspace's own Perplexity key only.
+// There is no fallback provider: this pass runs beside the shared search, it does not replace it. Rows are search
+// excerpts, never source reads, so contact evidence still requires reading the page itself.
+export async function searchPublicPeople(env,workspaceId,queries,{credential,observe=()=>{},signal,fetchImpl=fetch,timeoutMs=15000}={}){
+ const timeout=AbortSignal.timeout(timeoutMs),failed=reason=>observe({provider:'perplexity',operation:'search',status:'failed',reason:String(reason).slice(0,180)});
+ let response;
+ try{response=await requestPerplexitySearch(env,workspaceId,{credential,query:queries,maxResults:PERPLEXITY_MAX_RESULTS,signal:signal?AbortSignal.any([signal,timeout]):timeout,fetchImpl,purpose:'buyer_research'});}
+ catch(error){if(signal?.aborted)throw signal.reason||error;failed(error.message||'Perplexity people search unavailable');throw error;}
+ if(!response.ok){observe({provider:'perplexity',operation:'search',status:'failed',reason:`Perplexity people search HTTP ${response.status}`,httpStatus:response.status});throw Error(`Perplexity people search HTTP ${response.status}`);}
+ const payload=await response.json().catch(()=>null);
+ if(!Array.isArray(payload?.results)){failed('Perplexity people search returned an invalid result list');throw Error('Perplexity people search returned an invalid result list');}
+ const rows=rowsWithSource(perplexityRows(payload.results),'perplexity');
+ observe({provider:'perplexity',operation:'search',status:'succeeded',results:rows.length});
+ return rows;
 }

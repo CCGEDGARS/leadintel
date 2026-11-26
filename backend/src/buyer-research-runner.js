@@ -6,9 +6,11 @@ import {loadBuyerContactContext} from './buyer-contact-context.js';
 import {sha256} from './security.js';
 import {researchWorkspaceDossier} from './company-dossier.js';
 import {findPublicBuyerContactPages,searchManagementIndex} from './website-management.js';
-import {createBuyerSourceSearch} from './buyer-source-search.js';
+import {createBuyerSourceSearch,searchPublicPeople} from './buyer-source-search.js';
+import {unheldProfilePeople,publicPeopleQueries} from './public-profile-people.js';
+import {PERPLEXITY_MAX_RESULTS} from './perplexity-request.js';
 import {buyerCreditWindowKey,buyerCreditLimitFor,createBuyerCreditMeter,readBuyerCredits} from './buyer-research-credits.js';
-import {fetchDirectPublicPage,readPublicBuyerPage,searchWorkspaceApolloPeople} from './service-integrations.js';
+import {fetchDirectPublicPage,readPublicBuyerPage,searchWorkspaceApolloPeople,requireWorkspaceServiceCredential} from './service-integrations.js';
 import {discoverApolloBuyerIdentities} from './buyer-apollo-discovery.js';
 import {reviewWorkspaceBuyerEvidence,searchWorkspaceBuyerContact} from './ai-routes.js';
 import {lookupCompanyManagement,registerManagementPage} from './company-registry.js';
@@ -23,6 +25,7 @@ const standardPhaseOrder={official:'dossier',dossier:'identities',identities:'co
 const errorReason=(error,phase)=>`${phase}: ${error?.name==='TimeoutError'?'provider deadline reached':/\((?:4|5)\d{2}\)/.test(error?.message||'')?'provider HTTP '+error.message.match(/\((\d{3})\)/)[1]:error?.code==='TIME_BUDGET'||error?.name==='AbortError'?'time budget reached':error?.status===401||error?.status===403?'authorization changed':/limit|budget/i.test(error?.message||'')?'bounded work limit reached':'provider or source unavailable'}`;
 const jsonSize=value=>new TextEncoder().encode(JSON.stringify(value)).byteLength;
 const resultRows=result=>Array.isArray(result)?result:result?.results||[];
+const searchRows=(rows,limit=8)=>rows.slice(0,limit).map(r=>({url:C.url(r.url),title:String(r.title||'').slice(0,400),description:String(r.description||r.text||'').slice(0,1800),markdown:String(r.markdown||r.content||'').slice(0,6000),evidenceKind:r.evidenceKind||'search_excerpt',buyerSource:r.buyerSource,searchProvider:r.searchProvider,...(r.sourceRead===true?{sourceRead:true,extractedAt:r.extractedAt||new Date().toISOString()}:{}),...(r.metadata?{metadata:{sourceURL:r.metadata.sourceURL,url:r.metadata.url,statusCode:r.metadata.statusCode}}:{})})).filter(r=>r.url);
 function restoreSearch(value){const rows=value.rows||[];Object.defineProperty(rows,'searchProviders',{value:value.providers||[]});if(value.researchTrace)Object.defineProperty(rows,'researchTrace',{value:value.researchTrace});return rows;}
 export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowMs=50000,services={},clock=Date.now,jobId}={}){
  const results=[];
@@ -122,9 +125,23 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
    let rows;try{rows=await nativeSearch(query,{signal:controller.signal,diversify:Boolean(input.recheck&&Object.values(input.recheck.plans).some(plan=>plan.queries.includes(query))||input.recheck&&candidate.people.some(person=>D.buyerGmailResearchQueries(candidate,person).includes(query)))});}catch(error){if(services.search)for(const entry of error.researchTrace||[])observe(entry);throw error;}
    if(!Array.isArray(rows))throw Error('Search response is invalid');
    if(services.search){const trace=rows.researchTrace||[];if(trace.length)trace.forEach(observe);else for(const provider of new Set([...(rows.searchProviders||[]),...rows.map(r=>r.searchProvider||r.buyerSource)].filter(Boolean)))observe({provider,operation:'search',status:'succeeded',results:rows.length});}
-   const normalized=rows.slice(0,8).map(r=>({url:C.url(r.url),title:String(r.title||'').slice(0,400),description:String(r.description||r.text||'').slice(0,1800),markdown:String(r.markdown||r.content||'').slice(0,6000),evidenceKind:r.evidenceKind||'search_excerpt',buyerSource:r.buyerSource,searchProvider:r.searchProvider,...(r.sourceRead===true?{sourceRead:true,extractedAt:r.extractedAt||new Date().toISOString()}:{}),...(r.metadata?{metadata:{sourceURL:r.metadata.sourceURL,url:r.metadata.url,statusCode:r.metadata.statusCode}}:{})})).filter(r=>r.url);
+   const normalized=searchRows(rows);
    return {rows:normalized,providers:rows.searchProviders||[],researchTrace:rows.researchTrace||[]};
   }));
+  // B3, 26 Nov 2026: one public people request per job, answered with the workspace's own Perplexity key (the request
+  // shape that found a company's current people by hand). Only metered Expand research reaches the phase that calls
+  // it; a workspace without the key sends nothing. The answer is a reusable task receipt like any search.
+  const searchPeople=async()=>{
+   const queries=publicPeopleQueries(candidate,input.roles||[],{D});if(!queries.length)return;
+   let lookup=services.peopleSearch;
+   if(!lookup){
+    let credential;try{credential=await requireWorkspaceServiceCredential(env,row.workspace_id,'perplexity');}catch{return;}
+    if(!credential?.apiKey)return;
+    lookup=(values,signal)=>searchPublicPeople(env,row.workspace_id,values,{credential,observe,signal});
+   }
+   try{await task('search','Public people · '+queries.join(' | '),async()=>{const found=await lookup(queries,controller.signal);return {rows:searchRows(Array.isArray(found)?found:[],PERPLEXITY_MAX_RESULTS),providers:['perplexity']};});}
+   catch(error){if(error.code==='CANCELED'||controller.signal.aborted)throw error;}
+  };
   const read=async url=>task('read',C.url(url),async()=>{
    let raw;try{raw=await (services.read||(siteOnly?((url,signal)=>fetchDirectPublicPage(url,{signal:AbortSignal.any([signal,AbortSignal.timeout(8000)])})):null)||((url,signal)=>readPublicBuyerPage(env,row.workspace_id,url,{signal,totalTimeoutMs:18000,directTimeoutMs:3000,firecrawlTimeoutMs:12000,meter:creditMeter})))(url,controller.signal);}catch(error){for(const entry of error.researchTrace||[])observe(entry);throw error;}
    const page=raw?.data||raw||{};
@@ -234,7 +251,10 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
     }else if(input.scope==='selected_buyers'){phase=nextPhase[phase];}else{
     const plan=D.buyerResearchPlan(candidate,input.profile);
     for(const query of plan.queries.slice(0,6)){await guard();try{await search(query);}catch(error){if(error.code==='CANCELED'||controller.signal.aborted)throw error;}}
-    const trace=D.tracePublicBuyers(await allRows(),candidate.company,{...input.profile,companyDomain:candidate.domain});candidate.people=D.retainBuyerIdentities(D.mergeBuyerPool(candidate.people||[],trace.people,input.profile),input.profile,candidate).slice(0,10);acquirePeople();phase=nextPhase[phase];}
+    await searchPeople();
+    const identityRows=await allRows(),trace=D.tracePublicBuyers(identityRows,candidate.company,{...input.profile,companyDomain:candidate.domain});
+    const profiled=unheldProfilePeople(identityRows,candidate,{D});
+    candidate.people=D.retainBuyerIdentities(D.mergeBuyerPool(candidate.people||[],[...trace.people,...profiled],input.profile),input.profile,candidate).slice(0,10);acquirePeople();phase=nextPhase[phase];}
    }else if(phase==='contacts'){
     if(candidate.people?.length){
      scheduledContactWork=true;report=await D.runMandatoryBuyerResearch(candidate,{search,readPage:read,rows,guard,signal:controller.signal,contactOptions,recheckPlans:input.recheck?.plans,maxDurationMs:Math.min(remaining,input.recheck?Math.max(1,input.recheck.maxActiveMs-phaseMs):180000),observeTools:false,buyerAgentContext:D.buyerAgentContext(candidate,input.profile),accountability:report,crossCheck:async person=>task('independent',JSON.stringify([person.id,person.name,person.title,...(services.independent?[]:['grounded-low-v1'])]),async()=>{let result;try{result=await (services.independent?services.independent(person,controller.signal):searchWorkspaceBuyerContact(env,row.workspace_id,{company:candidate.company,domain:row.domain,person,signal:controller.signal}));}catch(error){observe({provider:'gemini',operation:'search',status:'failed',reason:'Independent research unavailable'});throw error;}if(result.status==='not_configured'||result.status==='unavailable'&&/not configured/i.test(result.reason||'')){observe({provider:'gemini',operation:'search',status:'skipped',reason:'Independent provider not configured'});return {...result,status:'not_configured'};}if(result.status!=='complete'||result.web_search===false){observe({provider:'gemini',operation:'search',status:'failed',reason:'Independent research unavailable'});throw Error('Independent research unavailable');}observe({provider:result.provider||'gemini',operation:'search',status:'succeeded',results:result.results?.length||0});return result;})});

@@ -11,6 +11,9 @@ import {creditFailure,recordProviderCredit} from './provider-credit-health.js';
 export const PERPLEXITY_RECEIPT_EVENT='service.perplexity_search';
 export const PERPLEXITY_SEARCH_PRICE_USD_MICROS=5000;
 export const PERPLEXITY_MAX_RESULTS=20;
+// One request may carry up to five queries; it is billed once and spends one rate-limit unit per query, and
+// `max_results` covers all of them together (API reference and rate-limit page, read 26 Nov 2026).
+export const PERPLEXITY_MAX_QUERIES=5;
 const RETRY_WAIT_MAX_MS=2000;
 async function receipt(env,workspaceId,value){
   try{
@@ -29,8 +32,10 @@ function retryWaitMs(response){
 }
 const pause=(ms,signal)=>new Promise((resolve,reject)=>{const timer=setTimeout(resolve,ms);signal.addEventListener('abort',()=>{clearTimeout(timer);reject(signal.reason);},{once:true});});
 export async function requestPerplexitySearch(env,workspaceId,{credential,query,maxResults=10,signal,fetchImpl=fetch,purpose='interactive_research',sleep=pause}={}){
-  if(!workspaceId||!credential?.apiKey||!String(query||'').trim())throw Error('A workspace Perplexity connection is required');
-  const payload={query:String(query),max_results:Math.max(1,Math.min(PERPLEXITY_MAX_RESULTS,Math.floor(Number(maxResults)||10)))};
+  // A single query is sent as a string, as before; a list is sent as up to five non-blank queries.
+  const queries=(Array.isArray(query)?query:[query]).map(value=>String(value??'').trim()).filter(Boolean).slice(0,PERPLEXITY_MAX_QUERIES);
+  if(!workspaceId||!credential?.apiKey||!queries.length)throw Error('A workspace Perplexity connection is required');
+  const payload={query:Array.isArray(query)?queries:String(query),max_results:Math.max(1,Math.min(PERPLEXITY_MAX_RESULTS,Math.floor(Number(maxResults)||10)))};
   const requestSignal=signal||AbortSignal.timeout(20000);requestSignal.throwIfAborted();
   const fingerprint=await sha256(JSON.stringify([workspaceId,'search',payload.max_results,payload.query]));
   for(let attempt=1;;attempt++){
