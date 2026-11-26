@@ -244,6 +244,9 @@ export async function startBuyerJob(env,workspaceId,user,body,trusted=null){
  if(initialPhase!=='official')await stmt(env,"UPDATE buyer_research_jobs SET phase=? WHERE id=?",initialPhase,id).run();
  return readBuyerJob(env,workspaceId,{id});
 }
+export function standaloneBuyerDiscovery(input){
+ return !input.taskId&&!input.recheck&&(input.scope||'all_buyers')==='all_buyers';
+}
 export async function commandBuyerJob(env,workspaceId,user,body){
  const row=await readBuyerJob(env,workspaceId,{id:body.jobId,domain:body.candidate?.domain||body.domain});
  if(!row)throw Object.assign(Error('Buyer research job not found'),{status:404});
@@ -254,15 +257,25 @@ export async function commandBuyerJob(env,workspaceId,user,body){
   if(activeBuyerJob(row.status))return row;
   const input=parse(row.input_json),context=await workspaceBuyerContext(env,workspaceId,input.taskId);
   if(input.workspaceContext!==context.hash)throw Object.assign(Error('The company profile changed. Start research with the updated context.'),{status:409});
+  const freeResume=standaloneBuyerDiscovery(input)&&(
+   body.resumeFreeCompany===true||!input.meteredPublicResearchApproved&&!input.paidResearch&&input.peopleFirst==null
+  );
+  if(freeResume){
+   input.freeDiscovery=true;
+   input.peopleFirst=true;
+   input.paidResearch=null;
+   input.meteredPublicResearchApproved=false;
+  }
   if(input.freeDiscovery&&parse(row.diagnostic_json,[]).at(-1)?.code==='free_discovery_finished'){
    if(body.allowMeteredPublicResearch!==true)return row;
    input.freeDiscovery=false;
+   input.meteredPublicResearchApproved=true;
   }
   const candidate=parse(row.result_json,input.candidate),{contactOptions}=await loadBuyerContactContext(env,{workspaceId},candidate),diagnostics=parse(row.diagnostic_json,[]),paused=currentWindowPause(row,input,diagnostics),phase=input.freeDiscovery?(row.phase==='identities'?'identities':'official'):paused&&row.phase!=='done'?row.phase:resumePhase(candidate,input,contactOptions);
   if(phase==='done')return row;
   const startedAt=new Date().toISOString();
   if(paused)diagnostics.push({phase,code:'resumed',reason:'Resumed unfinished research',at:startedAt});
-  const updated=await stmt(env,`UPDATE buyer_research_jobs SET phase=?,diagnostic_json=?,input_json=json_set(input_json,'$.executionWindowStartedAt',?,'$.freeDiscovery',json(?)),last_error='',status='queued',requested_by=?,session_hash=?,lease_token=NULL,lease_until=0,next_at=0,phase_ms=0,phase_runs=0,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND revision=? AND ${callerSql}`,phase,JSON.stringify(diagnostics.slice(-20)),startedAt,JSON.stringify(Boolean(input.freeDiscovery)),user.id,user.sessionTokenHash,row.id,row.revision,...callerArgs(workspaceId,user)).run();
+  const updated=await stmt(env,`UPDATE buyer_research_jobs SET phase=?,diagnostic_json=?,input_json=?,last_error='',status='queued',requested_by=?,session_hash=?,lease_token=NULL,lease_until=0,next_at=0,phase_ms=0,phase_runs=0,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND revision=? AND ${callerSql}`,phase,JSON.stringify(diagnostics.slice(-20)),JSON.stringify({...input,executionWindowStartedAt:startedAt}),user.id,user.sessionTokenHash,row.id,row.revision,...callerArgs(workspaceId,user)).run();
   if(!updated.meta.changes)throw Object.assign(Error('Buyer research changed; reload its saved progress'),{status:409});
   await stmt(env,`UPDATE buyer_research_tasks SET attempts=0,status='failed' WHERE job_id=? AND status<>'complete' AND EXISTS(SELECT 1 FROM buyer_research_jobs WHERE id=? AND status='queued' AND revision=? AND requested_by=? AND session_hash=?) AND ${callerSql}`,row.id,row.id,row.revision+1,user.id,user.sessionTokenHash,...callerArgs(workspaceId,user)).run();
  }
