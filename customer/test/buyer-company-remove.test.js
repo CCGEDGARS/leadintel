@@ -24,6 +24,13 @@ test('Save to CRM in the removal dialog preserves research and history, then cle
  assert.equal(r.ctx.crmCompanies[0].id,'crm-one');assert.equal(r.storage.get('outreach'),outreach);assert.equal(r.storage.get('delivery'),delivery);assert.equal(r.storage.get('main'),main);assert.equal(r.meta().scriptBuyer.personId,'anna');assert.equal(r.meta().activeBuyerCompanyDomain,'other.com');
  const reloaded=D.normalizeDiscoveryState(JSON.parse(JSON.stringify(r.ctx.discovery)));assert.equal(reloaded.selectedProspects.some(row=>row.domain==='example.com'),false);assert.match(r.toasts.at(-1),/saved to CRM.*removed from.*Buyers/i);
 });
+test('a CRM refresh cannot invalidate an acknowledged save while dismissing the Buyers card',async()=>{
+ const r=runtime({confirmed:'alternative'});realCrmSave(r);
+ r.ctx.refreshCrmState=async()=>{r.candidate.crmId='crm-one';r.candidate.people=r.candidate.people.map(person=>({...person}));};
+ assert.equal(await r.ctx.removeSelectedBuyerCompany('example.com'),true);
+ assert.deepEqual(Array.from(r.ctx.discovery.selectedProspects,row=>row.domain),['other.com']);
+ assert.equal(r.saves.length,1);assert.equal(r.writes.length,0);
+});
 test('failed CRM save or failed list sync keeps the company visible and never deletes CRM history',async()=>{
  for(const failure of ['crm','sync']){const r=runtime({confirmed:'alternative',syncOk:failure!=='sync'});realCrmSave(r);if(failure==='crm')r.b.saveCrmCompany=async()=>({ok:false,error:'CRM offline'});assert.equal(await r.ctx.removeSelectedBuyerCompany('example.com'),false);assert.equal(r.ctx.discovery.selectedProspects[0].domain,'example.com');assert.equal(r.ctx.crmCompanies[0].id,'crm-one');assert.equal(r.meta().activeBuyerCompanyDomain,'example.com');assert.equal(r.writes.length,0);if(failure==='crm')assert.equal(r.events.includes('sync'),false);}
 });
