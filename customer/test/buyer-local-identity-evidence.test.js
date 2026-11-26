@@ -447,3 +447,19 @@ test('people saved with a job title stay in the roster, also beside one saved wi
  for(const title of ['Production manager','Purchasing manager and author of the company blog','Post Production Manager'])assert.deepEqual(rosterTitles([storedPerson(title)]),[title],title);
  assert.deepEqual(rosterTitles([storedPerson('LinkedIn post about production leadership'),storedPerson('Production manager',{id:'public-y',name:'Lars Bak',publicName:'Lars Bak',publicNameUrl:'https://www.nsmf.dk/team'})]),['Production manager']);
 });
+
+test('contact headings beside owner titles never become discovered, retained or reopened buyers',()=>{
+ const company={company:'RS Stålteknik A/S',domain:'rsstaalteknik.dk'};
+ const url='https://rsstaalteknik.dk/kontakt',profile={decisionMakers:'Executive leadership'};
+ for(const heading of ['Kontakt RS Stålteknik','Contact North Works','Kontakta Nordverk']){
+  const row={url,sourceRead:true,markdown:['## Team','### '+heading,'Medejer','### Anna Nielsen','CEO'].join('\n')};
+  const contacts=D.discoverCompanyContacts([row],company);
+  assert.deepEqual(contacts.map(p=>[p.name,p.title]),[['Anna Nielsen','CEO']]);
+  const saved={...contacts[0],name:heading,publicName:heading,title:'Medejer',id:'false-owner'};
+  const people=[saved,...contacts];
+  assert.deepEqual(D.rankedBuyerShortlist(people,profile,company).people.map(p=>p.name),['Anna Nielsen']);
+  assert.deepEqual(D.retainBuyerIdentities(people,profile,company).map(p=>p.name),['Anna Nielsen']);
+  const reopened=D.normalizeDiscoveryState({selectedProspects:[{...company,buyerSearchMode:'user_selected_target',people}]}).selectedProspects[0];
+  assert.deepEqual(reopened.people.map(p=>p.name),['Anna Nielsen']);
+ }
+});
