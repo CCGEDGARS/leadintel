@@ -30,7 +30,7 @@
   const lookalikeDeleted=[...deleted].some(id=>/(?:^|[-_])look[ -]?alike(?:[-_]|$)/i.test(id));
   if(lookalike?lookalike.active!==false&&!deleted.has(lookalike.id):!lookalikeDeleted&&(lens?lens.active!==false:!Array.isArray(market.signals)))signals.push({id:'lookalike',kind:'lookalike',name:'Lookalike',keywords:[],description:'Similarity to your selected reference companies',sourceId:lookalike?.id||'lookalike'});
   for(const s of saved){const id=clean(s.id,120);if(!id||s.active===false||deleted.has(id)||isLookalike(s)||signals.some(x=>x.id===id))continue;signals.push({id,name:clean(s.name||s.label||id,180),keywords:(Array.isArray(s.keywords)?s.keywords:String(s.keywords||'').split(/[,;\n]/)).map(v=>clean(v,120)).filter(Boolean).slice(0,10),description:clean(s.description||s.evidenceToLookFor||s.reason,700)});}
-  const result={references:refs,groups,signals,markets:(main.targetMarkets||[]).map(v=>clean(v,100)).filter(Boolean),profile:{offers:clean(main.profile?.priorityOffers||main.answers?.priority_offers||main.answers?.priorityOffers,1500),idealCustomer:clean(main.profile?.idealCustomer||main.answers?.ideal_customer,1500),exclusions:clean(main.profile?.exclusions||main.answers?.exclusions,1500),website:url(main.website||main.profile?.website)}};
+  const result={references:refs,groups,signals,markets:(main.targetMarkets||[]).map(v=>clean(v,100)).filter(Boolean),profile:{offers:clean(main.profile?.priorityOffers||main.answers?.priority_offers||main.answers?.priorityOffers,1500),idealCustomer:clean(main.profile?.idealCustomer||main.answers?.ideal_customer,12000),buyerRoles:clean(main.profile?.decisionMakers||main.answers?.buyer_roles,2000),exclusions:clean(main.profile?.exclusions||main.answers?.exclusions,1500),website:url(main.website||main.profile?.website)}};
   return {...result,...profileOptions(main,result)};
  }
  function configuration(raw={},available={}){
@@ -99,13 +99,13 @@
    // An explicit empty collection or Off card never becomes an active default.
    const legacy=!configured&&(type==='lookalike'?available.signals.some(isLookalike):type==='core'&&Boolean(available.profile.idealCustomer));
    const p=source||{},active=source?p.active!==false:legacy;
-   let description=clean(p.description,1800)||(type==='core'?available.profile.idealCustomer:type==='lookalike'?'Companies sharing substantive business traits with selected references.':'');
+   let description=clean(p.description,12000)||(type==='core'?available.profile.idealCustomer:type==='lookalike'?'Companies sharing substantive business traits with selected references.':'');
    // The generated Trigger-led card refers to the baseline customer definition.
    // Resolve that reference from Profile without importing an inactive Strategy card.
    if(type==='trigger-led'&&/fit the core profile|atbilst pamata profil/i.test(description)&&available.profile.idealCustomer)description+=' Customer definition: '+available.profile.idealCustomer;
    const ready=type==='lookalike'?available.references.some(r=>r.ready):type==='opportunity-led'?opportunities.length>0:true;
    return {id:clean(p.id,120)||'icp-'+type,type,name:clean(p.name,180)||label,active,ready,
-    description,buyerRoles:clean(p.buyerRoles,1000),value:clean(p.value,500),
+    description,buyerRoles:clean(p.buyerRoles,2000)||available.profile.buyerRoles,value:clean(p.value,500),
     offers:clean(p.offers,1500)||available.profile.offers,exclusions:clean(p.exclusions,1500),rationale:clean(p.rationale,1000),
     status:!active?'Off in Strategy':!ready?(type==='lookalike'?'Analyze reference websites in Profile':'Complete current market research with public evidence'):'Active'};
   });
@@ -136,11 +136,60 @@
   const base=available.profile||{},join=values=>[...new Set(values.filter(Boolean))].join('; ');
   // Optional structured size and industry rules, checked against the business register.
   if(raw.target&&!TargetCriteria)fail('Target criteria could not be loaded. Reload the page and try again.');
-  const target=raw.target?TargetCriteria.normalize(raw.target):null;
-  return {version:3,qualityVersion:PROFILE_VERSION,name:clean(raw.name,120)||'Company list',count,profiles,
+  const sizePreferences=profiles.flatMap(profile=>profileSizePreferences(profile));
+  const target=raw.target||sizePreferences.length?TargetCriteria.normalize({
+   ...raw.target,...(sizePreferences.length?{collectSizeEvidence:true,registryOnly:raw.target?.registryOnly??false}:{})
+  }):null;
+  return {version:3,qualityVersion:PROFILE_VERSION,targetingPreferencesVersion:1,name:clean(raw.name,120)||'Company list',count,profiles,
    profileMode:raw.profileMode==='all'?'all':'any',signalMode,signals,mode:raw.mode==='all'?'all':'any',weights,
    referenceIds,references,opportunities:profiles.some(p=>p.type==='opportunity-led')?(available.opportunities||[]):[],markets,budget,
-   profile:{website:base.website||'',offers:join(profiles.map(p=>p.offers))||base.offers||'',idealCustomer:join(profiles.map(p=>p.description)),exclusions:join([base.exclusions,...profiles.map(p=>p.exclusions)])},...(target?{target}:{})};
+   ...(sizePreferences.length?{sizePreferences}:{}),profile:{website:base.website||'',offers:join(profiles.map(p=>p.offers))||base.offers||'',idealCustomer:join(profiles.map(p=>p.description)),exclusions:join([base.exclusions,...profiles.map(p=>p.exclusions)])},...(target?{target}:{})};
+ }
+ // Compare explicit numerical preferences per profile. Currency is required
+ // for turnover comparisons because the list market does not define the input currency.
+ const sizeMetrics={employees:/\b(?:employees?|staff|headcount|ansatte|medarbejdere|darbinieki)\b/i,revenue:/\b(?:turnover|revenue|omsætning|apgrozījums)\b/i};
+ const sizeAmount='(\\d{1,3}(?:,\\d{3})+|\\d+(?:[.,]\\d+)?)(?:\\s*(billion|million|thousand|mio\\.?|[bmk]\\b))?';
+ const sizeRange=new RegExp(sizeAmount+'\\s*(?:[-–—]|to|and)\\s*'+sizeAmount,'i');
+ const sizeBound=new RegExp('\\b(more than|greater than|fewer than|less than|at least|at most|up to|under|over|minimum|max(?:imum)?|min)\\s*[:=]?\\s*'+sizeAmount,'gi');
+ function sizeNumber(digits,unit){
+  const scale={billion:1e9,b:1e9,million:1e6,m:1e6,mio:1e6,thousand:1e3,k:1e3};
+  const amount=Number(digits.replace(/,(?=\d{3}(?:,|$))/g,'').replace(',','.'))*(scale[unit?.toLowerCase().replace('.','')]||1);
+  return Number.isSafeInteger(amount)?amount:null;
+ }
+ function profileSizePreferences(profile){
+  const clauses=profile.description.split(/(?<=[.!?])\s+|[;\n]|,(?!\d)|(?<=employees|headcount|turnover|revenue)\s+and\s+/i);
+  return Object.entries(sizeMetrics).flatMap(([key,metric])=>{
+   const bounds=[],quotes=[],currencies=new Set();
+   for(const clause of clauses){
+    if(!metric.test(clause)||Object.entries(sizeMetrics).some(([other,pattern])=>other!==key&&pattern.test(clause)))continue;
+    for(const match of clause.matchAll(/\b(?:EUR|DKK|SEK|GBP|NOK|USD)\b|[€£]/gi))currencies.add(({'€':'EUR','£':'GBP'})[match[0]]||match[0].toUpperCase());
+    const text=clause.replace(/\b(?:EUR|DKK|SEK|GBP|NOK|USD)\b|[€£]/gi,'').replace(/\s+/g,' ');
+    const range=text.match(sizeRange),start=bounds.length;
+    if(range){
+     bounds.push(['min',sizeNumber(range[1],range[2]||range[4]),false],['max',sizeNumber(range[3],range[4]||range[2]),false]);
+    }else for(const [,direction,digits,unit] of text.matchAll(sizeBound)){
+     const lower=/^(?:more than|greater than|at least|over|min)/i.test(direction);
+     bounds.push([lower?'min':'max',sizeNumber(digits,unit),/^(?:more than|greater than|fewer than|less than|under|over)$/i.test(direction)]);
+    }
+    if(bounds.length>start)quotes.push(clause.trim());
+   }
+   const min=bounds.filter(([side])=>side==='min'),max=bounds.filter(([side])=>side==='max');
+   if(!bounds.length||bounds.some(([,n])=>n===null)||Math.max(...min.map(b=>b[1]))>Math.min(...max.map(b=>b[1])))return [];
+   return [{profileId:profile.id,key,bounds,quote:quotes.join(' '),currency:key==='revenue'&&currencies.size===1?[...currencies][0]:null}];
+  });
+ }
+ function applySizePreferences(candidate,c){
+  const preferences=(c.sizePreferences||[]).filter(p=>candidate.profileMatches.some(m=>m.profileId===p.profileId));
+  if(!preferences.length)return candidate;
+  const sizePreferences=preferences.map(p=>{
+   const fact=candidate.target?.sizeFacts?.[p.key]||(p.key==='employees'?candidate.headcountEvidence:candidate.revenueEvidence);
+   const value=p.key==='employees'?fact?.count:fact?.amount;
+   const comparable=Number.isSafeInteger(value)&&(p.key==='employees'||p.currency&&fact.currency===p.currency);
+   const within=comparable&&p.bounds.every(([side,n,strict])=>side==='min'?(strict?value>n:value>=n):(strict?value<n:value<=n));
+   return {profileId:p.profileId,key:p.key,quote:p.quote,status:within?'within':comparable?'outside':'unknown',...(p.key==='revenue'&&!p.currency?{currencyMissing:true}:{})};
+  });
+  const matched=new Set(sizePreferences.filter(p=>p.status==='within').map(p=>p.key));
+  return {...candidate,sizePreferences,sizePreferenceMatches:matched.size};
  }
  function sourceProof(pages,e){const page=pages.find(p=>p.url===url(e?.url));return page&&contains(page.text,e.quote)?{url:page.url,quote:clean(e.quote,1000),readAt:page.readAt,date:clean(e.date,40)}:null;}
  function datedProof(pages,e,now){
@@ -258,7 +307,7 @@
   if(c.signalMode==='require'&&!eventsSupported)return null;
   const profileMatches=candidate.profileMatches.filter(m=>profiles.has(m.profileId)&&matchStrength(m.score)&&(m.type!=='trigger-led'||eventsSupported));
   if(!profileMatches.length||c.profileMode==='all'&&profileMatches.length!==c.profiles.length)return null;
-  const result=profileScores({...candidate,profileMatches,signalMatches},c);
+  const result=applySizePreferences(profileScores({...candidate,profileMatches,signalMatches},c),c);
   return {...result,quality:{version:PROFILE_VERSION,status:'reviewed',reason:clean(review.reason,1000),checkedAt:new Date(now).toISOString(),checks:['identity','market','selected_profiles','commercial_fit','exclusions',...(c.signalMode==='off'?[]:['selected_buying_signals'])],sourceCount:new Set([result.identity.url,result.locationEvidence.url,result.commercialFit.url,...result.matches.map(m=>m.url)]).size}};
  }
  // Register facts decide the structured rules. A known mismatch removes the
@@ -280,7 +329,14 @@
    if(missing.length)return {pending:true,reason:'Required evidence missing: '+missing.map(check=>check.detail).join(' · ')};
   }
   const register=facts?.status==='found'?{registry:clean(facts.registry,40),id:clean(facts.id,40),name:clean(facts.name,180),city:clean(facts.city,120),marketingProtected:facts.marketingProtected??null,source:facts.source||null,...(facts.group?{group:facts.group}:{})}:null;
-  return {excluded:false,candidate:{...candidate,target:{checks,register}}};
+  const sizeFacts={};
+  if(c.sizePreferences?.length&&facts?.status==='found'&&!facts.group){
+   if(Number.isSafeInteger(facts.employees?.count))sizeFacts.employees={count:facts.employees.count};
+   const revenue=facts.revenue;
+   const current=new Date(candidate.checkedAt).getUTCFullYear();
+   if(Number.isSafeInteger(revenue?.amount)&&revenue.year>=current-2&&revenue.year<=current)sizeFacts.revenue={amount:revenue.amount,currency:revenue.currency};
+  }
+  return {excluded:false,candidate:{...candidate,target:{checks,register,...(Object.keys(sizeFacts).length?{sizeFacts}:{})}}};
  }
  function criteriaSummary(c){return (c.target?TargetCriteria.describe(c.target)+' · ':'')+criteriaText(c);}
  function criteriaText(c){return c.qualityVersion===PROFILE_VERSION?'Profiles ('+c.profileMode+'): '+c.profiles.map(p=>p.name).join(', ')+' · Buying signals: '+({off:'Profiles only',boost:'Prioritize',require:'Require'})[c.signalMode]+(c.signals.length?' ('+c.mode+'): '+c.signals.map(s=>s.name).join(', '):''):c.signals.map(s=>s.name).join(', ')+' · Match '+c.mode;}
@@ -290,7 +346,8 @@
   const matches=[...byId.values()],total=config.signals.reduce((n,s)=>n+config.weights[s.id],0);
   return {...current,matches,score:Math.round(matches.reduce((n,m)=>n+m.score*config.weights[m.signalId],0)/total)};
  }
- function ranked(rows){const unique=new Map();for(const r of rows)if(!unique.has(r.domain)||unique.get(r.domain).score<=r.score)unique.set(r.domain,r);return [...unique.values()].sort((a,b)=>b.score-a.score||b.matches.length-a.matches.length||a.company.localeCompare(b.company));}
+ const compareRank=(a,b)=>b.score-a.score||(b.sizePreferenceMatches||0)-(a.sizePreferenceMatches||0);
+ function ranked(rows){const unique=new Map();for(const r of rows)if(!unique.has(r.domain)||compareRank(unique.get(r.domain),r)>=0)unique.set(r.domain,r);return [...unique.values()].sort((a,b)=>compareRank(a,b)||b.matches.length-a.matches.length||a.company.localeCompare(b.company));}
  // A saved search is a view of existing research, never a new qualification.
  // Keep its review labels separate from verified signal-list matches.
  function normalizeSearchSnapshot(input={}){
@@ -322,7 +379,10 @@
   const score=row=>hasCompanyScore(row)?row.score:-1;
   return [...results].sort((a,b)=>score(b)-score(a));
  }
- function exportRows(list){return exportOrderedRows({...list,results:inScoreOrder(list.results||[])});}
+ function exportRows(list){
+  const results=list.results||[];
+  return exportOrderedRows({...list,results:list.criteria.sizePreferences?.length?ranked(results):inScoreOrder(results)});
+ }
  function exportOrderedRows(list){
   if(list.criteria.kind==='search_snapshot'){
    const rows=list.results.map((row,index)=>{
@@ -357,5 +417,5 @@
   for(const [name,text] of Object.entries(files)){const n=enc.encode(name),b=enc.encode(text),checksum=crc(b),h=new Uint8Array(30+n.length),d=new DataView(h.buffer);d.setUint32(0,0x04034b50,true);d.setUint16(4,20,true);d.setUint32(14,checksum,true);d.setUint32(18,b.length,true);d.setUint32(22,b.length,true);d.setUint16(26,n.length,true);h.set(n,30);chunks.push(h,b);const c=new Uint8Array(46+n.length),v=new DataView(c.buffer);v.setUint32(0,0x02014b50,true);v.setUint16(4,20,true);v.setUint16(6,20,true);v.setUint32(16,checksum,true);v.setUint32(20,b.length,true);v.setUint32(24,b.length,true);v.setUint16(28,n.length,true);v.setUint32(42,offset,true);c.set(n,46);central.push(c);offset+=h.length+b.length;}
   const size=central.reduce((n,c)=>n+c.length,0),end=new Uint8Array(22),v=new DataView(end.buffer);v.setUint32(0,0x06054b50,true);v.setUint16(8,central.length,true);v.setUint16(10,central.length,true);v.setUint32(12,size,true);v.setUint32(16,offset,true);chunks.push(...central,end);const result=new Uint8Array(offset+size+22);let i=0;for(const c of chunks){result.set(c,i);i+=c.length;}return result;
  }
- return {QUALITY_VERSION,PROFILE_VERSION,recommendedBudget,options,configuration,assess,reviewResult,targetOutcome,criteriaSummary,mergeResult,ranked,inScoreOrder,hasCompanyScore,searchSnapshot,normalizeSearchSnapshot,exportRows,csv,xlsx,safeCell,url,domain};
+ return {QUALITY_VERSION,PROFILE_VERSION,recommendedBudget,options,configuration,assess,reviewResult,targetOutcome,criteriaSummary,mergeResult,ranked,compareRank,inScoreOrder,hasCompanyScore,searchSnapshot,normalizeSearchSnapshot,exportRows,csv,xlsx,safeCell,url,domain};
 });

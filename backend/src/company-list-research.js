@@ -55,6 +55,9 @@ const profilePlanning='Return {queries:[strings]}. Plan at most eight distinct s
 // company's activity, which can confirm the industry when the register code says otherwise.
 const industryStatement=' Also return industry:{division,url,quote}: the two-digit NACE division of the company\'s main activity and an exact quote from a supplied page on the company\'s own website stating that activity. Omit industry when no supplied page states the activity; never infer it from the company name.';
 const registerInstructions=' Employee count and annual turnover are descriptive evidence only. Ignore all size and revenue preferences, limits and exclusions in profile or reference prose when planning, deciding eligibility, identifying gaps or scoring fit. Business registration and industry codes are checked separately.';
+const targetingInstructions=criteria=>criteria.targetingPreferencesVersion
+ ? ' Consider the full selected targeting profile: priority offers, ideal customers, buyer roles as commercial context, and exclusions. Numerical targets in the profile are preferences. Use them as context for broad discovery and never require a figure, exclude a company, lower its underlying fit strength, or request follow-up solely because a figure is missing or outside a preference. Avoid literal size and turnover figures in search queries. The application compares verified headcount and turnover separately after eligibility review. Business registration and industry rules are checked separately.'
+ : registerInstructions;
 const headcountReview=' Set headcountConfirmed:true only if the quoted employee count is current and explicitly refers to this legal entity. An unsupported figure has no effect on the decision.';
 const revenueInstructions=' If available, return headcount:{url,quote} for a current exact employee count with the company name on its own website. If available, return annualRevenue:{url,quote} with an exact statement of this legal entity’s actual full-year net revenue, company name, fiscal year, amount and currency from its own website. Omit projections, quarterly figures, group figures and other entities. If unavailable, omit the field and continue.';
 const financialReview=' When the candidate carries revenueEvidence, set annualRevenueConfirmed:true only if the source establishes that exact annual turnover for this legal entity, period and original currency; check for forecasts, other entities and newer contradictory figures. If unsupported, omit the figure and assess the company on its other evidence.';
@@ -64,9 +67,9 @@ const modelCandidate=candidate=>{if(!candidate?.target)return candidate;const {t
 // "register": a live plan (20 Nov 2026) pasted "CVR ... 25-250 ansatte" into every
 // query and searched a company directory instead of companies.
 const targetPlanning=criteria=>{
- const target=criteria.target;if(!target)return registerInstructions;
+ const target=criteria.target;if(!target)return targetingInstructions(criteria);
  const labels=new Map(T.DIVISIONS.map(d=>[d.code,d.label])),industries=target.industries.map(code=>labels.get(code)).filter(Boolean);
- return registerInstructions+' This list also has industry rules that the application checks by itself after discovery. Never put employee counts, revenue figures, company-number or register terms into a query, and do not search company registers or business directories: search for the companies\' own websites.'
+ return targetingInstructions(criteria)+' This list also has industry rules that the application checks by itself after discovery. Never put employee counts, revenue figures, company-number or register terms into a query, and do not search company registers or business directories: search for the companies\' own websites.'
   +(industries.length?' Industries that qualify: '+industries.join('; ')+'.':'');
 };
 
@@ -160,14 +163,14 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
   let evidenceWrite;
   const retain=result=>{
    const index=s.results.findIndex(prior=>prior.domain===result.domain);
-   if(index>=0&&s.results[index].score>result.score)return;
+   if(index>=0&&M.compareRank(s.results[index],result)<0)return;
    let entry=result;
    // Larger lists grow one independent row per company. Also spill unusually
    // detailed short lists before the combined D1 owner row reaches 2 MB.
    if(criteria.count>20||s.evidenceCheckpoint||new TextEncoder().encode(JSON.stringify([criteria,s,result])).length>512*1024){
     s.evidenceCheckpoint=crypto.randomUUID();
     const encoded=JSON.stringify(result);
-    entry={evidenceId:s.evidenceCheckpoint,evidenceBytes:new TextEncoder().encode(encoded).byteLength,company:result.company,domain:result.domain,score:result.score,matchCount:result.matches.length};
+    entry={evidenceId:s.evidenceCheckpoint,evidenceBytes:new TextEncoder().encode(encoded).byteLength,company:result.company,domain:result.domain,score:result.score,sizePreferenceMatches:result.sizePreferenceMatches,matchCount:result.matches.length};
     evidenceWrite=sql(env,`INSERT INTO company_list_evidence(workspace_id,list_id,domain,evidence_id,result_json)
      SELECT workspace_id,id,?,?,? FROM company_lists WHERE id=? AND workspace_id=? AND lease_token=? AND json_extract(state_json,'$.evidenceCheckpoint')=?
      ON CONFLICT(workspace_id,list_id,domain) DO UPDATE SET evidence_id=excluded.evidence_id,result_json=excluded.result_json`,
@@ -406,7 +409,7 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
      else if(outcome.excluded)finishTask(task,outcome.reason,'rejected');
      else{task.candidate=outcome.candidate;task.registerChecked=true;}
     }else if(task.candidate){
-     const review=await laneAsk(lane,{stage:'review',criteria:modelCriteria(criteria),pages,candidate:modelCandidate(task.candidate),instructions:profileReview+registerInstructions+(task.candidate.revenueEvidence?financialReview:'')+(task.candidate.headcountEvidence?headcountReview:'')},task);
+     const review=await laneAsk(lane,{stage:'review',criteria:modelCriteria(criteria),pages,candidate:modelCandidate(task.candidate),instructions:profileReview+targetingInstructions(criteria)+(task.candidate.revenueEvidence?financialReview:'')+(task.candidate.headcountEvidence?headcountReview:'')},task);
      const result=M.reviewResult(task.candidate,review,criteria);
      if(result&&criteria.minimumScore&&result.score<criteria.minimumScore){
       finishTask(task,'Reviewed score '+result.score+' is below the required '+criteria.minimumScore+'.','rejected');
@@ -426,7 +429,7 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
      if(review.decision!=='reject')followup(task,review,pages);
      finishTask(task,(review.gaps||[]).map(g=>clean(g)).join(' · ')||clean(review.reason)||'Required evidence review did not pass.',review.decision==='reject'?'rejected':'needs_evidence');
     }else{
-     const raw=await laneAsk(lane,{stage:'assess',criteria:modelCriteria(criteria),pages,instructions:profileAssessment+registerInstructions+(criteria.target?revenueInstructions:'')+(criteria.target?.industries?.length?industryStatement:'')},task);
+     const raw=await laneAsk(lane,{stage:'assess',criteria:modelCriteria(criteria),pages,instructions:profileAssessment+targetingInstructions(criteria)+(criteria.target?revenueInstructions:'')+(criteria.target?.industries?.length?industryStatement:'')},task);
      const result=M.assess(raw,criteria,pages);
      if(result&&result.commercialFit){task.candidate=result;task.assessment={...lane.last};s.phase='reviewing';}
      else{if(raw.excluded!==true)followup(task,raw,pages);finishTask(task,(raw.gaps||[]).map(g=>clean(g)).join(' · ')||(raw.excluded?'Company excluded':'Identity, market, selected signal or commercial-fit evidence is incomplete.'),raw.excluded?'rejected':'needs_evidence');}
@@ -621,7 +624,7 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
      else if(outcome.excluded)finishTask(task,outcome.reason,'rejected');
        else{task.candidate=outcome.candidate;task.registerChecked=true;s.reason='Reviewing source evidence before counting a match';}
       }else if(task.candidate&&strict){
-       const review=await generate({stage:'review',criteria:modelCriteria(criteria),pages,candidate:modelCandidate(task.candidate),instructions:profilePolicy?profileReview+registerInstructions+(task.candidate.revenueEvidence?financialReview:'')+(task.candidate.headcountEvidence?headcountReview:''):reviewInstructions});
+       const review=await generate({stage:'review',criteria:modelCriteria(criteria),pages,candidate:modelCandidate(task.candidate),instructions:profilePolicy?profileReview+targetingInstructions(criteria)+(task.candidate.revenueEvidence?financialReview:'')+(task.candidate.headcountEvidence?headcountReview:''):reviewInstructions});
        const result=M.reviewResult(task.candidate,review,criteria);
        if(result&&criteria.minimumScore&&result.score<criteria.minimumScore){
         finishTask(task,'Reviewed score '+result.score+' is below the required '+criteria.minimumScore+'.','rejected');
@@ -633,7 +636,7 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
         retain(result);finishTask(task);
        }else{if(review.decision!=='reject')followup(task,review,pages);finishTask(task,(review.gaps||[]).map(g=>clean(g)).join(' · ')||clean(review.reason)||'Required evidence review did not pass.',review.decision==='reject'?'rejected':'needs_evidence');}
       }else{
-       const raw=await generate({stage:'assess',criteria:modelCriteria(criteria),pages,instructions:profilePolicy?profileAssessment+registerInstructions+(criteria.target?revenueInstructions:'')+(criteria.target?.industries?.length?industryStatement:''):assessmentInstructions});let match=M.assess(raw,profilePolicy?criteria:{...criteria,mode:'any'},pages);
+       const raw=await generate({stage:'assess',criteria:modelCriteria(criteria),pages,instructions:profilePolicy?profileAssessment+targetingInstructions(criteria)+(criteria.target?revenueInstructions:'')+(criteria.target?.industries?.length?industryStatement:''):assessmentInstructions});let match=M.assess(raw,profilePolicy?criteria:{...criteria,mode:'any'},pages);
        // Legacy jobs can finish their already-evidenced multi-signal matches.
        // Their older policy is retained and never relabelled as a new review.
        if(!strict&&match){s.partial||={};match=M.mergeResult(s.partial[match.domain],match,criteria);if(Object.keys(s.partial).length<500)s.partial[match.domain]=match;}

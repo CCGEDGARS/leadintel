@@ -118,3 +118,20 @@ test('register outage retains a qualified candidate and resumes at its register 
  assert.equal(list.results.length,1);
  assert.equal(reads,before);
 });
+
+test('profile preferences rank verified data through the authenticated list and scheduler',async t=>{
+ const f=await setup(t),prompts=[];
+ f.payload.main.market.icps.find(p=>p.id==='icp-core').description+=' Preferred size: 30–250 employees. Preferred annual turnover: SEK 3–150 million.';
+ await putCustomerState(f.env,{workspaceId,userId:f.users.owner.id,expectedVersion:f.version++,payload:f.payload});
+ f.env.COMPANY_LIST_TEST_SERVICES={...profileServices({count:3,observe:p=>prompts.push(p)}),registry:async({company})=>{
+  if(company==='Factory2')return {...found(company,120),revenue:{amount:20000000,currency:'SEK',year:new Date().getUTCFullYear()-1}};
+  if(company==='Factory1')return found(company,833);
+  return {status:'unavailable'};
+ }};
+ const list=await finish(f,(await start(f,{minimumScore:80})).id);
+ assert.deepEqual(list.results.map(r=>r.company),['Factory2','Factory0','Factory1']);
+ assert.deepEqual(list.results.map(r=>r.score),[90,90,90]);
+ assert.deepEqual(list.results.map(r=>r.sizePreferenceMatches),[2,0,0]);
+ assert.ok(prompts.some(p=>p.stage==='plan'&&p.instructions.includes('buyer roles as commercial context')));
+ assert.ok(prompts.some(p=>p.stage==='review'&&p.instructions.includes('Numerical targets in the profile are preferences')));
+});

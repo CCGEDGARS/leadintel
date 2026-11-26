@@ -78,3 +78,20 @@ test('the reviewed result keeps the register reasons',()=>{
  const reviewed=M.reviewResult(candidate,{decision:'pass',identityConfirmed:true,marketConfirmed:true,commercialFitConfirmed:true,exclusionsChecked:true,supportedProfileIds:['icp-core'],supportedSignalIds:[],reason:'Evidence supports the match',gaps:[]},c,now);
  assert.ok(reviewed);assert.equal(reviewed.target.register.id,'11111111');assert.equal(reviewed.target.checks.length,4);
 });
+
+test('verified profile size preferences break score ties without changing eligibility',()=>{
+ const w=workspace();
+ w.market.icps[0].description+=' Companies with more than 30 employees. Companies with less than 250 employees. Preferred annual turnover: EUR 3–150 million.';
+ const c=M.configuration({profileIds:['icp-core'],count:10,markets:['Denmark'],target},M.options(w));
+ const candidate=M.assess(raw(),c,[page],now);
+ const review={decision:'pass',reason:'Verified',identityConfirmed:true,marketConfirmed:true,commercialFitConfirmed:true,exclusionsChecked:true,supportedProfileIds:['icp-core']};
+ const ranked=(facts,company)=>M.reviewResult(M.targetOutcome({...candidate,company,domain:company},facts,c).candidate,review,c,now);
+ const preferred=ranked(registered({revenue:{amount:20000000,currency:'EUR',year:2025}}),'Zulu');
+ const outside=ranked(registered({employees:{count:250},revenue:{amount:20000000,currency:'DKK',year:2025}}),'Alpha');
+ const unknown=ranked(null,'Beta');
+ assert.equal(preferred.score,outside.score);
+ assert.equal(outside.score,unknown.score);
+ assert.deepEqual(preferred.sizePreferences.map(p=>p.status),['within','within']);
+ assert.deepEqual(outside.sizePreferences.map(p=>p.status),['outside','unknown']);
+ assert.deepEqual(M.ranked([outside,unknown,preferred]).map(r=>r.company),['Zulu','Alpha','Beta']);
+});
