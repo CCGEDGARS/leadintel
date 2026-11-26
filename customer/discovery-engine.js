@@ -2888,6 +2888,24 @@
   }
   function companyContactRouteKey(kind,value){return kind+'|'+(kind==='phone'?value.replace(/\D/g,''):kind==='linkedin'?value.replace(/\/+$/,'').toLowerCase():value);}
   const OFFICIAL_CONTACT_RESEARCH_POLICY=Object.freeze({version:'20261030-adaptive-company-sources-v6',scopeVersion:'20261104-contact-plan-v5',maxPages:24,maxDurationMs:180000,concurrency:3,queries:6});
+  // On official About pages, leadership may be named in the current ownership
+  // statement instead of individual cards. Match the named employer and an
+  // explicit role beside each name. Keep the published source for identity checks.
+  function officialLeadershipInProse(body,url,candidate){
+   const company=clean(candidate.company).replace(/\s+(?:a\/s|aps|ltd\.?|inc\.?)$/i,'').toLowerCase();
+   const people=[];
+   for(const sentence of body.split(/[.!?\n]+/)){
+    const ownership=sentence.trim().match(/^(?:today,?\s+|currently,?\s+)?(.+?)\s+is (?:currently )?(?:owned|led|managed) by\s+(.+)$|^(?:i dag\s+)?ejes\s+(.+?)\s+af\s+(.+)$/iu);
+    if(!ownership||clean(ownership[1]||ownership[3]).replace(/\s+(?:a\/s|aps|ltd|inc)$/i,'').toLowerCase()!==company)continue;
+    const owners=ownership[2]||ownership[4];
+    for(const clause of owners.split(/\s+(?:og|samt|and)\s+|,\s*/iu)){
+     const entry=clause.trim().match(/^(CEO|CFO|COO|CTO|(?:Production|Managing|Finance|Operations) Director|(?:produktions|økonomi|administrerende\s+)?direktør)\s+(.+)$/iu);
+     if(!entry||!/^\p{Lu}[\p{L}’'-]+(?:\s+\p{Lu}[\p{L}’'-]+){1,4}$/u.test(entry[2])||!hasFullBuyerName(entry[2])||isNonPersonBuyerHeading(entry[2])||/\b(?:ApS|Ltd|LLC|Inc|GmbH|Holding)\b/i.test(entry[2]))continue;
+     people.push({name:entry[2],publicName:entry[2],title:entry[1],id:'public-'+slug(url+'|'+entry[2].toLowerCase()),organization:candidate.company,publicNameUrl:url,identitySource:'public',identityStatus:'confirmed',nameVerification:'confirmed',companyContactSource:'official_staff'});
+    }
+   }
+   return people;
+  }
   function officialCompanyContactInventory(rows=[],candidate={}){
     const domain=companyIdentityDomain(candidate.domain),contacts=new Map(),channels=new Map(),routes=new Map(),sourcePages=[],sourceEvidence=[];
     const shared=/^(?:ir|media|sustainability|info|sales|support|contact|office|hello|team|press|procurement|purchasing|reception|enquiries|inquiries|accounts|accounting|invoice|invoices|web)(?:[._+-]|$)/i;
@@ -2899,6 +2917,12 @@
       const provenance=companyContactSource(row,candidate);if(!provenance)continue;
       sourcePages.push(url);sourceEvidence.push(provenance);
       const body=decodePublishedEmailText(String(row.markdown||row.content||row.text||'')).slice(0,60000);
+      if(provenance.kind==='official'){
+        for(const leader of officialLeadershipInProse(body,url,candidate)){
+          const key=leader.name.toLowerCase();
+          if(!contacts.has(key))contacts.set(key,leader);
+        }
+      }
       const lines=body.replace(/^([ \t]*#{1,6})[ \t]*\n+[ \t]*([^\n]+)/gm,'$1 $2').split(/\r?\n/),plain=line=>line.replace(/!\[[^\]]*\]\([^)]*\)/g,'').replace(/\[([^\]]+)\]\([^)]*\)/g,'$1').replace(/^\s*#{1,6}\s*|\*\*/g,'').trim();
       const roleStart=/\b(?:Senior(?: Executive)? (?:Vice )?President|Vice President|President|Chief|CEO|CFO|COO|CTO|CIO|CMO|CHRO|General Counsel|Head of|Managing Director|Director|Manager)\b/i;
       const headings=[];
@@ -3035,7 +3059,7 @@
     const bounded=async operation=>{await ensure();let abort;const stopped=new Promise((_,reject)=>{abort=()=>reject(new Error('Company contact research stopped'));controller.signal.addEventListener('abort',abort,{once:true});});try{const result=await Promise.race([operation(),stopped]);await ensure();return result;}finally{controller.signal.removeEventListener('abort',abort);}};
     const domain=companyIdentityDomain(candidate.domain),official=url=>Boolean(contactResearchUrl(url)&&companyIdentityDomain(url)===domain),read=new Map(),queue=new Map(),attempted=new Set(),failures=[],receipts=[],reads=[],freshRows=[],planned=new Map((reusable?previous.research.plannedUrls||[]:[]).map(url=>[canonicalBuyerSource(url),url])),completed=new Set(reusable?(previous.research.completedUrls||previous.sourcePages):[]),readKeys=new Set(),completedKeys=new Set([...completed].map(canonicalBuyerSource));let sourceLimit=reusable&&previous.research.discoveryTruncated===true,checkpointInventory=previous;
     // Reach actionable company channels before spending the bounded pass on policy documents.
-    const priority=url=>peopleFirst&&/kontakt|contact|team|ledelse|medarbejder|management|leadership/i.test(url)?-1:/invoice|invoicing|payment|accounting|\/finance\//i.test(url)?0:/\.pdf(?:$|\?)/i.test(url)?4:/contact|kontakt|get-in-touch|supplier|procurement|privacy/i.test(url)?1:companyPublicationUrl(url,candidate)?2:/management|leadership|team|investor/i.test(url)?3:5;
+    const priority=url=>peopleFirst&&(/kontakt|contact|team|ledelse|medarbejder|management|leadership/i.test(url)||/\/(?:about(?:-us)?|om-oss?)\/?$/i.test(new URL(url).pathname))?-1:/invoice|invoicing|payment|accounting|\/finance\//i.test(url)?0:/\.pdf(?:$|\?)/i.test(url)?4:/contact|kontakt|get-in-touch|supplier|procurement|privacy/i.test(url)?1:companyPublicationUrl(url,candidate)?2:/management|leadership|team|investor/i.test(url)?3:5;
     const legacyArchive=previous?.research&&previous.research.status!=='complete'&&previous.research.discoveryScope!==policy.scopeVersion;
     const financialArchive=(url,label='')=>{const u=new URL(url);return (/annual[-_ ]?report|interim[-_ ]?report|quarterly[-_ ]?report|financial[-_ ]?report|year[-_ ]?end[-_ ]?report|årsredovisning|arsredovisning|%c3%a5rsredovisning|del[aå]rsrapport|kvartalsrapport|q[1-4][-_ ]*20\d{2}|20\d{2}[-_ ]*q[1-4]/i.test(u.pathname+' '+label)||u.searchParams.has('year')||u.searchParams.has('y')||/investor|financial|report/i.test(u.pathname)&&/reports?(?:[-/]|$)/i.test(u.pathname))&&!/contact|kontakt|supplier|procurement|invoice|e-mail|email|phone|e-post/i.test(label);};
     const contactIntent=/\b(?:contacts?|kontakt(?:er)?|get[- ]in[- ]touch|teams?|people|staff|management|leadership|ledning|ledelse|medarbejdere?|direktion|suppliers?|procurement|inkop|privacy|invoices?|invoicing|payments?|accounting|e-mails?|emails?|phones?|e-post)\b/i;
@@ -3051,8 +3075,8 @@
     };
     const contactContainer=url=>{
       const u=new URL(buyerContactSourceUrl(url)),parts=navigationPath(u.pathname).split('/').filter(Boolean).map(normalizeIntent);
-      if(parts.length&&/^[a-z]{2}(?:-[a-z]{2})?$/.test(parts[0]))parts.shift();
-      const sections=new Set(['about','about-us','company','corporate','investor','investors','investor-relations','governance','sustainability','media','media-news','news','press','press-releases','om','om-oss','foretag','bolagsstyrning','hallbarhet','media-nyheter','nyheter','pressmeddelanden']);
+      if(parts.length>1&&/^[a-z]{2}(?:-[a-z]{2})?$/.test(parts[0]))parts.shift();
+      const sections=new Set(['about','about-us','company','corporate','investor','investors','investor-relations','governance','sustainability','media','media-news','news','press','press-releases','om','om-os','om-oss','foretag','bolagsstyrning','hallbarhet','media-nyheter','nyheter','pressmeddelanden']);
       return !u.search&&parts.length>0&&parts.length<=2&&parts.every(part=>sections.has(part));
     };
     const contactNavigation=(url,label='')=>contactDestination(url,label)||!financialArchive(url,label)&&contactContainer(url);
@@ -3094,6 +3118,13 @@
     try{
       await ensure();finish(true,true);
       if(!read.size){const first=[...queue.values()].sort((a,b)=>a.priority-b.priority)[0];if(first)await fetchOne(first);}
+      if(siteOnly&&!read.size&&!controller.signal.aborted){
+        // A blocked homepage should not rule out the site's public contact pages.
+        const home=new URL(candidate.website||'https://'+domain+'/'),locale=/^\/([a-z]{2})\//i.exec(home.pathname)?.[1]?.toLowerCase();
+        const danish=locale==='da'||!locale&&(domain.endsWith('.dk')||/^(Denmark|Danmark)$/i.test(candidate.market));
+        const prefix=locale?'/'+locale+'/':'/';
+        for(const path of danish?['kontakt/','om-os/']:['contact/','about-us/'])add(new URL(prefix+path,home).href);
+      }
       if(peopleFirst){
         const peoplePages=[...queue.values()].filter(entry=>entry.priority<0&&!attempted.has(canonicalBuyerSource(entry.url))).slice(0,policy.concurrency);
         await bounded(()=>Promise.all(peoplePages.map(fetchOne)));

@@ -31,7 +31,7 @@ function scenario(config){
   const passes=['openai','gemini'].map(provider=>({...validated(provider),planSignature:plan.signature,searchFamilies:plan.families.map(f=>({name:f.name,kind:f.kind,query:f.kind==='formula'?`Controlled independent search\nSearch formula: ${f.formula}\nReturn sources`:f.kind==='contacts'?'CONTACT ROUTES '+config.company:'CURRENT LEADERSHIP AND PROJECT DOSSIER '+config.company,status:'complete',attempts:1,completedAt:stamp,results:[{url}]})),sourceReads:[{url,status:'succeeded',checkedAt:stamp,researchTrace:[{provider:'direct',status:'succeeded',operation:'extract',results:1}]}],extractedSources:[url]}));
   const result=C.reconcile(passes,body);assert.equal(result.status,'complete',JSON.stringify(result));assert.equal(C.coverageComplete(result,body),true);assert.equal(result.people.length,4);return result;
  };
- const services={search,read,dossier,independent:async()=>{counters.independent++;return {status:'complete',results:[{url,title:config.company,description:text}],web_search:true};},review:async(_env,_workspace,body)=>{counters.review++;return {provider:'controlled-supervisor',supervisor:{status:'complete',reviewedPersonIds:body.people.map(p=>p.id),findings:[]},summary:'Reviewed supplied source evidence',conflicts:[]};}};
+ const services={search,read,dossier,publicIndex:async()=>[],independent:async()=>{counters.independent++;return {status:'complete',results:[{url,title:config.company,description:text}],web_search:true};},review:async(_env,_workspace,body)=>{counters.review++;return {provider:'controlled-supervisor',supervisor:{status:'complete',reviewedPersonIds:body.people.map(p=>p.id),findings:[]},summary:'Reviewed supplied source evidence',conflicts:[]};}};
  return {candidate,profile,counters,services,email,url};
 }
 async function startScenario(f,s,options={}){
@@ -109,7 +109,7 @@ test('a selected buyer job keeps broad company inventory while executing only th
 test('Find buyers saves public staff results before any metered request and expansion requires explicit opt-in',async t=>{
  const f=await buyerJobsFixture(t),s=scenario(variants[0]),job=await startScenario(f,s,{peopleFirst:true,freeDiscovery:true});
  const unexpected=()=>assert.fail('Free discovery called a metered provider');
- const services={read:s.services.read,registry:async()=>({status:'not_found'}),search:unexpected,apollo:unexpected,review:unexpected,independent:unexpected,dossier:unexpected,paidLookup:unexpected};
+ const services={read:s.services.read,publicIndex:async()=>[],registry:async()=>({status:'not_found'}),search:unexpected,apollo:unexpected,review:unexpected,independent:unexpected,dossier:unexpected,paidLookup:unexpected};
  const {row,phases}=await terminal(f,job,services);
  assert.deepEqual(phases,['official','identities']);assert.equal(row.status,'needs_review');
  assert.equal(JSON.parse(row.diagnostic_json).at(-1).code,'free_discovery_finished');
