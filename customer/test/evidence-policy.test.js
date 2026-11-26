@@ -17,6 +17,10 @@ test('publication comes from target metadata and article datelines, never scrape
  assert.equal(P.recency({url:'https://example.com/2002/mining',text:'Copyright 2026'}).status,'historical');
  assert.equal(P.publication({fetchedAt:date,text:'Copyright 2026'}).date,'');
  assert.equal(P.publication({date:'2026-02-30'}).date,'');
+ const history='Our predecessor closed on March 31, 2003. The owners formed the current company on April 1, 2003.\nToday, our CEO and Production Director lead the daily operations.';
+ assert.equal(P.publication({url:'https://example.com/about/',markdown:history}).date,'');
+ assert.equal(P.publication({markdown:'Published: 8 October 2024\n'+history}).date,'2024-10-08');
+ assert.equal(P.publication({markdown:'26 September 2020. Annual results announced.'}).date,'2020-09-26');
 });
 test('successful scraper responses with blocked target content or HTTP errors are not evidence',()=>{
  for(const invalid of [{text:'OUR SERVICES is blocked ERR_BLOCKED_BY_CLIENT'},{text:'Example products',metadata:{statusCode:403}},{text:'Example products',metadata:{statusCode:404}}]){

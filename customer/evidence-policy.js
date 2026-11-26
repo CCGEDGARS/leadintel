@@ -26,6 +26,8 @@
   const MONTHS=['january january jan januari janvāris janvāra januar janvier enero gennaio','february feb februari februāris februāra februar février febrero febbraio','march mar mars marts marta märz marzo','april apr avril aprīlis aprīļa abril aprile','may maj maijs maija mai mayo maggio','june jun juni jūnijs jūnija juin junio giugno','july jul juli jūlijs jūlija juillet julio luglio','august aug augusts augusta août agosto','september sep sept septembris septembra septembre septiembre settembre','october oct oktober oktobris oktobra octobre octubre ottobre','november nov novembris novembra novembre noviembre','december dec december decembris decembra dezember décembre diciembre dicembre'];
   const monthMap=new Map(MONTHS.flatMap((names,index)=>names.split(' ').map(name=>[name,index+1])));
   const monthPattern=[...monthMap.keys()].sort((a,b)=>b.length-a.length).join('|');
+  const datelineDate='(?:19|20)\\d{2}[-/.]\\d{1,2}[-/.]\\d{1,2}|\\d{1,2}[/.]\\d{1,2}[/.](?:19|20)\\d{2}|(?:'+monthPattern+')[ .]+\\d{1,2},?[ .]+(?:19|20)\\d{2}|\\d{1,2}[ .]+(?:'+monthPattern+'),?[ .]+(?:19|20)\\d{2}';
+  const publicationDateline=new RegExp('^(?:published(?: on)?|publication date|posted(?: on)?|publicerad|publiceret|udgivet|veröffentlicht(?: am)?|publié le)?[ \\t:–—-]*('+datelineDate+')(?=$|[.,|–—]|[ \\t]+[-|–—])','i');
   function calendarDate(year,month,day){const y=Number(year),m=Number(month),d=Number(day);if(y<1900||y>2100||m<1||m>12||d<1||d>31)return '';const date=new Date(Date.UTC(y,m-1,d));return date.getUTCFullYear()===y&&date.getUTCMonth()===m-1&&date.getUTCDate()===d?date.toISOString().slice(0,10):'';}
   function parseDate(value){
     if(Array.isArray(value)){for(const item of value){const date=parseDate(item);if(date)return date;}return '';}
@@ -43,7 +45,12 @@
     const title=clean(source.title||metadata.title);let date=parseDate(title);if(date)return {date,dateSource:'page-title'};
     // Publication datelines only: never turn footer copyright, scrape time or a bare planning year into publication time.
     const text=String(source.markdown||source.content||source.text||source.description||'').slice(0,2500).replace(/\[[^\]]*\]\([^)]*\)/g,'').replace(/\b(?:©|copyright)\b[^\n]*/gi,'');
-    date=parseDate(text);if(date)return {date,dateSource:'page-dateline'};
+    // An event on an About page can predate the people listed there by decades.
+    // Require a publication label or a date at the start of a dateline.
+    for(const line of text.split(/\r?\n/)){
+      const match=line.trim().replace(/^[#*_\s]+|[*_\s]+$/g,'').match(publicationDateline);
+      if(match&&(date=parseDate(match[1])))return {date,dateSource:'page-dateline'};
+    }
     match=(title+' '+url).match(/(?:\/|\b)(19\d{2}|20\d{2})(?:\/|\b)/);return {date:'',dateSource:'unknown',historicalYear:match?Number(match[1]):null};
   }
   function recency(source={},now=Date.now(),days=365){const info=publication(source);if(!info.date)return {...info,status:info.historicalYear&&info.historicalYear<new Date(now).getUTCFullYear()-1?'historical':'unknown'};const ageDays=(now-Date.parse(info.date))/86400000;return {...info,ageDays,status:ageDays<-7?'future':ageDays>days?'historical':'recent'};}
