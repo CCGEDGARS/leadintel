@@ -50,25 +50,27 @@ export async function searchManagementIndex(query,signal,read){
 
 // Search excerpts locate pages. Only acquired page bodies enter the shared
 // identity and contact checks. Save the first-party roster before this pass.
-export async function findPublicBuyerContactPages(candidate,{index,read,refresh,interrupted}){
+export async function findPublicBuyerContactPages(candidate,{index,read,refresh,interrupted,profile,addIdentities}){
  const D=globalThis.LeadIntelDiscovery;
  let checked=0,readFailures=0,indexUnavailable=false;
- const lookup=async(query,name='')=>{
-  let hits;
+ const searchIndex=async query=>{
   try{
-   ({hits}=await index(query));
-   checked++;
+   const {hits}=await index(query);
+   checked++;return hits;
   }catch(error){
    if(interrupted(error))throw error;
-   indexUnavailable=true;
-   return;
+   indexUnavailable=true;return [];
   }
+ };
+ const lookup=async(query,name='',addresses=[])=>{
+  const hits=await searchIndex(query);
   const targets=hits.filter(hit=>{
    const host=D.canonicalDomain(hit.url);
    if(!host||D.isBlockedDomain(host))return false;
    if(host===candidate.domain)return true;
    const text=(hit.title+' '+hit.description).toLowerCase();
-   return name&&text.includes(name.toLowerCase())&&(text.includes(candidate.domain)||text.includes(candidate.company.toLowerCase()));
+   if(addresses.some(email=>text.includes(email)))return true;
+   return name&&text.includes(name.toLowerCase());
   });
   for(const hit of targets.slice(0,2)){
    try{const page=await read(hit.url);if(!page?.sourceRead)readFailures++;}
@@ -79,11 +81,32 @@ export async function findPublicBuyerContactPages(candidate,{index,read,refresh,
   await lookup('site:'+candidate.domain+' (management OR leadership OR team OR ledelse OR kontakt)');
   await refresh();
  }
+ if(!indexUnavailable&&addIdentities&&(candidate.people||[]).filter(p=>D.sourcedBuyerIdentity(p,candidate)).length<4){
+  const plan=D.buyerResearchPlan(candidate,profile);
+  const queries=plan.queries.filter(query=>query.startsWith('site:linkedin.com/in/')).slice(0,2);
+  for(const query of queries){
+   const hits=await searchIndex(query);
+   if(indexUnavailable)break;
+   const profiles=hits.filter(hit=>D.normalizeLinkedInUrl(hit.url)).map(hit=>({...hit,evidenceKind:'search_excerpt'}));
+   const trace=D.tracePublicBuyers(profiles,candidate.company,{...profile,companyDomain:candidate.domain});
+   if(trace.people.length)await addIdentities(trace.people);
+  }
+ }
  const missing=(candidate.people||[]).filter(person=>D.sourcedBuyerIdentity(person,candidate)&&!D.confirmedBuyerContactData(candidate,person).email).slice(0,4);
  for(const person of missing){
   if(indexUnavailable)break;
   const name=person.publicName||person.name;
   await lookup('"'+name+'" "'+candidate.domain+'" email',name);
+ }
+ if(missing.length&&checked)await refresh();
+ const colleagues=[...(candidate.people||[]),...(candidate.buyerDiscovery?.companyContacts||[])];
+ for(const person of missing){
+  if(indexUnavailable)break;
+  const current=candidate.people?.find(p=>p.id===person.id);
+  if(!current||current.publicEmail||D.confirmedBuyerContactData(candidate,current).email)continue;
+  const addresses=D.rankedEmailGuesses(current,candidate.domain,colleagues).slice(0,3).map(row=>row.email);
+  if(!addresses.length)continue;
+  await lookup(addresses.map(email=>'"'+email+'"').join(' OR '),current.publicName||current.name,addresses);
  }
  if(missing.length&&checked)await refresh();
  const notes=[];

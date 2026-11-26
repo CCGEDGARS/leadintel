@@ -56,7 +56,7 @@ test('cancel during a free Apollo response prevents late candidate and completed
  const row=await readBuyerJob(f.env,workspaceId,{id:f.job.id});assert.equal(row.status,'canceled');assert.equal(row.result_json,original);assert.equal(f.DB.raw.prepare("SELECT count(*) n FROM buyer_research_tasks WHERE job_id=? AND status='complete'").get(f.job.id).n,0);
 });
 
-test('actual HTTP acknowledgement and scheduled wrapper execute the encrypted customer Apollo identity path without paid endpoints',async t=>{
+for(const freeDiscovery of [false,true])test('HTTP and scheduler use only the encrypted Apollo identity endpoint, free discovery '+freeDiscovery,async t=>{
  const {default:app}=await import('../src/app.js'),{encryptSecret,importAesKey}=await import('../src/oauth.js');
  const f=await buyerJobsFixture(t),key='controlled-apollo-identity-key';f.env.OAUTH_TOKEN_ENCRYPTION_KEY=Buffer.alloc(32,19).toString('base64');f.env.APOLLO_API_KEY='forbidden-platform-key';
  const encrypted=await encryptSecret(key,await importAesKey(f.env.OAUTH_TOKEN_ENCRYPTION_KEY));f.DB.raw.prepare("INSERT INTO workspace_service_integrations(workspace_id,provider,encrypted_api_key,key_hint,metadata_json) VALUES(?,'apollo',?,'test',?)").run(workspaceId,encrypted,JSON.stringify({discovery_enabled:true,email_enrichment_enabled:true,phone_enrichment_enabled:true}));
@@ -65,7 +65,7 @@ test('actual HTTP acknowledgement and scheduled wrapper execute the encrypted cu
   if(new URL(url).hostname==='forge.example')return new Response('<h1>Forge Industries</h1><p>Robert Lund — Head of Procurement — Forge Industries.</p>',{headers:{'Content-Type':'text/html'}});
   throw Error('Unplanned network request in controlled test: '+new URL(url).hostname);
  };t.after(()=>{globalThis.fetch=originalFetch;});
- const waits=[],request=new Request('https://app.fixture.test/api/buyers/research?workspace_id='+workspaceId,{method:'POST',headers:{Origin:'https://app.fixture.test',Cookie:'leadintel_session='+f.users.owner.token,'Content-Type':'application/json'},body:JSON.stringify({...f.body,paidResearch:false})});
+ const waits=[],request=new Request('https://app.fixture.test/api/buyers/research?workspace_id='+workspaceId,{method:'POST',headers:{Origin:'https://app.fixture.test',Cookie:'leadintel_session='+f.users.owner.token,'Content-Type':'application/json'},body:JSON.stringify({...f.body,peopleFirst:freeDiscovery,freeDiscovery,paidResearch:false})});
  const response=await app.fetch(request,f.env,{waitUntil:p=>waits.push(p)});assert.equal(response.status,200);const {job}=await response.json();await Promise.all(waits);
  const noop=async()=>({completed:0}),services={search:async()=>[],read:async url=>({url,markdown:'Robert Lund — Head of Procurement — Forge Industries',metadata:{sourceURL:url}}),dossier:async()=>({status:'complete',people:[],facts:[],channels:[],sources:[],passes:[]})};
  for(let i=0;i<8&&!calls.length;i++){const pending=[];await app.scheduled({cron:'* * * * *',scheduledTime:Date.now()},f.env,{waitUntil:p=>pending.push(p)},{runBuyerResearchJobs:(env,options)=>runBuyerResearchJobs(env,{...options,maxJobs:1,windowMs:30000,services}),runWritingReferenceJobs:noop,runWorkspaceSkillJobs:noop,runCompanyMaterialJobs:noop,runLanguagePackJobs:noop});await Promise.all(pending);}

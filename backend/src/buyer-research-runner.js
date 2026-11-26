@@ -167,7 +167,7 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
   try{
    await guard();const context=await workspaceBuyerContext(env,row.workspace_id,input.taskId);if(context.hash!==input.workspaceContext)throw Object.assign(Error('The seller context changed'),{code:'CONTEXT_CHANGED'});
    const rows=await allRows(),phaseStart=clock(),remaining=Math.max(1000,windowMs-(clock()-start)-500);
-   if(!siteOnly&&input.scope!=='selected_buyers'&&!apolloIdentityChecked&&['identities','contacts','review','paid'].includes(phase)){
+   if(input.scope!=='selected_buyers'&&!apolloIdentityChecked&&['identities','contacts','review','paid'].includes(phase)){
     const before=new Set((candidate.people||[]).map(person=>person.id));
     const directory=await discoverApolloBuyerIdentities({candidate,profile:input.profile,task,guard,record:observe,observed:input.apolloIdentityReceipts,
       search:payload=>(services.apollo?services.apollo(payload,controller.signal,{workspaceId:row.workspace_id,userId:row.requested_by,guard}):searchWorkspaceApolloPeople(env,row.workspace_id,payload,{userId:row.requested_by,signal:controller.signal,guard,beforeDispatch:()=>{if(windowMs-(clock()-start)<15000)throw Object.assign(Error('Apollo discovery deferred to the next processing slice'),{code:'TIME_BUDGET'});}}))});
@@ -216,6 +216,11 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
     if(siteOnly){
      acquiredRows=(await allRows()).filter(source=>source.sourceRead===true);acquirePeople();
      const indexReport=await findPublicBuyerContactPages(candidate,{
+      profile:input.profile,
+      addIdentities:people=>{
+       candidate.buyerDiscovery.pool=D.mergeBuyerPool(candidate.buyerDiscovery.pool||candidate.people||[],people,input.profile);
+       acquirePeople();
+      },
       index:query=>task('search','Free public index | '+query,async()=>{
        const signal=AbortSignal.any([controller.signal,AbortSignal.timeout(6000)]);
        const hits=await (services.publicIndex||searchManagementIndex)(query,signal,fetchDirectPublicPage);

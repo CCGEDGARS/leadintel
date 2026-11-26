@@ -14,11 +14,17 @@ import {buyerPaidIntent,runWorkflowPaidResearch} from '../src/buyer-paid-researc
 import * as Workflow from '../src/approved-workflow-runner.js';
 const require=createRequire(import.meta.url),D=require('../../customer/discovery-engine.js'),Crm=require('../../customer/crm-engine.js');
 
-async function cohortFixture(t,{limit=4,phone=true,callIds=true}={}){
+async function cohortFixture(t,{limit=4,phone=true,callIds=true,paidEmailLimit,smallTeam=false}={}){
  const f=await buyerJobsFixture(t),c=paidCohortCandidate(),stamp=c.publicResearch.accountability.completedAt;
+ if(smallTeam){
+  c.people=c.people.slice(0,3);
+  require('../../customer/test/helpers/buyer-research-receipts.cjs')(c,stamp);
+  Object.assign(c.publicResearch.accountability,{totalPeople:3,checkedPeople:3});
+  Object.assign(c.publicResearch.aiReview,{reviewedPersonIds:c.people.map(p=>p.id),inputSignature:D.buyerReviewSignature(c)});
+ }
  const context={workspaceId,userId:f.users.owner.id,role:'owner'},company=(await upsertCrmCompany(f.env.DB,context,{company:c.company,domain:c.domain})).company;c.crmId=company.id;await upsertCrmIntelligence(f.env.DB,context,c.crmId,Crm.mapDiscoveryCandidateToCrm(c).intelligence);
  f.DB.raw.prepare("INSERT INTO additional_contact_policies(workspace_id,enabled,phone_enabled,provider,daily_limit,monthly_limit,max_per_company,approved_by,automatic_buyer_limit) VALUES(?,1,?,'treg',10,100,10,?,?)").run(workspaceId,Number(phone),f.users.owner.id,limit);
- const response=await handleBuyerResearchRoute(new Request('https://app.fixture.test/api/buyers/research?workspace_id='+workspaceId,{method:'POST',headers:{Cookie:'leadintel_session='+f.users.owner.token,'Content-Type':'application/json'},body:JSON.stringify({action:'start',candidate:c,paidResearch:true})}),f.env);assert.equal(response.status,200);const job=(await response.json()).job;
+ const response=await handleBuyerResearchRoute(new Request('https://app.fixture.test/api/buyers/research?workspace_id='+workspaceId,{method:'POST',headers:{Cookie:'leadintel_session='+f.users.owner.token,'Content-Type':'application/json'},body:JSON.stringify({action:'start',candidate:c,paidResearch:true,paidEmailLimit})}),f.env);assert.equal(response.status,200);const job=(await response.json()).job;
  f.DB.raw.prepare("UPDATE buyer_research_jobs SET phase='paid',result_json=? WHERE id=?").run(JSON.stringify(c),job.id);
  const calls=[],lookup=await controlledLookup(f,calls,{callIds}),queries=[],body=c.people.map(p=>'### '+p.name+'\n'+p.title+'\nForge Industries').join('\n\n');
  const services={paidLookup:lookup,search:async query=>{queries.push(query);return [];},read:async url=>({url,markdown:body,sourceRead:true,extractedAt:stamp,metadata:{sourceURL:url}}),independent:async()=>({status:'not_configured',results:[]}),review:async(_env,_workspace,input)=>({provider:'controlled-review',supervisor:{status:'complete',reviewedPersonIds:input.people.map(p=>p.id),findings:[]},conflicts:[]})};
@@ -92,4 +98,15 @@ test('canceling a captured paid/free continuation prevents further source or pai
  const response=await handleBuyerResearchRoute(new Request('https://app.fixture.test/api/buyers/research?workspace_id='+workspaceId,{method:'POST',headers:{Cookie:'leadintel_session='+f.users.owner.token,'Content-Type':'application/json'},body:JSON.stringify({action:'cancel',jobId:f.job.id,expectedRevision:row.revision})}),f.env);assert.equal(response.status,200);
  f.services.search=async()=>assert.fail('Canceled continuation cannot research');f.services.paidLookup=async()=>assert.fail('Canceled continuation cannot purchase');await f.tick();
  assert.equal((await f.row()).status,'canceled');assert.equal(f.calls.length,2);assert.equal(f.DB.raw.prepare('SELECT SUM(cost_micro) n FROM treg_contact_calls').get().n,2000);
+});
+
+test('explicit email-only search verifies a small researched team with the approved limit',async t=>{
+ const f=await cohortFixture(t,{limit:4,phone:true,paidEmailLimit:2,smallTeam:true});
+ const intent=JSON.parse((await f.row()).input_json).paidResearch;
+ assert.deepEqual([intent.workEmailSearch,intent.automaticBuyerLimit,intent.email,intent.phone],[true,2,true,false]);
+ for(let i=0;i<24&&['queued','running'].includes((await f.row()).status);i++)await f.tick();
+ const saved=JSON.parse((await f.row()).result_json).publicResearch.paidResearch;
+ assert.equal(saved.status,'complete',JSON.stringify(saved));assert.equal(f.calls.filter(c=>c.url.includes('email.find')).length,2);
+ assert.equal(f.calls.filter(c=>c.url.includes('phone.find')).length,0);
+ const detail=await getCrmCompany(f.DB,f.context,f.c.crmId);assert.equal(detail.contacts.filter(c=>c.email_status==='verified').length,2);
 });

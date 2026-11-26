@@ -184,3 +184,12 @@ test('a published reception route is visible outside the research details and se
  assert.equal(summary.querySelector('[href^="tel:"]').textContent,'+44 20 7000 1234');
  assert.equal(summary.querySelector('a[target="_blank"]').href,contact);
 });
+
+test('the optional work-email search shows its own limit separately from the free company action',()=>{
+ const {ctx,candidate}=runtime();candidate.crmId='saved-company';
+ const render=()=>documentFor(ctx.renderSelectedProspects([candidate]));
+ assert.equal(render().querySelector('[data-find-buyer-emails]'),null);
+ ctx.window.LeadIntelAdditionalContacts={policy:()=>({enabled:true,provider:'treg',phoneEnabled:true,automaticBuyerLimit:3})};
+ const doc=render();assert.equal(doc.querySelectorAll('[data-find-prospect-buyers]').length,1);
+ const paid=doc.querySelector('[data-find-buyer-emails]');assert.equal(paid.dataset.paidEmailLimit,'3');assert.match(paid.textContent,/up to 3 work emails · uses credits/);
+});

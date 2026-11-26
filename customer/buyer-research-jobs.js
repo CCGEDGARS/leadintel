@@ -186,6 +186,7 @@
       scope.restoreReceipts=readOnly&&!scope.personIds?.length;
       if(old&&old.scope.owner===owner&&old.scope.current()&&(readOnly||!old.readOnly)){
         const samePeople=stable([...(old.scope.personIds||[])].sort())===stable([...(scope.personIds||[])].sort());
+        if(!readOnly&&options.paidEmailLimit&&!old.readOnly)throw Error('Buyer research is already running. Wait for its results before starting a paid search.');
         if(!readOnly&&!samePeople){
           const identities=(owner.people||[]).filter(p=>scope.personIds?.includes(String(p.id))).map(personIdentity).sort().join('\n');
           const queuedCurrent=()=>getBridge()===scope.bridge&&scope.bridge.workspace?.id===scope.workspaceId&&scope.bridge.session?.user?.id===scope.userId&&scope.bridge.session?.authenticated&&inputKey(owner,scope.profile)===scope.key&&(!options.isCurrent||options.isCurrent()===true)&&(owner.people||[]).filter(p=>scope.personIds?.includes(String(p.id))).map(personIdentity).sort().join('\n')===identities;
@@ -229,12 +230,13 @@
           const selectedRoster=value=>roster({people:(value?.people||[]).filter(person=>!selected||selected.has(String(person.id)))});
           const covered=scopeCovered&&selectedRoster(owner)===selectedRoster(job?.candidate);
           if(job&&!covered)job=null;
+          if(options.paidEmailLimit&&ACTIVE.has(observedJob?.status))throw Error('Buyer research is already running. Wait for its results before starting a paid search.');
           const paidScopeMatches=Boolean(job?.input?.paidResearch)===Boolean(options.paidResearch);
           if(!paidScopeMatches)job=null;
           if(!job||!ACTIVE.has(job.status)&&(options.force||options.paidResearch||job.status!=='complete'||!covered)){
             const resume=job&&covered&&paidScopeMatches&&!options.paidResearch&&(!options.force||options.resumeIncomplete===true&&job.resumePhase&&job.resumePhase!=='done')&&TERMINAL.has(job.status)&&job.status!=='complete';
             const observed=observedJob?.id&&domain(observedJob.domain||observedJob.candidate?.domain)===domain(owner.domain)?observedJob:null;
-            const command=resume?{action:'resume'}:{action:'start',peopleFirst:true,freeDiscovery:true,...requestInput(owner,scope.profile),...(scope.personIds?{personIds:scope.personIds}:{}),force:options.force===true,resumeIncomplete:options.resumeIncomplete===true,paidResearch:options.paidResearch===true};
+            const command=resume?{action:'resume'}:{action:'start',peopleFirst:true,freeDiscovery:true,...requestInput(owner,scope.profile),...(scope.personIds?{personIds:scope.personIds}:{}),force:options.force===true,resumeIncomplete:options.resumeIncomplete===true,paidResearch:options.paidResearch===true,...(options.paidEmailLimit?{paidEmailLimit:options.paidEmailLimit}:{})};
             job=await request(scope,'POST',{...command,...(observed?{jobId:observed.id,expectedRevision:observed.revision}:{})},null,controller);
           }
         }

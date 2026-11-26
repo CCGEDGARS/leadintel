@@ -27,7 +27,8 @@
     if(company.manualExclusionsPending&&!D.confirmedBuyerShortlist(candidate.people||[],{decisionMakers:D.effectiveBuyerRoles(candidate)},candidate,contactOptions).priorityIds.includes(selected.id||D.buyerIdentity(selected)))return blocked('Resolve company checks or select a currently qualified priority buyer before manual paid lookup.','ADDITIONAL_CONTACT_COMPANY_REQUIRED');
     if(options.automatic===true){
       const priorities=D.mandatoryBuyerResearchPriorities(candidate.people||[],candidate,{forExecution:true,contactOptions});
-      if(priorities.length<4||!D.buyerResearchCoveragePassed(candidate,{...options,contactOptions,researchPeople:priorities,allowPartialRoster:true}))return blocked('Complete free research for all four priority buyers before automatic paid search.','ADDITIONAL_CONTACT_PRIORITY_RESEARCH_REQUIRED');
+      const required=options.workEmailSearch===true?Math.min(4,candidate.people.length):4;
+      if(!required||priorities.length<required||!D.buyerResearchCoveragePassed(candidate,{...options,contactOptions,researchPeople:priorities,allowPartialRoster:true}))return blocked(options.workEmailSearch?'Complete public research for each priority buyer before work-email lookup.':'Complete free research for all four priority buyers before automatic paid search.','ADDITIONAL_CONTACT_PRIORITY_RESEARCH_REQUIRED');
     }
     const scoped=options.automatic!==true||options.provider==='treg';
     if(!D.buyerResearchCoveragePassed(candidate,{...options,contactOptions,...(scoped?{researchPeople:[selected]}:{}),allowPartialRoster:scoped}))return blocked('Complete this buyer’s mandatory public research before using additional services.');

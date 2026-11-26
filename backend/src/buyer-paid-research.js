@@ -18,9 +18,9 @@ export function paidSnapshotCandidate(candidate,detail){const s=detail.intellige
 export const paidContinuationScopeHash=row=>sha256(JSON.stringify([row?.research_snapshot_json||'{}',row?.evidence_json||'[]']));
 export const PAID_PRIORITY_RESEARCH_REQUIRED='ADDITIONAL_CONTACT_PRIORITY_RESEARCH_REQUIRED';
 export const PAID_PRIORITY_RESEARCH_INCOMPLETE='PAID_PRIORITY_RESEARCH_INCOMPLETE';
-function priorityDepthGaps(candidate,context,detail){
+function priorityDepthGaps(candidate,context,detail,workEmailSearch){
  const contactOptions=buyerContactOptions(candidate,context,detail),people=D.mandatoryBuyerResearchPriorities(candidate.people||[],candidate,{forExecution:true,contactOptions});
- return people.length===4&&people.every(person=>D.BUYER_CONTACT_RESEARCH_POLICY.requiredChecks.every(key=>D.buyerResearchCheckPassed(candidate,person,key)))?people.filter(person=>!D.acceptedOfficialBuyerEmail(candidate,person)&&!D.buyerResearchCheckPassed(candidate,person,'deep')):[];
+ return people.length>0&&people.length===(workEmailSearch?Math.min(4,candidate.people.length):4)&&people.every(person=>D.BUYER_CONTACT_RESEARCH_POLICY.requiredChecks.every(key=>D.buyerResearchCheckPassed(candidate,person,key)))?people.filter(person=>!D.acceptedOfficialBuyerEmail(candidate,person)&&!D.buyerResearchCheckPassed(candidate,person,'deep')):[];
 }
 export async function capturePaidContinuationScope(env,context,candidate,intent,jobId,guard){
  await guard();const row=await env.DB.prepare('SELECT research_snapshot_json,evidence_json FROM crm_intelligence WHERE workspace_id=? AND company_id=?').bind(context.workspaceId,intent.companyId).first();
@@ -45,6 +45,7 @@ export async function runBuyerPaidResearch(env,context,candidate,{intent,jobId,g
  if(policy.provider!==intent.provider||policy.provider!=='treg')return stop('blocked','The saved automatic contact provider needs review.');
  const limit=Math.min(policy.automaticBuyerLimit,P.automaticLimit(intent.automaticBuyerLimit));
  const email=intent.email&&policy.enabled,phone=intent.phone&&policy.phoneEnabled;
+ const workEmailSearch=intent.workEmailSearch===true&&email&&!phone;
  if(!email&&!phone)return stop('disabled','Paid email and phone research are off for this run.');
  await guard();
  const company=await findCrmCompanyByDomain(env.DB,context.workspaceId,candidate.domain);
@@ -85,7 +86,7 @@ export async function runBuyerPaidResearch(env,context,candidate,{intent,jobId,g
   intent.continuationScopeHash=scope.hash;await onContinuation?.(scope);
   // Capture the unchanged own CRM scope first, then invalidate only the
   // summaries whose newly required deeper work has not actually run.
-  const gaps=priorityDepthGaps(candidate,context,currentDetail);
+  const gaps=priorityDepthGaps(candidate,context,currentDetail,workEmailSearch);
   for(const person of gaps){person.emailResearch={...person.emailResearch,status:'partial'};if(person.contactResearch)person.contactResearch.channels={...person.contactResearch.channels,company:{...person.contactResearch.channels?.company,status:'partial'}};}
   const accountability=candidate.publicResearch.accountability;
   if(accountability){accountability.status='partial';accountability.stopReason='checks_incomplete';accountability.checkedPeople=Math.min(Number(accountability.checkedPeople)||0,(candidate.people||[]).filter(p=>p.emailResearch?.status==='complete').length);accountability.gaps=[...new Set([...(accountability.gaps||[]),'A newly displayed buyer requires deeper public checks before the saved paid attempt continues.'])].slice(0,20);}
@@ -95,7 +96,7 @@ export async function runBuyerPaidResearch(env,context,candidate,{intent,jobId,g
  };
  // A provider email can establish a new displayed buyer without supplying
  // the published evidence needed to waive its deeper public research.
- const depthGaps=priorityDepthGaps(active,context,detail),gapIds=new Set(depthGaps.map(p=>String(p.id)));
+ const depthGaps=priorityDepthGaps(active,context,detail,workEmailSearch),gapIds=new Set(depthGaps.map(p=>String(p.id)));
  if(depthGaps.length){
   if(previous?.code===PAID_PRIORITY_RESEARCH_REQUIRED)return stop('blocked','The bounded free continuation is incomplete. Resume missing public checks before paid research.',PAID_PRIORITY_RESEARCH_INCOMPLETE);
   let pending=report.outcomes.find(row=>gapIds.has(row.personId)&&['checked','processing'].includes(row.status));
@@ -123,9 +124,9 @@ export async function runBuyerPaidResearch(env,context,candidate,{intent,jobId,g
  }
  const done=new Set(report.outcomes.filter(r=>r.status!=='processing').map(r=>r.personId));
  if(!report.outcomes.some(row=>row.status==='processing')&&report.outcomes.filter(r=>r.status==='checked').length>=limit)return stop('complete','Automatic research has checked the selected priority buyers. Other buyers can be checked manually.');
- const targets=P.targets(active,{provider:'treg',automaticBuyerLimit:limit,contactOptions,confirmedEmail:p=>complete(p)?'complete':''}).filter(p=>!done.has(String(p.id)));
+ const targets=P.targets(active,{workEmailSearch,provider:'treg',automaticBuyerLimit:limit,contactOptions,confirmedEmail:p=>complete(p)?'complete':''}).filter(p=>!done.has(String(p.id)));
  const person=targets[0];
- if(!person){const selected=P.targets(active,{provider:'treg',automaticBuyerLimit:limit,contactOptions,confirmedEmail:()=>''});if(selected.length&&selected.every(p=>complete(p)||done.has(String(p.id))))return stop('complete','The selected priority buyers have been checked. Other buyers can be checked manually.');const unresolved=(active.people||[]).filter(p=>!complete(p)&&!done.has(String(p.id)));return stop(unresolved.length?'blocked':'complete',unresolved.length?'Remaining buyers need current qualification, free checks or AI review.':'Enabled paid channels have been checked.');}
+ if(!person){const selected=P.targets(active,{workEmailSearch,provider:'treg',automaticBuyerLimit:limit,contactOptions,confirmedEmail:()=>''});if(selected.length&&selected.every(p=>complete(p)||done.has(String(p.id))))return stop('complete','The selected priority buyers have been checked. Other buyers can be checked manually.');const unresolved=(active.people||[]).filter(p=>!complete(p)&&!done.has(String(p.id)));return stop(unresolved.length?'blocked':'complete',unresolved.length?'Remaining buyers need current qualification, free checks or AI review.':'Enabled paid channels have been checked.');}
  if(!report.outcomes.some(row=>row.personId===String(person.id)&&row.status==='processing')&&report.outcomes.filter(r=>r.status!=='blocked').length>=limit)return stop('complete','Automatic research has checked the selected priority buyers. Other buyers can be checked manually.');
  const contact=contactFor(person),includeEmail=Boolean(email&&!D.acceptedOfficialBuyerEmail(active,person)&&!C.accepted(contact,active.domain,'provider_verified')),includePhone=Boolean(phone&&!D.confirmedBuyerPhone(active,person,contact,{workspaceId:context.workspaceId,companyId:company.id}));
  const attempts=(Number(report.outcomes.find(row=>row.personId===String(person.id))?.attempts)||0)+1;
@@ -133,7 +134,7 @@ export async function runBuyerPaidResearch(env,context,candidate,{intent,jobId,g
  const input={person_id:person.id,provider:'treg',automatic:true,automatic_buyer_limit:limit,automatic_email:email,automatic_phone:phone,data_lookup:includePhone,phone_approved:includePhone,email_lookup:includeEmail};
  if(includePhone&&!includeEmail&&contact.id&&C.accepted(contact,active.domain,'provider_verified'))input.contact_id=contact.id;
  let outcome;
- try{const result=await lookup(env,{...context,guard,writeAuthority:guard.writeAuthority},company.id,input,{guard,signal});await guard();outcome={personId:String(person.id),email:includeEmail,phone:includePhone,status:result.request?.status==='processing'?'processing':'checked',result:result.research?.status||result.request?.status||'checked',checkedAt:stamp(),costMicro:Number(result.research?.costMicro)||0};}
+ try{const result=await lookup(env,{...context,guard,writeAuthority:guard.writeAuthority},company.id,input,{guard,signal,workEmailSearch});await guard();outcome={personId:String(person.id),email:includeEmail,phone:includePhone,status:result.request?.status==='processing'?'processing':'checked',result:result.research?.status||result.request?.status||'checked',reason:String(result.reason||'').slice(0,220),checkedAt:stamp(),costMicro:Number(result.research?.costMicro)||0};}
  catch(error){if(signal?.aborted||['CANCELED','CONTEXT_CHANGED','LEASE_EXPIRED','TIME_BUDGET'].includes(error.code))throw error;outcome={personId:String(person.id),email:includeEmail,phone:includePhone,status:['TREG_RETRY_SAME_LOOKUP','ADDITIONAL_CONTACT_RESERVATION_HOLD',PAID_PRIORITY_RESEARCH_REQUIRED].includes(error.code)?'processing':'blocked',code:error.code||'PAID_RESEARCH_FAILED',reason:String(error.message||'Paid research unavailable').slice(0,220),checkedAt:stamp()};
   if(error.code===PAID_PRIORITY_RESEARCH_REQUIRED){const attempt=await env.DB.prepare("SELECT result_json FROM additional_contact_attempts WHERE workspace_id=? AND company_id=? AND person_id=? AND month=? AND provider='treg'").bind(context.workspaceId,company.id,String(person.id),stamp().slice(0,7)).first();const saved=JSON.parse(attempt?.result_json||'{}');outcome.costMicro=Math.max(Number(saved.research?.costMicro)||0,Number(report.outcomes.find(row=>row.personId===String(person.id))?.costMicro)||0);}
  }
@@ -143,7 +144,7 @@ export async function runBuyerPaidResearch(env,context,candidate,{intent,jobId,g
  report.outcomes=report.outcomes.filter(r=>r.personId!==outcome.personId).concat(outcome).slice(0,10);
  const latest=await getCrmCompany(env.DB,context,company.id);await guard();
  if(paidBuyerScope(paidSnapshotCandidate(candidate,latest))!==paidBuyerScope(candidate))return stop('blocked','Saved buyer qualification or evidence changed after the lookup. Its receipt is retained.','PAID_SCOPE_CHANGED');
- if(priorityDepthGaps(candidate,context,latest).length&&(outcome.status!=='blocked'||outcome.code===PAID_PRIORITY_RESEARCH_REQUIRED))return deferPublic(outcome,latest);
+ if(priorityDepthGaps(candidate,context,latest,workEmailSearch).length&&(outcome.status!=='blocked'||outcome.code===PAID_PRIORITY_RESEARCH_REQUIRED))return deferPublic(outcome,latest);
  if(outcome.status==='blocked')return stop('blocked',outcome.reason);
  if(outcome.status==='processing'){report.reason='The provider lookup is pending; its saved request will be reused.';return false;}
  return false;
