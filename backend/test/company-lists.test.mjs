@@ -161,3 +161,18 @@ test('a reviewed company below the selected score threshold stays out of the ran
  assert.equal(list.results.length,0);
  assert.ok(list.incompleteChecks.some(check=>check.status==='rejected'&&check.reason.includes('below the required 80')));
 });
+
+test('a missing recommendation still follows a published relative operations link before dropping the company',async t=>{
+ const f=await setup(t),base=services(1),reads=[];
+ f.env.COMPANY_LIST_TEST_SERVICES={...base,read:async url=>{
+  reads.push(url);const page=await base.read(url);
+  return {...page,markdown:page.markdown+' [Capabilities](/products)',links:[]};
+ },generate:async p=>{
+  if(p.stage==='review'&&p.pages.length===1)return {decision:'needs_evidence',reason:'Missing capabilities',gaps:['Capabilities'],followupUrls:[]};
+  const value=await base.generate(p);if(p.stage==='assess')value.website='https://factory0.example/';return value;
+ }};
+ const waits=[],first=(await (await route(f,{...input,count:1},'owner',{},waits)).json()).list;await Promise.all(waits);
+ for(let i=0;i<5;i++)await tick(f);
+ const result=await readCompanyList(f.env,workspaceId,first.id);
+ assert.equal(result.status,'complete');assert.deepEqual(reads,['https://factory0.example/','https://factory0.example/products']);assert.equal(result.results[0].audit.reads.length,2);
+});

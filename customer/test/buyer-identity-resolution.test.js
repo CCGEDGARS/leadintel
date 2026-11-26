@@ -64,3 +64,17 @@ test('one request timeout keeps identities pending and continues remaining ident
 test('explicit research cancellation still stops identity resolution',async()=>{
  await assert.rejects(D.resolvePendingBuyerIdentities([pending],[],candidate,profile,async()=>{throw Object.assign(new Error('canceled'),{name:'AbortError',code:'BUYER_RESEARCH_CANCELED'});}),/canceled/);
 });
+
+test('a directory surname mask and current roster resolve a buyer across languages, without conflating employees',async()=>{
+ const domain='fjord-staal.dk',target={company:'Fjord Staal A/S',domain},directory={id:'kim',first_name:'Kim',last_name_obfuscated:'Ch***n',title:'Project Manager',organization:{name:'Fjord-Staal'}};
+ const person=D.traceIdentityBuyers({people:[directory]},target,{decisionMakers:'Project Manager'}).people[0];
+ const url='https://dk.linkedin.com/company/fjord-staal',employee='[Kim Juul Christiansen](https://dk.linkedin.com/in/kim-juul)';
+ const body='# Fjord-Staal\nWebsite\n[Website](https://www.fjord-staal.dk/)\n## Medarbejdere hos Fjord-Staal\n'+employee+'\n## Similar pages\n* Kim Christensen';
+ async function resolve(markdown,sourceRead=true,rows=[]){
+  return (await D.resolvePendingBuyerIdentities([person],[{url,markdown,sourceRead}],target,profile,async()=>rows)).people[0];
+ }
+ const found=await resolve(body);assert.equal(found.name,'Kim Juul Christiansen');assert.equal(found.title,'Project Manager');assert.equal(found.publicNameUrl,url);assert.equal(found.identityStatus,'confirmed');
+ for(const text of [body.replace(domain,'unrelated.dk'),body.replace('Medarbejdere hos','Former employees at'),body.replace('hos Fjord-Staal','hos Fjord Coating'),body.replace(employee,'* Kim Jensen'),body.replace(employee,employee+'\n* Kim Christensen')])assert.equal((await resolve(text)).identityStatus,'pending');
+ assert.equal((await resolve(body,false)).identityStatus,'pending');
+ assert.equal((await resolve('',false,[row('Kim Jensen',target.company,'Project Manager')])).identityStatus,'pending');
+});

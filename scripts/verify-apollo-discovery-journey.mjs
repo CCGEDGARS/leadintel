@@ -8,11 +8,13 @@ import {encryptSecret,importAesKey} from '../backend/src/oauth.js';
 export async function verifyApolloDiscoveryJourney({artifactDir='/tmp/leadintel-apollo-journey'}={}){
  let f,apiCalls=0,paidContactCalls=0;const errors=[],evidence={};
  f=await journeyFixture({durableJobs:true,externalFetch:async(input,options)=>{
-  const url=new URL(typeof input==='string'?input:input.url);if(url.hostname!=='api.apollo.io')return null;
+  const url=new URL(typeof input==='string'?input:input.url);
+  if(url.href==='https://www.linkedin.com/company/forge-industries')return new Response('<h1>Forge Industries</h1><p>Website</p><a href="https://forge.example/">forge.example</a><h2>Employees at Forge Industries</h2><ul><li><a href="https://www.linkedin.com/in/katja-jensen">Katja Jensen</a></li></ul>',{headers:{'Content-Type':'text/html'}});
+  if(url.hostname!=='api.apollo.io')return null;
   if(url.pathname==='/api/v1/auth/health')return Response.json({is_logged_in:true});
   if(!url.pathname.endsWith('/mixed_people/api_search')){paidContactCalls++;throw Error('Unexpected Apollo endpoint: '+url.pathname);}assert.equal(JSON.parse(options.body).reveal_phone_number,undefined);apiCalls++;
-  return Response.json({people:[{id:'apollo-robert',name:'Robert Lund',title:'Head of Procurement',organization:{name:'Forge Industries'},email:'not-revealed@forge.example',phone_number:'+46999999999'},{id:'apollo-alice',name:'Alice Berg',title:'Chief Operating Officer',organization:{name:'Forge Industries'}}]});
- },researchServices:{apollo:(payload,signal,context)=>searchWorkspaceApolloPeople(f.env,context.workspaceId,payload,{...context,signal})}});
+  return Response.json({people:[{id:'apollo-robert',name:'Robert Lund',title:'Head of Procurement',organization:{name:'Forge Industries'},email:'not-revealed@forge.example',phone_number:'+46999999999'},{id:'apollo-alice',name:'Alice Berg',title:'Chief Operating Officer',organization:{name:'Forge Industries'}},{id:'apollo-katja',first_name:'Katja',last_name_obfuscated:'Je***n',title:'Head of Procurement',organization:{name:'Forge Industries'}}]});
+ },researchServices:{publicIndex:async query=>query.startsWith('site:linkedin.com/company/')?[{url:'https://www.linkedin.com/company/forge-industries',title:'Forge Industries',description:''}]:[],apollo:(payload,signal,context)=>searchWorkspaceApolloPeople(f.env,context.workspaceId,payload,{...context,signal})}});
  f.env.OAUTH_TOKEN_ENCRYPTION_KEY=Buffer.alloc(32,23).toString('base64');const encrypted=await encryptSecret('controlled-apollo-key',await importAesKey(f.env.OAUTH_TOKEN_ENCRYPTION_KEY));
  f.DB.raw.prepare("INSERT INTO workspace_service_integrations(workspace_id,provider,encrypted_api_key,key_hint,metadata_json) VALUES(?,'apollo',?,'test',?)").run(workspaceId,encrypted,JSON.stringify({discovery_enabled:true,email_enrichment_enabled:false,phone_enrichment_enabled:false}));
  const {chromium}=await loadPlaywright(),browser=await chromium.launch({executablePath:process.env.LEADINTEL_CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox']});
@@ -40,6 +42,7 @@ export async function verifyApolloDiscoveryJourney({artifactDir='/tmp/leadintel-
   }
   assert.equal(apiCalls,1,'free discovery uses the connected Apollo identity endpoint once');
   assert.equal(paidContactCalls,0,'standalone discovery never reveals email or phone');
+  await page.waitForFunction(()=>discovery.selectedProspects[0].people.some(p=>p.id==='apollo-katja'&&p.name==='Katja Jensen'&&p.publicNameUrl==='https://www.linkedin.com/company/forge-industries'));
   await research.filter({hasText:'Expand web research'}).click();
   await page.waitForFunction(()=>['queued','running'].includes(discovery.selectedProspects[0].buyerResearchJob?.status));
   await f.runJobs(job.id);

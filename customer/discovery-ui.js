@@ -4469,7 +4469,7 @@ function renderSelectedProspects(prospects){
     const companyResearchAction=buyerCompanyResearchAction(candidate);
     const paidPolicy=window.LeadIntelAdditionalContacts?.policy?.();
     const emailLimit=paidPolicy?.provider==='treg'&&paidPolicy.enabled&&candidate.crmId?Math.min(4,Math.max(1,Number(paidPolicy.automaticBuyerLimit)||1)):0;
-    const emailSearch=emailLimit?`<button class="secondary-btn small" type="button" data-find-buyer-emails="${esc(domain)}" data-paid-email-limit="${emailLimit}" data-buyer-context="${context}" ${researchBusy||buyerCompanyRemovalPending.size||buyerCompanySavePending.size?'disabled':''}>Find buyers + verify up to ${emailLimit} work email${emailLimit===1?'':'s'} · uses credits</button>`:'';
+    const emailSearch=emailLimit?`<button class="secondary-btn small" type="button" data-find-buyer-emails="${esc(domain)}" data-paid-email-limit="${emailLimit}" aria-describedby="buyer-email-price-${esc(domain)}" data-buyer-context="${context}" ${researchBusy||buyerCompanyRemovalPending.size||buyerCompanySavePending.size?'disabled':''}>Find buyers + verify up to ${emailLimit} work email${emailLimit===1?'':'s'} · uses credits</button><small id="buyer-email-price-${esc(domain)}">Treg can charge up to $${Number((emailLimit*0.075).toFixed(3))} for ${emailLimit===1?'one buyer':emailLimit+' buyers'} for email finding and verification. Web research and AI charges are separate.</small>`:'';
 
     const researchPending=candidate.peopleStatus==='loading'||candidate.publicContactStatus==='loading';
     const checkedPeople=people.filter(person=>LeadIntelDiscovery.buyerResearchAssessment(person).status==='complete').length;

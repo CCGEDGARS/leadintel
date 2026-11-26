@@ -22,6 +22,17 @@ function sourceKey(value){
  for(const tag of tags)url.searchParams.delete(tag);
  return url.href;
 }
+function pageLinks(page,base,text){
+ const links=[...(Array.isArray(page.links)?page.links:[]),...Array.from(text.matchAll(/\[[^\]\n]+\]\(([^)\s]+)\)/g),m=>m[1])];
+ const resolved=new Set();
+ for(const link of links){
+  const value=typeof link==='string'?link:link?.href||link?.url;
+  if(!value||typeof value!=='string'||value.startsWith('#'))continue;
+  try{const url=M.url(new URL(value,base).href);if(url)resolved.add(url);}catch{}
+  if(resolved.size===100)break;
+ }
+ return [...resolved];
+}
 function newQueries(plan,previous){
  const queries=[],seen=new Set(previous.map(q=>clean(q,350).toLowerCase()));
  for(const raw of Array.isArray(plan.queries)?plan.queries:[]){
@@ -46,7 +57,7 @@ const profileScoring = [
  'Event strength is an integer from 1 to 100. Use 1–49 for an explicit dated event meeting only the minimum selected definition, 50–79 when the source identifies the relevant company action, and 80–99 for a specific project, scope or commitment. Reserve 100 for that level of detail corroborated by an independent source. Syndicated copies count as one source.',
  'The application calculates the profile fit (maximum 90) and verified event bonus (maximum 10), applying source, recency and selected event weights. Judge the substance of each event before those adjustments. Requested list size never changes strength.'
 ].join(' ');
-const profileAssessment='Return {company,website,excluded,identity:{url,quote},location:{market,label,url,quote},commercialFit:{status:"supported|unknown",url,quote,reason},profileMatches:[{profileId,url,quote,date,strength,reason,referenceId,referenceQuote,opportunityId,opportunityQuote}],signalMatches:[{signalId,url,quote,date,strength,reason}],gaps:[],followupUrls:[]}. Every quote must occur in the supplied read pages and belong to this company. Copy each quote exactly as it is written on the page, at least 12 characters long. Identity must name the company on its official domain; the identity quote is a phrase or line that contains the company name, never the name alone. location.label is a place name copied exactly as it is written inside location.quote, for example the town from the address; add no country or other words to it. Commercial fit needs a sourced operation/application relevant to the selected offers. Check all exclusions. For missing required evidence suggest up to three URLs from the supplied pages/links. Return excluded:true for a confirmed exclusion. '+profileRules+' '+profileScoring;
+const profileAssessment='Return {company,website,excluded,identity:{url,quote},location:{market,label,url,quote},commercialFit:{status:"supported|unknown",url,quote,reason},profileMatches:[{profileId,url,quote,date,strength,reason,referenceId,referenceQuote,opportunityId,opportunityQuote}],signalMatches:[{signalId,url,quote,date,strength,reason}],gaps:[],followupUrls:[]}. Every quote must occur in the supplied read pages and belong to this company. On external pages quote the sentence naming the prospect or a passage under a heading naming that company. For unattributed claims find the official page. Copy each quote exactly as it is written on the page, at least 12 characters long. Identity must name the company on its official domain; the identity quote is a phrase or line that contains the company name, never the name alone. location.label is a place name copied exactly as it is written inside location.quote, for example the town from the address; add no country or other words to it. Commercial fit needs a sourced operation/application relevant to the selected offers. Check all exclusions. For missing required evidence suggest up to three URLs from the supplied pages/links. Return excluded:true for a confirmed exclusion. '+profileRules+' '+profileScoring;
 const profileReview='Independently audit the candidate against the read pages, selected profiles, references and opportunities; do not trust its assessment. Return {decision:"pass|needs_evidence|reject",identityConfirmed:boolean,marketConfirmed:boolean,commercialFitConfirmed:boolean,exclusionsChecked:boolean,supportedProfileIds:[],supportedSignalIds:[],reason,gaps:[],followupUrls:[]}. Pass only supported company identity, operating market, commercial application, profile matches and required signals with resolved exclusions. Verify the meaning and attribution of every quote and business comparison. In profile any mode, unsupported optional profiles may be omitted from supportedProfileIds if another selected profile is verified. In profile all mode, every selected profile is mandatory. Unsupported optional signals may be omitted from supportedSignalIds without rejecting valid profile matches; mandatory gaps require needs_evidence. Wrong identity or confirmed exclusion means reject. Missing optional events are not mandatory gaps. Only supplied links can be proposed. Check each retained match against its unadjusted strength when present. For earlier candidates with only a calculated score, audit the source evidence and account for its source and recency adjustments. '+profileRules+' '+profileScoring;
 const profilePlanning='Return {queries:[strings]}. Plan at most eight distinct searches for the selected profiles and list countries. Use Core definitions, selected reference traits for Lookalike, selected buying events for Trigger-led, and source-backed saved opportunity themes for Opportunity-led. Respect profile any/all and signal off/boost/require. In boost mode discover profile fits broadly as well as candidates with selected events. In require mode seek both. Do not add inactive or unselected profiles/signals, or require events for a profiles-only Lookalike search. Use local business language and English; diversify official websites, industry associations and specialist sources. Avoid previous queries and matched companies. Resolve the supplied evidence gaps. Do not invent names or URLs. Return no queries only when no useful research remains. '+profileRules;
 // Structured target criteria are decided by business-register facts, not by the
@@ -314,7 +325,19 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
    if((task.depth||0)>=3)return false;
    const allowed=new Set(pages.flatMap(p=>[...(p.links||[]),...(p.text.match(/https?:\/\/[^\s<>"\]\)]+/g)||[])]).map(M.url).filter(Boolean));
    const additions=[];
-   for(const url of new Set((Array.isArray(raw.followupUrls)?raw.followupUrls:[]).slice(0,3).map(M.url))){
+   const proposed=(Array.isArray(raw.followupUrls)?raw.followupUrls:[]).flatMap(value=>{
+    try{const url=M.url(new URL(value,task.url).href);return allowed.has(url)?[url]:[];}catch{return [];}
+   });
+   // An incomplete assessment can omit the next page even when the official
+   // homepage links straight to its operations and physical address.
+   if(!proposed.length&&!task.depth&&raw.excluded!==true){
+    const internal=[...allowed].filter(url=>M.domain(url)===M.domain(task.url)&&!pages.some(p=>sourceKey(p.url)===sourceKey(url)));
+    for(const section of [/(?:^|\/)(?:about(?:-us)?|om-os|om-oss|products?|services?|capabilities|leistungen)(?:\/|$)/i,/(?:^|\/)(?:contact(?:-us)?|kontakt(?:-os)?|locations|standorte)(?:\/|$)/i]){
+     const link=internal.find(url=>section.test(new URL(url).pathname));
+     if(link)proposed.push(link);
+    }
+   }
+   for(const url of new Set(proposed.slice(0,3))){
     const key=sourceKey(url);
     if(!allowed.has(url)||pages.some(p=>sourceKey(p.url)===key))continue;
     // A search may already have queued the linked page as a standalone hit.
@@ -399,7 +422,7 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
      });
      const p=raw.data||raw,actual=M.url(p.url||p.metadata?.sourceURL||task.url),text=String(p.markdown||p.description||p.text||'').slice(0,16000);
      if(M.domain(actual)!==M.domain(task.url)||text.trim().length<40){recordGap(task,'Source redirected to another domain or returned no readable evidence.');drop(task);save();return;}
-     task.page={url:actual,text,links:(Array.isArray(p.links)?p.links:[]).map(M.url).filter(Boolean).slice(0,100),readAt:new Date().toISOString(),receipt:{...lane.last}};
+     task.page={url:actual,text,links:pageLinks(p,actual,text),readAt:new Date().toISOString(),receipt:{...lane.last}};
      s.phase='checking';save();return;
     }
     const pages=[...(task.context||[]),task.page];
@@ -610,7 +633,7 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
       });
       const p=raw.data||raw,actual=M.url(p.url||p.metadata?.sourceURL||task.url),text=String(p.markdown||p.description||p.text||'').slice(0,16000);
       if(M.domain(actual)!==M.domain(task.url)||text.trim().length<40){recordGap(task,'Source redirected to another domain or returned no readable evidence.');s.pending.shift();await checkpoint();continue;}
-      task.page={url:actual,text,links:(Array.isArray(p.links)?p.links:[]).map(M.url).filter(Boolean).slice(0,100),readAt:new Date().toISOString(),receipt:{...lastOperation}};
+      task.page={url:actual,text,links:pageLinks(p,actual,text),readAt:new Date().toISOString(),receipt:{...lastOperation}};
       s.phase='checking';s.reason=profilePolicy?'Checking company identity, market and selected profiles':'Checking company identity, market and selected signals';await checkpoint();
      }else{
       // Preserve actual read pages for follow-up and review. Never reconstruct a

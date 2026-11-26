@@ -230,3 +230,20 @@ test('the card is walked from the heading it was recognised by, not from another
  nothing('Karla Holm','Teknisk Chef',`### [Karla](mailto:x@${domain}) Holm\nTeknisk chef\nDirekte 12 34 56 78\n## Projekter\nKarla Holm\nTeknisk chef\n${link('kh')}`,'the heading holds a mail link, a plain mention follows further down');
  nothing('Karla Holm','Teknisk Chef',`Karla Holm\nTeknisk Chef\n${link('kh')}\n### Karla Holm\nTeknisk Chef\nDirekte tlf.: 12 34 56 78\n### Kim Hansen\nIngeniør`,'a plain mention first, the heading after it');
 });
+
+test('nested staff headings keep labelled local numbers and initials on the right card after reload',()=>{
+ const company={company:'Fjord Engineering A/S',domain:'fjord-engineering.dk',buyerSearchMode:'user_selected_target',buyerRoles:['Production Manager']};
+ const url='https://fjord-engineering.dk/contact/',row={url,sourceRead:true,markdown:[
+ '#### Pia Beck Jensen','##### Production Manager','Telefon: 25 16 94 20','E-mail: pb@fjord-engineering.dk',
+ '#### Poul Brand','##### Production Manager','Telefon: 25 16 94 21','E-mail: pb@fjord-engineering.dkpb@fjord-engineering.dk',
+ '#### Anna Lund','##### Production Manager','Telefon: 25 16 94 23','E-mail: al@fjord-engineering.dk (pb@fjord-engineering.dk)',
+ '## Office','Telefon: 25 16 94 23'
+ ].join('\n')};
+ const buyers=['Pia Beck Jensen','Poul Brand','Anna Lund'].map((name,i)=>({id:'p'+i,name,title:'Production Manager',organization:company.company}));
+ const people=D.matchPublicBuyerDetails(buyers,[row],company.domain,company.company);
+ const restored=D.normalizeDiscoveryState({selectedProspects:[{...company,people}]}).selectedProspects[0].people;
+ assert.equal(D.acceptedOfficialBuyerEmail(company,restored[0]),'pb@fjord-engineering.dk');
+ assert.equal(D.confirmedBuyerPhone(company,restored[0]),'25 16 94 20');
+ assert.equal(restored[1].publicEmail,'');assert.equal(restored[2].publicEmail,'');assert.equal(restored[2].publicPhone,'');
+ assert.equal(D.validResearchEmail('pb@fjord-engineering.dkpb@fjord-engineering.dk',company.domain),false);
+});

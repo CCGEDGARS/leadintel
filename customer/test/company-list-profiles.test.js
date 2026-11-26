@@ -159,3 +159,14 @@ test('year and month precision cannot establish a current buying signal or dated
   assert.equal(Boolean(review(opportunity,raw,{},[source])),exact,date);
  }
 });
+
+test('a different company’s external evidence cannot qualify a prospect or raise its priority',()=>{
+ const company='Factory',external={url:'https://guild.example/members',text:'# Companies\n## Other Foundry\nOperates a milling line in Stockholm, Sweden.\nPublished 2026-11-01: Other Foundry is hiring production engineers.\n## Factory\nOperates a Danish fabrication plant in Odense.'};
+ const c=config({profileIds:['icp-core'],signalMode:'boost',signalIds:['hiring']});
+ const foreign={url:external.url,quote:'Operates a milling line in Stockholm, Sweden.'},raw=candidate(),pages=[page,external];
+ for(const field of ['location','commercialFit'])assert.equal(review(c,{...raw,[field]:{...raw[field],...foreign}}, {},pages),null,field);
+ assert.equal(review(c,{...raw,profileMatches:[{...raw.profileMatches[0],...foreign}]},{},pages),null);
+ const match=review(c,{...raw,signalMatches:[{...raw.signalMatches[0],url:external.url,quote:'Other Foundry is hiring production engineers.'}]},{},pages);
+ assert.equal(match.signalBonus,0);
+ assert.ok(review(c,{...raw,commercialFit:{...raw.commercialFit,url:external.url,quote:'Operates a Danish fabrication plant in Odense.'}}, {},pages));
+});
