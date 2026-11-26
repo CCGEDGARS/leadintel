@@ -148,3 +148,23 @@
  .cl-ranked-list tr:has(details[open]) .cl-fit { grid-column: 1/-1; grid-row: auto; }
  .cl-ranked-list .cl-buyer-action { grid-column: 1/-1; }
 }
+
+.cl-industry-picker{margin:16px 0;padding:clamp(14px,2vw,24px);border:1px solid #d6e4dc;border-radius:12px;background:#f8faf8}
+.cl-industry-head{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px}
+.cl-industry-head h4{margin:0;font-size:1.1rem}
+.cl-industry-head p{margin:4px 0 0;color:#496154}
+.cl-industry-head button{min-height:44px}
+#cl-industry-status:empty{display:none}
+#cl-industry-status{font-weight:600;margin:16px 0 10px}
+.cl-industry-cards,.cl-industry-picker .cl-industries{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,235px),1fr));gap:8px}
+.cl-industry-cards label,.cl-industry-picker .cl-industries label{display:flex;align-items:baseline;gap:9px;min-height:44px;box-sizing:border-box;padding:11px 12px;border:1px solid #d5e0d9;border-radius:8px;background:white;cursor:pointer}
+.cl-industry-picker label:has(input:checked){border-color:#669b89;background:#edf6f1}
+.cl-industry-picker label:focus-within{outline:2px solid #21664e;outline-offset:2px}
+.cl-industry-picker input[type=checkbox]{flex:none;accent-color:#185c47;margin:0}
+.cl-industry-picker label small{display:inline;margin:0 4px 0 0;font-variant-numeric:tabular-nums}
+.cl-industry-cards label span span{display:block;margin-top:5px;font-size:.9rem;line-height:1.4;color:#465c50}
+.cl-industry-catalogue{margin:12px 0 6px;border-top:1px solid #d6e4dc}
+.cl-industry-catalogue summary{font-weight:600}
+.cl-industry-catalogue summary small{font-weight:400;margin-left:8px}
+.cl-industry-focus{display:block;margin-top:15px;font-weight:600}
+.cl-industry-focus small{font-weight:400}
