@@ -94,6 +94,9 @@
   }
   function slug(value){const text=clean(value).toLowerCase();return text.replace(/\p{Script=Cyrillic}/u.test(text)?/[^\p{L}\p{N}]+/gu:/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")||"item";}
   function normalizeUrl(value){try{const u=new URL(clean(value));return ["http:","https:"].includes(u.protocol)?u.href:"";}catch{return "";}}
+  // One LinkedIn profile is one identity whatever host or letter case a source printed
+  // (dk.linkedin.com/in/x and www.linkedin.com/in/X are the same profile). Used to compare, never to display.
+  function linkedInProfileKey(value){const url=normalizeLinkedInUrl(value);return url?url.replace(/^https?:\/\/(?:[a-z]{2,3}\.)?linkedin\.com\//i,'https://www.linkedin.com/').toLowerCase():"";}
   function normalizeLinkedInUrl(value){
     const url=normalizeUrl(value);if(!url)return "";
     try{
@@ -1865,16 +1868,17 @@
     for(const person of [...previous,...incoming]){
       if(malformedBuyerRole(person.title)||isNonPersonBuyerHeading(person.publicName||person.name)||isOfficeContactRole(person.title))continue;
       let key=buyerIdentity(person);if(!key)continue;
-      const full=clean(person.publicName||person.name).toLowerCase(),url=normalizeLinkedInUrl(person.publicLinkedinUrl||person.linkedin_url);
+      const full=clean(person.publicName||person.name).toLowerCase(),url=linkedInProfileKey(person.publicLinkedinUrl||person.linkedin_url);
       const same=[...merged.entries()].filter(([oldKey,old])=>{
-        if(person.id&&(old.id===person.id||(aliases.get(oldKey)?.has(person.id)||(old.identitySourceIds||[]).includes(person.id)||(person.identitySourceIds||[]).includes(old.id))&&full===clean(old.publicName||old.name).toLowerCase())){const oldProfile=normalizeLinkedInUrl(old.publicLinkedinUrl||old.linkedin_url);return (!url||!oldProfile||url===oldProfile)&&(!person.organization||!old.organization||companyNameMatches(person.organization,old.organization));}
-        const oldUrl=normalizeLinkedInUrl(old.publicLinkedinUrl||old.linkedin_url);
-        return full.split(/\s+/).length>=2&&full===clean(old.publicName||old.name).toLowerCase()&&(!url||!oldUrl||url===oldUrl)&&(!person.organization||!old.organization||companyNameMatches(person.organization,old.organization))&&(url&&oldUrl&&url===oldUrl||!person.title||!old.title||Boolean(roleRelevance(person,[old.title])));
+        if(person.id&&(old.id===person.id||(aliases.get(oldKey)?.has(person.id)||(old.identitySourceIds||[]).includes(person.id)||(person.identitySourceIds||[]).includes(old.id))&&full===clean(old.publicName||old.name).toLowerCase())){const oldProfile=linkedInProfileKey(old.publicLinkedinUrl||old.linkedin_url);return (!url||!oldProfile||url===oldProfile)&&(!person.organization||!old.organization||companyNameMatches(person.organization,old.organization));}
+        const oldUrl=linkedInProfileKey(old.publicLinkedinUrl||old.linkedin_url);
+        // Two titles that both lead the company ("CEO", "Administrerende direktør", "Ejer") are one role for one name.
+        return full.split(/\s+/).length>=2&&full===clean(old.publicName||old.name).toLowerCase()&&(!url||!oldUrl||url===oldUrl)&&(!person.organization||!old.organization||companyNameMatches(person.organization,old.organization))&&(url&&oldUrl&&url===oldUrl||!person.title||!old.title||Boolean(roleRelevance(person,[old.title]))||isExecutiveBuyer(person)&&isExecutiveBuyer(old));
       });
       // A newly discovered exact profile may connect two earlier source rows.
       // Collapse only a consistent full identity; a namesake/profile disagreement
       // must remain separate. Keep all IDs during this pass so sparse replays join it.
-      const bridge=same.length>1&&hasFullBuyerName(full)&&same.every(([,old])=>clean(old.publicName||old.name).toLowerCase()===full&&(!url||!normalizeLinkedInUrl(old.publicLinkedinUrl||old.linkedin_url)||url===normalizeLinkedInUrl(old.publicLinkedinUrl||old.linkedin_url))&&(person.id===old.id||(person.identitySourceIds||[]).includes(old.id)||url&&url===normalizeLinkedInUrl(old.publicLinkedinUrl||old.linkedin_url)));
+      const bridge=same.length>1&&hasFullBuyerName(full)&&same.every(([,old])=>clean(old.publicName||old.name).toLowerCase()===full&&(!url||!linkedInProfileKey(old.publicLinkedinUrl||old.linkedin_url)||url===linkedInProfileKey(old.publicLinkedinUrl||old.linkedin_url))&&(person.id===old.id||(person.identitySourceIds||[]).includes(old.id)||url&&url===linkedInProfileKey(old.publicLinkedinUrl||old.linkedin_url)));
       if(bridge)same.sort((a,b)=>Number(b[1].flowSelected===true)-Number(a[1].flowSelected===true)||Number(Boolean(b[1].linkedinConfirmedUrl)&&b[1].linkedinConfirmationMethod==='manual')-Number(Boolean(a[1].linkedinConfirmedUrl)&&a[1].linkedinConfirmationMethod==='manual')||Number(b[1].kept===true)-Number(a[1].kept===true));
       if(same.length===1||bridge)key=same[0][0];
       else if(merged.has(key))key=key+'|'+clean(person.organization).toLowerCase()+'|'+clean(person.title).toLowerCase()+'|'+clean(person.id);
@@ -1884,7 +1888,7 @@
         old=mergeBuyerPoolRecord(old,other);for(const id of [...(aliases.get(otherKey)||[]),other.id])if(id)joinedIds.add(id);merged.delete(otherKey);aliases.delete(otherKey);
       }
       aliases.set(key,joinedIds);
-      const idConflict=[...merged.values()].find(item=>item.id&&item.id===person.id&&normalizeLinkedInUrl(item.publicLinkedinUrl||item.linkedin_url)&&url&&normalizeLinkedInUrl(item.publicLinkedinUrl||item.linkedin_url)!==url);
+      const idConflict=[...merged.values()].find(item=>item.id&&item.id===person.id&&linkedInProfileKey(item.publicLinkedinUrl||item.linkedin_url)&&url&&linkedInProfileKey(item.publicLinkedinUrl||item.linkedin_url)!==url);
       merged.set(key,mergeBuyerPoolRecord(old,person,idConflict));
     }
     const values=[...merged.values()].filter(person=>!malformedBuyerRole(person.title));

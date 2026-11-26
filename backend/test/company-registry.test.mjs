@@ -146,11 +146,19 @@ const management=(input,routes,options={})=>{const a=api(routes);return lookupCo
 test('registered management comes from the single-company record: natural persons with a known role, name and start date only',async()=>{
  const record=entity({direktion:[director,{...director,name:'Dahl Holding ApS',type:'VIRKSOMHED',cvr:44444444},{...director,name:'Karl Berg Olsen',type:'VIRKSOMHED',cvr:55555555},{...director,name:'Jens Holm',role:'UKENDT ROLLE'},{...director,name:'  Bo   Krag ',startdate:null}]});
  const {result,calls}=await management({},{'/search/company/Nordstål':json([entity({direktion:[]})]),'/11111111':json(record)});
- assert.deepEqual(result,{status:'found',registry:'DK-CVR',country:'DK',id:'11111111',name:'NORDSTÅL A/S',active:true,
+ assert.deepEqual(result,{status:'found',registry:'DK-CVR',country:'DK',id:'11111111',name:'NORDSTÅL A/S',active:true,city:'Give',
   management:[{name:'Rita Holm Dahl',role:'Direktør',since:'2016-05-04'},{name:'Bo Krag',role:'Direktør',since:''}],
   source:{name:'CVR (Danish Central Business Register) via apicvr.dk',url:'https://apicvr.dk/api/v1/11111111',checkedAt:'2026-11-20T18:00:00.000Z'}});
  assert.ok(!/Smedevej|7323/.test(JSON.stringify(result)),'the register publishes addresses of directors; they are not taken');
  assert.deepEqual(calls.map(call=>new URL(call.url).pathname),['/api/v1/search/company/Nordst%C3%A5l','/api/v1/11111111']);
+});
+
+// B3, 26 Nov 2026: a public people search needs the company's town to tell a short name from namesakes.
+test('the register answer carries the company\'s own city and never a director\'s address',async()=>{
+ const record=entity({city:'Hvide Sande',direktion:[{...director,city:'Hillerød'}]});
+ const {result}=await management({},{'/search/company/Nordstål':json([entity({direktion:[]})]),'/11111111':json(record)});
+ assert.equal(result.city,'Hvide Sande');
+ assert.ok(!/Hillerød|Smedevej|7323/.test(JSON.stringify(result)),JSON.stringify(result));
 });
 test('no management is reported unless the register settled on exactly this company',async()=>{
  const member=entity({vat:55555555,name:'Nordstål Montage A/S',employees:40});

@@ -59,6 +59,21 @@ test('a profile person stays in the buyer pool when the ten shown places are alr
  assert.ok(saved.people.length<=10);
 });
 
+test('the register\'s city is saved and narrows the people searches; asking again for it never loses a found answer',async t=>{
+ const registerAnswer={status:'found',registry:'DK-CVR',country:'DK',id:'12345678',name:'FORGE INDUSTRIES',active:true,management:[],source:{name:'CVR',url:'https://apicvr.dk/api/v1/12345678'},city:'Hvide Sande'};
+ const {f,job}=await identitiesJob(t);const asked=[];
+ await run(f.env,{jobId:job.id,services:services({registry:async()=>registerAnswer,peopleSearch:async query=>{asked.push(query);return [];}})});
+ const saved=JSON.parse((await readBuyerJob(f.env,workspaceId,{id:job.id})).result_json);
+ assert.equal(saved.buyerDiscovery.registerManagement.city,'Hvide Sande');
+ assert.ok(asked.some(query=>query.includes('Hvide Sande')),JSON.stringify(asked));
+ // A job saved before the city existed: the register is asked once more; an outage keeps the found answer.
+ const second=await identitiesJob(t);
+ second.f.DB.raw.prepare("UPDATE buyer_research_jobs SET result_json=json_set(result_json,'$.buyerDiscovery',json(?)) WHERE id=?").run(JSON.stringify({registerManagement:{status:'found',id:'12345678',people:1,attempts:1,checkedAt:'2026-11-25T21:52:20.245Z'}}),second.job.id);
+ await run(second.f.env,{jobId:second.job.id,services:services({registry:async()=>({status:'unavailable'}),peopleSearch:async()=>[]})});
+ const kept=JSON.parse((await readBuyerJob(second.f.env,workspaceId,{id:second.job.id})).result_json).buyerDiscovery.registerManagement;
+ assert.deepEqual({status:kept.status,people:kept.people,attempts:kept.attempts},{status:'found',people:1,attempts:2});
+});
+
 test('a person the job already holds keeps the evidence it has',async t=>{
  const {f,job}=await identitiesJob(t);
  const peopleSearch=async()=>[profileRow('robert-lund-3','Robert Lund','- **Procurement Lead**\n**Forge Industries**\nJanuary 2021 - Present')];

@@ -147,7 +147,10 @@ export async function lookupCompanyManagement(input={},{fetch=globalThis.fetch,s
   .filter(person=>person&&person.type==='PERSON'&&typeof person.name==='string'&&person.name.trim()&&!NOT_A_PERSON.test(person.name.trim().replace(/\s+/g,' ')))
   .map(person=>({name:person.name.trim().replace(/\s+/g,' '),role:DK_MANAGEMENT_ROLES.get(String(person.role??'').trim().toUpperCase())||'',since:/^\d{4}-\d{2}-\d{2}$/.test(person.startdate||'')?person.startdate:''}))
   .filter(person=>person.role).slice(0,8);
- return {status:'found',registry:found.registry,country:found.country,id:found.id,name:found.name,active:found.active,management,source:found.source};
+ // The company's own registered city (never a director's address) lets a public people search tell a short or
+ // common company name from namesakes elsewhere.
+ const city=String(record.city??record.cityname??'').trim().replace(/\s+/g,' ').slice(0,80);
+ return {status:'found',registry:found.registry,country:found.country,id:found.id,name:found.name,active:found.active,management,source:found.source,...(city?{city}:{})};
 }
 
 // The register answer as the read source the Buyers engine understands (its register path reads
