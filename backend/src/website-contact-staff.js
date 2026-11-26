@@ -37,10 +37,13 @@ function nestedStaffCards(page,input){
     }
    }
   }
-  const [address]=listed,email=listed.size===1&&D.validResearchEmail(address,input.domain)?address:'',phone=numbers.size===1?[...numbers.values()][0]:'';
-  if(!email&&!phone)continue;
+  const workEmails=[...listed].filter(value=>D.validResearchEmail(value,input.domain)&&! /^(info|kontakt|contact|office|sales|reception)@/i.test(value));
+  const profiles=[...new Set((details.match(/https?:\/\/(?:[a-z]+\.)?linkedin\.com\/in\/[^\s)\]>]+/gi)||[]).map(D.normalizeProfessionalLinkedInUrl).filter(Boolean))];
+  const profile=profiles.length===1?profiles[0]:'';
+  const email=workEmails.length===1?workEmails[0]:'',phone=numbers.size===1?[...numbers.values()][0]:'';
+  if(!email&&!phone&&!profile)continue;
   people.push({name,publicName:name,title,organization:input.company,publicNameUrl:page.url,identitySource:'public',identityStatus:'confirmed',nameVerification:'confirmed',companyContactSource:'official_staff',
-   publishedStaffCard:{url:page.url,email,phone,quote:clean(name+' '+title+' '+details).slice(0,700),checkedAt:page.extractedAt}});
+   ...(profile?{publicLinkedinUrl:profile}:{}),publishedStaffCard:{url:page.url,email,phone,quote:clean(name+' '+title+' '+details).slice(0,700),checkedAt:page.extractedAt}});
  }
  return people;
 }

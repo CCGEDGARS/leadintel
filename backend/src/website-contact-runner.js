@@ -1,3 +1,4 @@
+import {managementShortlist,searchManagementIndex} from './website-management.js';
 import {websiteSourceChunks as sourceChunks,websiteStaffCards as localStaffCards} from './website-contact-staff.js';
 import {reviewWebsiteLinkedIn,websiteLinkedInMatchRows,websiteLinkedInQueries,websiteLinkedInReviewCurrent,WEBSITE_LINKEDIN_REVIEW_VERSION} from './website-linkedin-review.js';
 import {websiteFreeResearchComplete,websiteContactRole,websiteContactIdentity,websiteNameKey,websiteProfileKey,websiteIdentitySupport,websiteIdentityCheckKey} from './website-contact-evidence.js';
@@ -5,7 +6,7 @@ import {reconcileWebsiteContactIdentities} from './website-contact-identity.js';
 import {storageFailure} from './workspace-storage.js';
 import {contactSql as sql,contactParse as parse,contactAuthority as authority,contactError,contactActive} from './website-contact-store.js';
 import {createBuyerSourceSearch} from './buyer-source-search.js';
-import {readPublicBuyerPage,searchWorkspaceApolloPeople} from './service-integrations.js';
+import {fetchDirectPublicPage,readPublicBuyerPage,searchWorkspaceApolloPeople} from './service-integrations.js';
 import {searchWorkspaceBuyerContact} from './ai-routes.js';
 import '../../customer/discovery-engine.js';
 import S from '../../customer/website-scanning.js';
@@ -54,13 +55,14 @@ function acquire(state,input){
  const all=roster.sort((a,b)=>leadership(a.title)-leadership(b.title)||a.name.localeCompare(b.name));
  state.coverage.peopleTruncated=all.length>300;state.people=all.slice(0,300);state.coverage.channelLimitReached=channels.size>300||routes.size>300;state.channels=[...channels.values()].slice(0,300);state.routes=[...routes.values()].slice(0,300);
  reconcileWebsiteContactIdentities(state,input);
+ if(input.managementLimit)state.people=managementShortlist(state.people,input.managementLimit,input.buyerRoles);
 }
 function compact(state){
  // Completed person receipts and exact source quotes live on the roster. Rotate
  // old response bodies, retaining URL/read/time/count receipts; a future need
  // for an archived body triggers a fresh read, never a fabricated cache hit.
  const completed=state.tasks.filter(t=>t.status==='complete'),keepReads=new Set(completed.filter(t=>t.kind==='read').slice(-60)),keepSearches=new Set(completed.filter(t=>t.kind==='search').slice(-60));
- for(const task of completed){if(task.kind==='read'&&state.phase==='contacts')delete task.result.links;if(task.kind==='read'&&!keepReads.has(task)&&!task.archived){const {markdown,links,...receipt}=task.result;task.result={...receipt,archived:true};task.archived=true;task.attempts=0;state.coverage.rotatedBodies=true;}if(task.kind==='search'&&!keepSearches.has(task)&&!task.archived){task.resultCount=task.result.length;task.result=task.result.map(({url,title})=>({url,title}));task.archived=true;task.attempts=0;state.coverage.rotatedBodies=true;}}
+ for(const task of completed){if(task.kind==='read'&&state.phase==='contacts'&&state.coverage.peopleLimit===300)delete task.result.links;if(task.kind==='read'&&!keepReads.has(task)&&!task.archived){const {markdown,links,...receipt}=task.result;task.result={...receipt,archived:true};task.archived=true;task.attempts=0;state.coverage.rotatedBodies=true;}if(task.kind==='search'&&!keepSearches.has(task)&&!task.archived){task.resultCount=task.result.length;task.result=task.result.map(({url,title})=>({url,title}));task.archived=true;task.attempts=0;state.coverage.rotatedBodies=true;}}
 }
 function queries(input){const domain=input.domain,name=input.company.replaceAll('"','');
  const localLeadership=domain.endsWith('.dk')?' OR direktør OR produktionsdirektør OR bestyrelse':'';
@@ -85,7 +87,8 @@ export async function runWebsiteContactJobs(env,{jobId,now=Date.now(),windowMs=4
  const excluded=focused?[]:(state.people||[]).filter(p=>!websiteContactIdentity(p));
  if(excluded.length){state.excludedIdentities=[...(state.excludedIdentities||[]),...excluded.map(p=>({...p,exclusionReason:'Indexed publication or unsupported professional identity'}))].slice(-300);state.people=state.people.filter(websiteContactIdentity);}
  if(!focused)reconcileWebsiteContactIdentities(state,input);
- if(!focused&&!services.checkPerson&&state.linkedinReviewVersion!==WEBSITE_LINKEDIN_REVIEW_VERSION){for(const person of state.people||[])if(!websiteLinkedInReviewCurrent(input,person))delete person.freeResearchStatus;state.linkedinReviewVersion=WEBSITE_LINKEDIN_REVIEW_VERSION;}
+ if(input.managementLimit)state.people=managementShortlist(state.people,input.managementLimit,input.buyerRoles);
+ if(!input.managementLimit&&!focused&&!services.checkPerson&&state.linkedinReviewVersion!==WEBSITE_LINKEDIN_REVIEW_VERSION){for(const person of state.people||[])if(!websiteLinkedInReviewCurrent(input,person))delete person.freeResearchStatus;state.linkedinReviewVersion=WEBSITE_LINKEDIN_REVIEW_VERSION;}
  const guard=async()=>{
   if(controller.signal.aborted)throw Object.assign(Error('Processing slice ended'),{code:'TIME_BUDGET'});
   if(clock()>=row.deadline_at)throw Object.assign(Error('Research pass time limit reached; results are saved. Continue unfinished checks when needed.'),{code:'PASS_LIMIT'});
@@ -129,7 +132,7 @@ export async function runWebsiteContactJobs(env,{jobId,now=Date.now(),windowMs=4
  const search=async query=>task('search',query,async signal=>{const raw=await searchSource(query,{signal});if(signal.aborted)throw signal.reason;const rows=(Array.isArray(raw)?raw:raw?.results||[]).slice(0,8).map(r=>({url:S.safeUrl(r.url),title:clean(r.title).slice(0,300),description:String(r.description||r.text||'').slice(0,1800),evidenceKind:'search_excerpt'})).filter(r=>r.url);if(services.search)observe({provider:'controlled-public-search',operation:'search',status:'succeeded',results:rows.length});return rows;});
  const establishes=(page,officialContactPage=false)=>page&&sameHost(page.url,input.domain)&&S.assessIdentity({name:input.company,website:input.website},{url:page.url,text:page.markdown,title:page.title},{officialContactPage}).verified;
  const read=async (url,{confirmCompany=false}={})=>task('read',S.safeUrl(url),async(signal,operationMs)=>{
-  let raw;try{raw=await (services.read||((url,signal)=>readPublicBuyerPage(env,row.workspace_id,url,{purpose:'website_contacts',signal,totalTimeoutMs:Math.min(18000,operationMs)})))(url,signal);}catch(error){
+  let raw;try{raw=await (services.read||(input.managementLimit?((url,signal)=>fetchDirectPublicPage(url,{signal})):null)||((url,signal)=>readPublicBuyerPage(env,row.workspace_id,url,{purpose:'website_contacts',signal,totalTimeoutMs:Math.min(18000,operationMs)})))(url,signal);}catch(error){
    for(const entry of error.researchTrace||[])observe(entry);
    const details=(error.researchTrace||[]).map(entry=>[entry.provider,entry.reason].filter(Boolean).join(' · ')).join(', ');
    if(details&&!signal.aborted)error.message=error.message+' ('+details+')';
@@ -151,8 +154,8 @@ export async function runWebsiteContactJobs(env,{jobId,now=Date.now(),windowMs=4
  };
  const recordIdentity=(candidate,person,review,page)=>{
   const official=page&&person.identityOrigin==='official'&&sameHost(page.url,input.domain)&&page.url===person.publicNameUrl&&[...D.discoverCompanyContacts([page],candidate,[]),...localStaffCards(page,input)].some(p=>websiteNameKey(p.publicName||p.name)===websiteNameKey(person.publicName||person.name)&&websiteContactRole(p.title)===websiteContactRole(person.title));
-  const confirmed=websiteLinkedInReviewCurrent(candidate,person)&&websiteIdentitySupport(candidate,person).eligible&&(review.matchStatus==='double_checked'||official);
-  person.identityCheck={version:1,status:confirmed?'confirmed':'needs_review',checkedAt:new Date().toISOString(),identityKey:websiteIdentityCheckKey(candidate,person),evidenceKind:official?'official':'professional_profile',...(official?{sourceUrl:page.url,sourceCheckedAt:state.tasks.find(t=>t.kind==='read'&&t.value===page.url&&!t.archived)?.checkedAt}:{})};
+  const confirmed=websiteIdentitySupport(candidate,person).eligible&&(input.managementLimit&&official||websiteLinkedInReviewCurrent(candidate,person)&&(review.matchStatus==='double_checked'||official));
+  person.identityCheck={version:1,status:confirmed?'confirmed':'needs_review',checkedAt:new Date().toISOString(),identityKey:websiteIdentityCheckKey(candidate,person),evidenceKind:official?'official':'professional_profile',...(official?{sourceUrl:page.url,sourceCheckedAt:state.tasks.find(t=>t.kind==='read'&&t.result?.url===page.url&&!t.archived)?.result?.extractedAt}:{})};
   return confirmed;
  };
  const applyProfile=(candidate,person,review)=>{
@@ -185,10 +188,10 @@ export async function runWebsiteContactJobs(env,{jobId,now=Date.now(),windowMs=4
   const person=state.people.find(p=>String(p.id)===focused.personId);
   if(!person)throw contactError('The selected contact changed.');
   const candidate=candidateFor(input,[person]);state.label='Checking identity · '+(person.publicName||person.name);
-  const review=await reviewWebsiteLinkedIn(candidate,person,{search,guard,receipt:query=>state.tasks.find(t=>t.kind==='search'&&t.value===query&&!t.archived)});
+  const review=input.managementLimit?{matchStatus:'not_checked'}:await reviewWebsiteLinkedIn(candidate,person,{search,guard,receipt:query=>state.tasks.find(t=>t.kind==='search'&&t.value===query&&!t.archived)});
   // Fresh matching may clear an older derived profile hold; a namesake/role
   // conflict in the saved roster remains authoritative and is never overridden.
-  applyProfile(candidate,person,review);
+  if(!input.managementLimit)applyProfile(candidate,person,review);
   const page=review.matchStatus!=='double_checked'&&person.identityOrigin==='official'&&sameHost(person.publicNameUrl,input.domain)?await optional(()=>read(person.publicNameUrl)):null;
   await guard();const confirmed=recordIdentity(candidate,person,review,page);
   state.freeRevision=(state.freeRevision||1)+1;delete state.personCheck;
@@ -234,6 +237,68 @@ export async function runWebsiteContactJobs(env,{jobId,now=Date.now(),windowMs=4
  try{
   for(let stepInSlice=0;stepInSlice<8&&status==='queued';stepInSlice++){
   await guard();if(clock()>row.deadline_at){state.label='Research pass time limit reached; results are saved. Continue unfinished checks when needed.';state.stopReason='time_limit';status='incomplete';}
+  else if(input.managementLimit&&focused){await checkIdentity();}
+  else if(input.managementLimit){
+   const pages=reads(state).filter(p=>p.markdown&&sameHost(p.url,input.domain));
+   if(!state.identityVerifiedAt){
+    let home=await optional(()=>read(input.website));
+    if(!establishes(home,true)){
+     const query='site:'+input.domain+' (contact OR team OR management OR kontakt)';
+     const found=await task('public_index',query,signal=>(services.publicIndex||services.search||searchManagementIndex)(query,signal,fetchDirectPublicPage));
+     for(const hit of found.filter(hit=>sameHost(hit.url,input.domain)).slice(0,2)){
+      home=await optional(()=>read(hit.url,{confirmCompany:true}));if(establishes(home,true))break;
+     }
+     if(!establishes(home,true))throw Error('Official website did not confirm the saved company.');
+    }
+    state.identityVerifiedAt=new Date().toISOString();state.description=companyDescription(home);state.descriptionSourceUrl=home.url;
+   }else{
+    const seen=new Set(state.tasks.filter(t=>t.kind==='read'&&t.status!=='pending').map(t=>t.value));
+    const available=[...new Set(pages.flatMap(p=>p.links||[]))].filter(url=>sameHost(url,input.domain)&&!seen.has(url));
+    const contactLinks=available.filter(url=>contactPage(new URL(url).pathname)&&!state.people.some(p=>websiteNameKey(p.name).split(' ').every(word=>websiteNameKey(url).includes(word)))).sort((a,b)=>Number(/staff|team|medarbejder|leadership/i.test(b))-Number(/staff|team|medarbejder|leadership/i.test(a)));
+    if(!state.managementDiscoveryDone){
+     const urls=contactLinks.slice(0,Math.min(3,Math.max(0,8-(state.managementReads||0))));
+     if(urls.length){await readBatch(urls);state.managementReads=(state.managementReads||0)+urls.length;}
+     else state.managementDiscoveryDone=true;
+     acquire(state,input);
+    }else{
+     const priorities=state.people.slice(0,4);
+     const deeper=available.filter(url=>priorities.some(p=>{
+      if(p.publishedStaffCard?.email&&p.publishedStaffCard?.phone&&p.publicLinkedinUrl&&p.gmailMatches?.length)return false;
+      const name=websiteNameKey(p.publicName||p.name).split(' ').filter(w=>w.length>2);
+      return name.length>=2&&name.every(word=>websiteNameKey(url).includes(word));
+     }));
+     const urls=deeper.slice(0,Math.min(3,Math.max(0,8-(state.managementDetailReads||0))));
+     if(urls.length){await readBatch(urls);state.managementDetailReads=(state.managementDetailReads||0)+urls.length;acquire(state,input);}
+     else{
+      for(const person of state.people){
+       const card=person.publishedStaffCard||{};
+       Object.assign(person,D.matchPublicBuyerDetails([person],pages,input.domain,input.company)[0]);
+       let indexed=[];
+       const officialGmail=D.gmailResearchMatches(person,input,pages);
+       if(!state.managementIndexUnavailable&&(!(card.email||person.publicEmail)||!(card.phone||person.publicPhone)||!person.publicLinkedinUrl||!officialGmail.length)){
+        const query='"'+person.name+'" "'+input.company+'"';
+        indexed=await optional(()=>task('public_index',query,signal=>(services.publicIndex||services.search||searchManagementIndex)(query,signal,fetchDirectPublicPage)));
+        if(!indexed){state.managementIndexUnavailable=true;indexed=[];}
+        if(!person.publicLinkedinUrl&&indexed.length){
+         const matched=D.matchPublicLinkedInProfiles([person],websiteLinkedInMatchRows(person,indexed,input),input.company)[0];
+         if(matched.linkedinIdentityEvidence?.url)Object.assign(person,matched);
+        }
+       }
+       const officialHit=indexed.find(hit=>sameHost(hit.url,input.domain)&&websiteNameKey(hit.title+' '+hit.description).includes(websiteNameKey(person.name)));
+       const extra=officialHit?await optional(()=>read(officialHit.url)):null;
+       if(extra)Object.assign(person,D.matchPublicBuyerDetails([person],[extra],input.domain,input.company)[0]);
+       const matches=[...officialGmail,...D.gmailResearchMatches(person,input,extra?[extra,...indexed]:indexed)];
+       person.gmailMatches=[...new Map([...(person.gmailMatches||[]),...matches].map(m=>[m.email,m])).values()];
+       person.publicSourcesChecked=true;person.freeCheckedAt=new Date().toISOString();
+       person.freeResearchStatus=state.gaps.length?'needs_review':'complete';
+       const page=pages.find(p=>p.url===person.publicNameUrl);
+       recordIdentity(input,person,{matchStatus:'not_checked'},page);
+      }
+      delete state.personCheck;state.phase='contacts';status=state.gaps.length?'incomplete':'complete';state.stopReason='sources_checked';state.label='Published contact details checked for '+state.people.length+' decision-makers.';
+     }
+    }
+   }
+  }
   else if(focused){await checkIdentity();}
   else if(state.phase==='discovery'){
    if(state.people.filter(p=>p.freeResearchStatus).length>=state.batchLimit){

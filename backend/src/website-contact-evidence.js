@@ -61,7 +61,7 @@ export function websitePaidReadiness(candidate,person,jobStatus){
  const support=websiteIdentitySupport(candidate,person),reviewed=websiteLinkedInReviewCurrent(candidate,person),check=person.identityCheck;
  if(!support.eligible)return {eligible:false,reason:support.reason,code:'WEBSITE_CONTACT_IDENTITY_REQUIRED'};
  const fresh=value=>{const age=Date.now()-Date.parse(value||'');return age>=0&&age<30*86400000;};
- const explicit=check?.version===1&&check.status==='confirmed'&&check.identityKey===websiteIdentityCheckKey(candidate,person)&&fresh(check.checkedAt)&&reviewed&&(person.linkedinReview.matchStatus==='double_checked'||check.evidenceKind==='official'&&fresh(check.sourceCheckedAt)&&check.sourceUrl===person.publicNameUrl&&D.canonicalDomain(check.sourceUrl)===candidate.domain);
+ const explicit=check?.version===1&&check.status==='confirmed'&&check.identityKey===websiteIdentityCheckKey(candidate,person)&&fresh(check.checkedAt)&&(reviewed||candidate.managementLimit&&check.evidenceKind==='official')&&(person.linkedinReview?.matchStatus==='double_checked'||check.evidenceKind==='official'&&fresh(check.sourceCheckedAt)&&check.sourceUrl===person.publicNameUrl&&D.canonicalDomain(check.sourceUrl)===candidate.domain);
  const full=person.freeResearchStatus==='complete'&&fresh(person.freeCheckedAt)&&websiteFreeResearchComplete(candidate,person);
  return {eligible:Boolean(explicit||full),reason:explicit||full?'': 'Use Check identity to confirm this person before approving paid research.',code:'WEBSITE_CONTACT_FREE_RESEARCH_REQUIRED'};
 }
