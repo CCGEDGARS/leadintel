@@ -99,7 +99,7 @@ test('paid phone displays progress and its own outcome on the selected contact, 
  w.LeadIntelServerBridge={workspace:{id:'w'},session:{authenticated:true,user:{id:'owner'}}};
  w.LeadIntelDialogs={confirm:async()=>true};
  const people=['Jesper','Jan'].map(name=>({name,id:name,paidReadiness:{eligible:true}}));
- const job={id:'j',companyId:'c',company:'Steel',domain:'steel.example',revision:7,status:'incomplete',people,counts:{discovered:2},sources:[],routes:[],channels:[],gaps:[],coverage:{}};
+ const job={id:'j',companyId:'c',company:'Steel',domain:'steel.example',revision:7,status:'incomplete',managementLimit:5,people,counts:{discovered:2},sources:[],routes:[],channels:[],gaps:[],coverage:{}};
  let finish,requests=0;
  w.fetch=async(_url,options)=>{
   if(options.method==='GET')return {ok:true,json:async()=>({job,paidPolicy:{provider:'treg',phoneEnabled:true,enabled:false}})};
@@ -110,6 +110,8 @@ test('paid phone displays progress and its own outcome on the selected contact, 
  await w.LeadIntelWebsiteContacts.open([{crmId:'c',name:'Steel',website:'https://steel.example/'}]);
  const press=()=>w.document.querySelector('[data-contact-action="paid-phone"][data-person="Jan"]').click();
  const cards=()=>[...w.document.querySelectorAll('.website-contact-person')];
+ assert.doesNotMatch(cards()[1].textContent,/not checked/i);
+ assert.match(cards()[1].textContent,/continue public research/i);
  press();await tick();
  assert.ok(cards()[1].querySelector('progress'));assert.equal(cards()[0].querySelector('progress'),null);
  const contactData={phone:{status:'not_found'},lastAttempt:{phone:'not_found'}};
