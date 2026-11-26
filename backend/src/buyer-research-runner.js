@@ -155,6 +155,20 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
    candidate.people=D.retainBuyerIdentities(reconciled.people,input.profile,candidate).filter(person=>input.scope!=='selected_buyers'||input.personIds.includes(String(person.id))).slice(0,10);
    candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),pool:reconciled.people.slice(0,30),opportunityRoles:input.roles};confirmNamed();
   };
+  const addIdentities=people=>{
+   candidate.buyerDiscovery.pool=D.mergeBuyerPool(candidate.buyerDiscovery.pool||candidate.people||[],people,input.profile);
+   acquirePeople();
+  };
+  const resolveDirectoryNames=async(searchSources,sourceRows)=>{
+   const pending=(candidate.buyerDiscovery?.pool||[]).filter(person=>person.identitySource==='apollo'&&person.identityStatus==='pending');
+   const relevant=D.selectDecisionMakers(pending,input.profile,4);
+   if(!relevant.length)return;
+   const resolved=await D.resolvePendingBuyerIdentities(relevant,sourceRows,candidate,input.profile,searchSources);
+   await guard();
+   const confirmed=resolved.people.filter(person=>person.identityStatus==='confirmed');
+   if(confirmed.length)addIdentities(confirmed);
+   candidate.buyerDiscovery.resultDiagnostics=[...(candidate.buyerDiscovery.resultDiagnostics||[]),...resolved.diagnostics].slice(-500);
+  };
   const diagnostics=parse(row.diagnostic_json,[]);
   if(rescopeOfficial)diagnostics.push({phase:'official',reason:'Resuming the contact-source objective after a legacy financial-archive limit; completed source tasks retained',at:new Date().toISOString()});
   const settleQuality=async()=>{
@@ -223,10 +237,7 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
      acquiredRows=(await allRows()).filter(source=>source.sourceRead===true);acquirePeople();
      const indexReport=await findPublicBuyerContactPages(candidate,{
       profile:input.profile,
-      addIdentities:people=>{
-       candidate.buyerDiscovery.pool=D.mergeBuyerPool(candidate.buyerDiscovery.pool||candidate.people||[],people,input.profile);
-       acquirePeople();
-      },
+      addIdentities,resolveDirectoryNames:searchSources=>resolveDirectoryNames(searchSources,acquiredRows),
       index:query=>task('search','Free public index | '+query,async()=>{
        const signal=AbortSignal.any([controller.signal,AbortSignal.timeout(6000)]);
        const hits=await (services.publicIndex||searchManagementIndex)(query,signal,fetchDirectPublicPage);
@@ -245,7 +256,8 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
     }else if(input.scope==='selected_buyers'){phase=nextPhase[phase];}else{
     const plan=D.buyerResearchPlan(candidate,input.profile);
     for(const query of plan.queries.slice(0,6)){await guard();try{await search(query);}catch(error){if(error.code==='CANCELED'||controller.signal.aborted)throw error;}}
-    const trace=D.tracePublicBuyers(await allRows(),candidate.company,{...input.profile,companyDomain:candidate.domain});candidate.people=D.retainBuyerIdentities(D.mergeBuyerPool(candidate.people||[],trace.people,input.profile),input.profile,candidate).slice(0,10);acquirePeople();phase=nextPhase[phase];}
+    const identityRows=await allRows();await resolveDirectoryNames(search,identityRows);
+    const trace=D.tracePublicBuyers(identityRows,candidate.company,{...input.profile,companyDomain:candidate.domain});candidate.people=D.retainBuyerIdentities(D.mergeBuyerPool(candidate.people||[],trace.people,input.profile),input.profile,candidate).slice(0,10);acquirePeople();phase=nextPhase[phase];}
    }else if(phase==='contacts'){
     if(candidate.people?.length){
      scheduledContactWork=true;report=await D.runMandatoryBuyerResearch(candidate,{search,readPage:read,rows,guard,signal:controller.signal,contactOptions,recheckPlans:input.recheck?.plans,maxDurationMs:Math.min(remaining,input.recheck?Math.max(1,input.recheck.maxActiveMs-phaseMs):180000),observeTools:false,buyerAgentContext:D.buyerAgentContext(candidate,input.profile),accountability:report,crossCheck:async person=>task('independent',JSON.stringify([person.id,person.name,person.title,...(services.independent?[]:['grounded-low-v1'])]),async()=>{let result;try{result=await (services.independent?services.independent(person,controller.signal):searchWorkspaceBuyerContact(env,row.workspace_id,{company:candidate.company,domain:row.domain,person,signal:controller.signal}));}catch(error){observe({provider:'gemini',operation:'search',status:'failed',reason:'Independent research unavailable'});throw error;}if(result.status==='not_configured'||result.status==='unavailable'&&/not configured/i.test(result.reason||'')){observe({provider:'gemini',operation:'search',status:'skipped',reason:'Independent provider not configured'});return {...result,status:'not_configured'};}if(result.status!=='complete'||result.web_search===false){observe({provider:'gemini',operation:'search',status:'failed',reason:'Independent research unavailable'});throw Error('Independent research unavailable');}observe({provider:result.provider||'gemini',operation:'search',status:'succeeded',results:result.results?.length||0});return result;})});

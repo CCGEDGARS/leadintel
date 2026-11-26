@@ -20,7 +20,7 @@ export const PAID_PRIORITY_RESEARCH_REQUIRED='ADDITIONAL_CONTACT_PRIORITY_RESEAR
 export const PAID_PRIORITY_RESEARCH_INCOMPLETE='PAID_PRIORITY_RESEARCH_INCOMPLETE';
 function priorityDepthGaps(candidate,context,detail,workEmailSearch){
  const contactOptions=buyerContactOptions(candidate,context,detail),people=D.mandatoryBuyerResearchPriorities(candidate.people||[],candidate,{forExecution:true,contactOptions});
- return people.length>0&&people.length===(workEmailSearch?Math.min(4,candidate.people.length):4)&&people.every(person=>D.BUYER_CONTACT_RESEARCH_POLICY.requiredChecks.every(key=>D.buyerResearchCheckPassed(candidate,person,key)))?people.filter(person=>!D.acceptedOfficialBuyerEmail(candidate,person)&&!D.buyerResearchCheckPassed(candidate,person,'deep')):[];
+ return people.length>0&&people.length===P.priorityCount(candidate,workEmailSearch)&&people.every(person=>D.BUYER_CONTACT_RESEARCH_POLICY.requiredChecks.every(key=>D.buyerResearchCheckPassed(candidate,person,key)))?people.filter(person=>!D.acceptedOfficialBuyerEmail(candidate,person)&&!D.buyerResearchCheckPassed(candidate,person,'deep')):[];
 }
 export async function capturePaidContinuationScope(env,context,candidate,intent,jobId,guard){
  await guard();const row=await env.DB.prepare('SELECT research_snapshot_json,evidence_json FROM crm_intelligence WHERE workspace_id=? AND company_id=?').bind(context.workspaceId,intent.companyId).first();

@@ -74,3 +74,18 @@ for(const freeDiscovery of [false,true])test('HTTP and scheduler use only the en
  const tasks=f.DB.raw.prepare("SELECT request_value,result_json FROM buyer_research_tasks WHERE job_id=? AND request_value LIKE 'Apollo people search%'").all(job.id);assert.equal(tasks.length,1);assert.doesNotMatch(JSON.stringify(tasks),/must-not-leak|46123456789|controlled-apollo-identity-key|forbidden-platform-key/);
  const events=f.DB.raw.prepare("SELECT metadata_json FROM audit_events WHERE event_type='operations.scheduler' AND entity_type='buyer_research'").all();assert.ok(events.length>0);
 });
+
+for(const ambiguous of [false,true])test('free buyer search checks directory first names against public roles, ambiguous '+ambiguous,async t=>{
+ const f=await buyerJobsFixture(t),job=await startBuyerJob(f.env,workspaceId,f.users.owner,{...f.body,peopleFirst:true,freeDiscovery:true});
+ f.DB.raw.prepare("UPDATE buyer_research_jobs SET phase='identities' WHERE id=?").run(job.id);
+ const requests=[],profile=name=>({title:name+' | Head of Procurement | Forge Industries',url:'https://linkedin.com/in/'+name.toLowerCase().replaceAll(' ','-'),description:'Current Head of Procurement at Forge Industries'});
+ await run({...f,job},{registry:async()=>({status:'not_found'}),apollo:async()=>({people:[person({id:'partial-iris',name:'Iris'}),person({id:'other-employer',name:'Clara',organization_name:'Elsewhere'})]}),publicIndex:async q=>{
+  requests.push(q);if(!q.includes('"Iris"')||!q.includes('Procurement'))return [];
+  return ambiguous?[profile('Iris Jensen'),profile('Iris Smith')]:[profile('Iris Jensen')];
+ },read:async()=>{throw Error('No published email in fixture');}});
+ const saved=candidateOf(await readBuyerJob(f.env,workspaceId,{id:job.id}));
+ assert.ok(requests.some(q=>q.includes('"Iris"')&&q.includes('Procurement')),JSON.stringify(requests));
+ const personFound=saved.people.find(p=>p.id==='partial-iris'&&p.identityStatus==='confirmed');
+ if(ambiguous)assert.equal(personFound,undefined);
+ else {assert.equal(personFound?.name,'Iris Jensen');assert.match(personFound.publicNameUrl,/iris-jensen/);assert.ok(!personFound.publicEmail);}
+});

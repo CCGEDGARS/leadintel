@@ -50,7 +50,7 @@ export async function searchManagementIndex(query,signal,read){
 
 // Search excerpts locate pages. Only acquired page bodies enter the shared
 // identity and contact checks. Save the first-party roster before this pass.
-export async function findPublicBuyerContactPages(candidate,{index,read,refresh,interrupted,profile,addIdentities}){
+export async function findPublicBuyerContactPages(candidate,{index,read,refresh,interrupted,profile,addIdentities,resolveDirectoryNames}){
  const D=globalThis.LeadIntelDiscovery;
  let checked=0,readFailures=0,indexUnavailable=false;
  const searchIndex=async query=>{
@@ -92,6 +92,12 @@ export async function findPublicBuyerContactPages(candidate,{index,read,refresh,
    if(trace.people.length)await addIdentities(trace.people);
   }
  }
+ if(!indexUnavailable&&resolveDirectoryNames)await resolveDirectoryNames(async query=>{
+  if(indexUnavailable)throw Error('Public index unavailable');
+  const hits=await searchIndex(query);
+  if(indexUnavailable)throw Error('Public index unavailable');
+  return hits.map(hit=>({...hit,evidenceKind:'search_excerpt'}));
+ });
  const missing=(candidate.people||[]).filter(person=>D.sourcedBuyerIdentity(person,candidate)&&!D.confirmedBuyerContactData(candidate,person).email).slice(0,4);
  for(const person of missing){
   if(indexUnavailable)break;
