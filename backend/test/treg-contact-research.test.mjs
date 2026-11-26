@@ -223,3 +223,23 @@ test('real Treg billing responses persist scoped credit health and successful re
   assert.equal(await providerCreditIssue(env,ctx.workspaceId,'treg'),null);
  }finally{db.close();}
 });
+
+test('name and domain finder records with short email aliases require independent deliverability',async()=>{
+ const email='ab@example.com',contact={email,name:person.name,domain:candidate.domain};
+ const verify={output:{status:'verified',email},raw:{email,status:'verified',role_account:false,disposable:false,domain_intelligence:{catch_all:false}}};
+ const lookup=async(find,verification=verify)=>{
+  const f=await fixture({find,verify:verification});
+  const result=await f.mod.findTregWorkEmail({},ctx,candidate,person,'company-a',{attemptKey:'a'},f.deps);
+  assert.equal(f.calls[0].options.headers['X-Treg-Route-Prefer'],'trykitt');
+  return result;
+ };
+ const find={output:{email},raw:{contact}};
+ assert.equal((await lookup(find)).contact?.work_email,email);
+ assert.equal((await lookup({output:{email,verified:true},raw:{fullName:person.name,domain:candidate.domain,email,validIdentity:true}})).contact?.work_email,email);
+ assert.equal((await lookup({output:{email,full_name:person.name},raw:{contact:{...contact,name:'Another Buyer'}}})).contact,null);
+ assert.equal((await lookup({output:{email},raw:{validIdentity:false,fullName:person.name}})).contact,null);
+ const unknown=await lookup({output:{email,verified:true},raw:{found_email:email}});
+ assert.equal(unknown.contact,null);assert.match(unknown.reason,/ab@example.com.*who owns it/);
+ const catchall=await lookup(find,{...verify,raw:{...verify.raw,domain_intelligence:{catch_all:true}}});
+ assert.equal(catchall.contact,null);assert.match(catchall.reason,/catch-all/);
+});

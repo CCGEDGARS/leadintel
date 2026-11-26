@@ -204,6 +204,12 @@ export async function startBuyerJob(env,workspaceId,user,body,trusted=null){
  input.executionContinuationVersion=4;
  input.contactSourceScope=D.OFFICIAL_CONTACT_RESEARCH_POLICY.scopeVersion;
  input.paidResearch=await buyerPaidIntent(env,workspaceId,body.paidResearch===true&&input.scope==='all_buyers',input.candidate);
+ if(body.paidEmailLimit!==undefined){
+  const limit=body.paidEmailLimit;
+  if(!Number.isInteger(limit)||limit<1||limit>4||!input.paidResearch?.email||input.paidResearch.provider!=='treg'||!input.paidResearch.companyId)throw Object.assign(Error('A saved company, enabled Treg email policy and a limit of one to four buyers are required.'),{status:409});
+  input.paidResearch.phone=false;input.paidResearch.workEmailSearch=true;
+  input.paidResearch.automaticBuyerLimit=Math.min(limit,input.paidResearch.automaticBuyerLimit);
+ }
  if(trusted?.taskId){input.taskId=trusted.taskId;if(input.paidResearch){input.paidResearch.email=trusted.email===true&&input.paidResearch.email;input.paidResearch.phone=trusted.phone===true&&input.paidResearch.phone;input.paidResearch.automaticBuyerLimit=Math.min(input.paidResearch.automaticBuyerLimit,trusted.buyerCount);}}
  const key=await buyerInputKey(input);
  input.workspaceContext=stored.hash;
@@ -212,6 +218,7 @@ export async function startBuyerJob(env,workspaceId,user,body,trusted=null){
   prepareBuyerRecheck(input,history.results||[]);
  }
  const current=await readBuyerJob(env,workspaceId,{domain:input.candidate.domain});
+ if(body.paidEmailLimit&&current&&activeBuyerJob(current.status))throw Object.assign(Error('A buyer search is already running for this company.'),{status:409});
  if(trusted?.taskId&&current&&activeBuyerJob(current.status)&&parse(current.input_json).taskId!==trusted.taskId)throw Object.assign(Error('Another buyer research job is active for this company. Finish or pause it first.'),{status:409});
  if(body.jobId&&current?.id!==body.jobId||body.expectedRevision!==undefined&&Number(body.expectedRevision)!==current?.revision)throw Object.assign(Error('Buyer research changed; reload the latest saved job'),{status:409});
  if(current?.context_key===key&&parse(current.input_json).workspaceContext===stored.hash&&(!body.force||activeBuyerJob(current.status))){

@@ -25,9 +25,10 @@ for(const data of examples)test('free HTTP start, scheduled research and authent
   }
   if(url.hostname==='html.duckduckgo.com'){
    if(!fixtureDirectory)return new Response('Index unavailable',{status:503});
-   return html('<h2><a href="'+directory+'">Anna Walsh | Harbor Clinics</a></h2><p>Harbor Clinics leadership and membership directory.</p>');
+   if(url.searchParams.get('q').includes('aw@harbor.example'))return html('<h2><a href="'+directory+'">Member contact</a></h2><p>Office email addresses including aw@harbor.example</p>');
+   return html('No results found');
   }
-  if(fixtureDirectory&&url.href===directory)return html('<h1>Harbor Clinics</h1><p>Anna Walsh | Email: anna.walsh@harbor.example</p>');
+  if(fixtureDirectory&&url.href===directory)return html('<h1>Harbor Clinics</h1><p>Anna Walsh | Email: aw@harbor.example</p>');
   return new Response('Unavailable',{status:404});
  });
  const endpoint=f.env.APP_ORIGIN+'/api/buyers/research?workspace_id='+workspaceId;
@@ -53,10 +54,10 @@ for(const data of examples)test('free HTTP start, scheduled research and authent
  assert.ok(saved.buyerDiscovery.officialContactInventory.channels.some(c=>c.value===published));
  assert.ok(saved.buyerDiscovery.officialContactInventory.routes.some(r=>r.value===data.phone));
  const leader=people.find(p=>p.name===data.leader);
- assert.equal(leader.publicEmail||'',fixtureDirectory?'anna.walsh@harbor.example':'');
+ assert.equal(leader.publicEmail||'',fixtureDirectory?'aw@harbor.example':'');
  if(fixtureDirectory)assert.equal(leader.publicEmailUrl,directory);
  assert.ok(!people.find(p=>p.name===data.operations).publicEmail);
- assert.match(job.diagnostics.at(-1).reason,fixtureDirectory?/2 completed queries/:/index unavailable/);
+ assert.match(job.diagnostics.at(-1).reason,fixtureDirectory?/6 completed queries/:/index unavailable/);
  assert.ok(requests.every(url=>!/(?:api\.firecrawl|api\.perplexity|api\.openai|api\.apollo|hunter\.io)/.test(url)));
  assert.equal(f.DB.raw.prepare('SELECT count(*) n FROM crm_enrichment_requests').get().n,0);
 });

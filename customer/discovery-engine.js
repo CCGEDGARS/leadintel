@@ -183,6 +183,15 @@
     }
     return results;
   }
+  // These short forms are discovery hypotheses. Keep them out of the matching
+  // patterns used to attribute published addresses to a person.
+  function emailSearchPatterns(person){
+    const patterns=emailLocalPatterns(person);
+    if(!patterns.length)return [];
+    const initials=staffEmailInitials(person);
+    const name=emailNameParts(person),short=name.first[0]+name.shortLast[0];
+    return [...patterns,...initials.map(local=>({local,format:local===short?'first-last initials':'all initials'}))];
+  }
   function rankedEmailGuesses(person={},domain='',people=[]){
     const host=companyIdentityDomain(domain);
     if(!host||!host.includes('.')||['gmail.com','googlemail.com','outlook.com','hotmail.com','yahoo.com'].includes(host)||!/^[a-z0-9.-]+$/.test(host))return [];
@@ -192,7 +201,7 @@
       const sources=[...(sample.patternFindings||[]),...(sample.publicEmail?[{email:sample.publicEmail,url:sample.publicEmailUrl}]:[])];
       for(const source of sources){
         if(!validResearchEmail(source.email,host)||companyIdentityDomain(source.url)!==host||!normalizeUrl(source.url))continue;
-        const pattern=emailLocalPatterns(sample).find(item=>item.local===clean(source.email).toLowerCase().split('@')[0]);
+        const pattern=emailSearchPatterns(sample).find(item=>item.local===clean(source.email).toLowerCase().split('@')[0]);
         if(!pattern)continue;
         if(!evidence.has(pattern.format))evidence.set(pattern.format,new Set());
         evidence.get(pattern.format).add(clean(sample.publicName||sample.name).toLowerCase());
@@ -203,7 +212,7 @@
       if(clean(sample.publicName||sample.name).toLowerCase()===clean(person.publicName||person.name).toLowerCase())continue;
       for(const email of [sample.publicEmail,...(sample.patternFindings||[]).map(item=>item.email)].filter(Boolean))rejected.add(clean(email).toLowerCase());
     }
-    return emailLocalPatterns(person).map((item,index)=>({email:`${item.local}@${host}`,type:'Company',format:item.format,status:'guessed',supportingContacts:evidence.get(item.format)?.size||0,priority:item.local.includes('-')?index: index>=10?index-9.5:index})).filter(item=>validResearchEmail(item.email,host)&&!rejected.has(item.email)).sort((a,b)=>b.supportingContacts-a.supportingContacts||a.priority-b.priority).slice(0,8).map(({priority,...item})=>({...item,reason:item.supportingContacts?`Format seen for ${item.supportingContacts} other named company contact${item.supportingContacts===1?'':'s'}`:'Name-based pattern only'}));
+    return emailSearchPatterns(person).map((item,index)=>({email:`${item.local}@${host}`,type:'Company',format:item.format,status:'guessed',supportingContacts:evidence.get(item.format)?.size||0,priority:item.format.endsWith('initials')?(item.format==='first-last initials'?1.6:2.6):item.local.includes('-')?index:index>=10?index-9.5:index})).filter(item=>validResearchEmail(item.email,host)&&!rejected.has(item.email)).sort((a,b)=>b.supportingContacts-a.supportingContacts||a.priority-b.priority).slice(0,8).map(({priority,...item})=>({...item,reason:item.supportingContacts?`Format seen for ${item.supportingContacts} other named company contact${item.supportingContacts===1?'':'s'}`:'Name-based pattern only'}));
   }
   // Companies in Denmark commonly write a staff address as the person's initials ("kh@" for Karla Holm; 25 of 26 addresses
   // on one contact page read on 23 Nov 2026): the initials of every name word, or of the first and last. A mailbox of a

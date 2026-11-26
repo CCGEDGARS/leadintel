@@ -29,3 +29,10 @@ test('recent invalid checks and addresses already attributed to other people are
  const guesses=D.rankedEmailGuesses(person,'example.test',[{name:'Alice Smith',publicEmail:'a.smith@example.test'}]);
  assert.ok(!guesses.some(row=>row.email==='anna.smith@example.test'||row.email==='a.smith@example.test'));assert.ok(guesses.some(row=>row.email==='asmith@example.test'));
 });
+test('short initials can guide a search without assigning an address to a person',()=>{
+ const p={name:'Karla Marie Hansen'},company={company:'Foundry',domain:'foundry.dk'};
+ const guesses=D.rankedEmailGuesses(p,company.domain,[{name:'Anna Jensen',publicEmail:'aj@foundry.dk',publicEmailUrl:'https://foundry.dk/team'}]);
+ assert.equal(guesses[0].email,'kh@foundry.dk');assert.equal(guesses[0].status,'guessed');
+ assert.ok(guesses.some(g=>g.email==='kmh@foundry.dk'));
+ assert.deepEqual(D.sourcedBuyerEmails(p,company.domain,[{url:'https://association.example/members',markdown:'Karla Marie Hansen attended a meeting. Company address: kh@foundry.dk'}]),[]);
+});

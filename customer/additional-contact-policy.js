@@ -13,6 +13,10 @@
     if(!Number.isFinite(researched)||researched>now+300000||now-researched>30*86400000)return {eligible:false,reason:'Refresh company verification in Companies before a paid lookup.',code:'ADDITIONAL_CONTACT_COMPANY_REQUIRED'};
     return {eligible:true,manualFitPending,manualExclusionsPending};
   }
+  function priorityCount(candidate,workEmailSearch){
+    if(!workEmailSearch)return 4;
+    return Math.min(4,(candidate.people||[]).filter(person=>D.sourcedBuyerIdentity(person,candidate)).length);
+  }
   function readiness(candidate={},person={},options={}){
     const qualification=options.companyAssessment||candidate.qualification;
     const blocked=(reason,code)=>({eligible:false,reason,...(code?{code}:{})});
@@ -27,7 +31,8 @@
     if(company.manualExclusionsPending&&!D.confirmedBuyerShortlist(candidate.people||[],{decisionMakers:D.effectiveBuyerRoles(candidate)},candidate,contactOptions).priorityIds.includes(selected.id||D.buyerIdentity(selected)))return blocked('Resolve company checks or select a currently qualified priority buyer before manual paid lookup.','ADDITIONAL_CONTACT_COMPANY_REQUIRED');
     if(options.automatic===true){
       const priorities=D.mandatoryBuyerResearchPriorities(candidate.people||[],candidate,{forExecution:true,contactOptions});
-      if(priorities.length<4||!D.buyerResearchCoveragePassed(candidate,{...options,contactOptions,researchPeople:priorities,allowPartialRoster:true}))return blocked('Complete free research for all four priority buyers before automatic paid search.','ADDITIONAL_CONTACT_PRIORITY_RESEARCH_REQUIRED');
+      const required=priorityCount(candidate,options.workEmailSearch===true);
+      if(!required||priorities.length<required||!D.buyerResearchCoveragePassed(candidate,{...options,contactOptions,researchPeople:priorities,allowPartialRoster:true}))return blocked(options.workEmailSearch?'Complete public research for each priority buyer before work-email lookup.':'Complete free research for all four priority buyers before automatic paid search.','ADDITIONAL_CONTACT_PRIORITY_RESEARCH_REQUIRED');
     }
     const scoped=options.automatic!==true||options.provider==='treg';
     if(!D.buyerResearchCoveragePassed(candidate,{...options,contactOptions,...(scoped?{researchPeople:[selected]}:{}),allowPartialRoster:scoped}))return blocked('Complete this buyer’s mandatory public research before using additional services.');
@@ -54,6 +59,6 @@
     const confirmedEmail=options.confirmedEmail||(()=>'' );
     return targetGroup(candidate,options).filter(person=>readiness(candidate,person,{...options,automatic:true,confirmedEmail:false}).eligible&&!confirmedEmail(person));
   }
-  return {readiness,companyReadiness,targets,targetGroup,automaticLimit};
+  return {priorityCount,readiness,companyReadiness,targets,targetGroup,automaticLimit};
 });
 

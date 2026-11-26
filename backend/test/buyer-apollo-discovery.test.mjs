@@ -56,7 +56,7 @@ test('cancel during a free Apollo response prevents late candidate and completed
  const row=await readBuyerJob(f.env,workspaceId,{id:f.job.id});assert.equal(row.status,'canceled');assert.equal(row.result_json,original);assert.equal(f.DB.raw.prepare("SELECT count(*) n FROM buyer_research_tasks WHERE job_id=? AND status='complete'").get(f.job.id).n,0);
 });
 
-test('actual HTTP acknowledgement and scheduled wrapper execute the encrypted customer Apollo identity path without paid endpoints',async t=>{
+for(const freeDiscovery of [false,true])test('HTTP and scheduler use only the encrypted Apollo identity endpoint, free discovery '+freeDiscovery,async t=>{
  const {default:app}=await import('../src/app.js'),{encryptSecret,importAesKey}=await import('../src/oauth.js');
  const f=await buyerJobsFixture(t),key='controlled-apollo-identity-key';f.env.OAUTH_TOKEN_ENCRYPTION_KEY=Buffer.alloc(32,19).toString('base64');f.env.APOLLO_API_KEY='forbidden-platform-key';
  const encrypted=await encryptSecret(key,await importAesKey(f.env.OAUTH_TOKEN_ENCRYPTION_KEY));f.DB.raw.prepare("INSERT INTO workspace_service_integrations(workspace_id,provider,encrypted_api_key,key_hint,metadata_json) VALUES(?,'apollo',?,'test',?)").run(workspaceId,encrypted,JSON.stringify({discovery_enabled:true,email_enrichment_enabled:true,phone_enrichment_enabled:true}));
@@ -65,7 +65,7 @@ test('actual HTTP acknowledgement and scheduled wrapper execute the encrypted cu
   if(new URL(url).hostname==='forge.example')return new Response('<h1>Forge Industries</h1><p>Robert Lund — Head of Procurement — Forge Industries.</p>',{headers:{'Content-Type':'text/html'}});
   throw Error('Unplanned network request in controlled test: '+new URL(url).hostname);
  };t.after(()=>{globalThis.fetch=originalFetch;});
- const waits=[],request=new Request('https://app.fixture.test/api/buyers/research?workspace_id='+workspaceId,{method:'POST',headers:{Origin:'https://app.fixture.test',Cookie:'leadintel_session='+f.users.owner.token,'Content-Type':'application/json'},body:JSON.stringify({...f.body,paidResearch:false})});
+ const waits=[],request=new Request('https://app.fixture.test/api/buyers/research?workspace_id='+workspaceId,{method:'POST',headers:{Origin:'https://app.fixture.test',Cookie:'leadintel_session='+f.users.owner.token,'Content-Type':'application/json'},body:JSON.stringify({...f.body,peopleFirst:freeDiscovery,freeDiscovery,paidResearch:false})});
  const response=await app.fetch(request,f.env,{waitUntil:p=>waits.push(p)});assert.equal(response.status,200);const {job}=await response.json();await Promise.all(waits);
  const noop=async()=>({completed:0}),services={search:async()=>[],read:async url=>({url,markdown:'Robert Lund — Head of Procurement — Forge Industries',metadata:{sourceURL:url}}),dossier:async()=>({status:'complete',people:[],facts:[],channels:[],sources:[],passes:[]})};
  for(let i=0;i<8&&!calls.length;i++){const pending=[];await app.scheduled({cron:'* * * * *',scheduledTime:Date.now()},f.env,{waitUntil:p=>pending.push(p)},{runBuyerResearchJobs:(env,options)=>runBuyerResearchJobs(env,{...options,maxJobs:1,windowMs:30000,services}),runWritingReferenceJobs:noop,runWorkspaceSkillJobs:noop,runCompanyMaterialJobs:noop,runLanguagePackJobs:noop});await Promise.all(pending);}
@@ -73,4 +73,19 @@ test('actual HTTP acknowledgement and scheduled wrapper execute the encrypted cu
  const row=await readBuyerJob(f.env,workspaceId,{id:job.id}),saved=candidateOf(row);assert.ok(saved.people.some(p=>p.id==='apollo-anna'));assert.equal(saved.publicResearch.accountability.tools.find(p=>p.provider==='apollo').succeeded,1);
  const tasks=f.DB.raw.prepare("SELECT request_value,result_json FROM buyer_research_tasks WHERE job_id=? AND request_value LIKE 'Apollo people search%'").all(job.id);assert.equal(tasks.length,1);assert.doesNotMatch(JSON.stringify(tasks),/must-not-leak|46123456789|controlled-apollo-identity-key|forbidden-platform-key/);
  const events=f.DB.raw.prepare("SELECT metadata_json FROM audit_events WHERE event_type='operations.scheduler' AND entity_type='buyer_research'").all();assert.ok(events.length>0);
+});
+
+for(const ambiguous of [false,true])test('free buyer search checks directory first names against public roles, ambiguous '+ambiguous,async t=>{
+ const f=await buyerJobsFixture(t),job=await startBuyerJob(f.env,workspaceId,f.users.owner,{...f.body,peopleFirst:true,freeDiscovery:true});
+ f.DB.raw.prepare("UPDATE buyer_research_jobs SET phase='identities' WHERE id=?").run(job.id);
+ const requests=[],profile=name=>({title:name+' | Head of Procurement | Forge Industries',url:'https://linkedin.com/in/'+name.toLowerCase().replaceAll(' ','-'),description:'Current Head of Procurement at Forge Industries'});
+ await run({...f,job},{registry:async()=>({status:'not_found'}),apollo:async()=>({people:[person({id:'partial-iris',name:'Iris'}),person({id:'other-employer',name:'Clara',organization_name:'Elsewhere'})]}),publicIndex:async q=>{
+  requests.push(q);if(!q.includes('"Iris"')||!q.includes('Procurement'))return [];
+  return ambiguous?[profile('Iris Jensen'),profile('Iris Smith')]:[profile('Iris Jensen')];
+ },read:async()=>{throw Error('No published email in fixture');}});
+ const saved=candidateOf(await readBuyerJob(f.env,workspaceId,{id:job.id}));
+ assert.ok(requests.some(q=>q.includes('"Iris"')&&q.includes('Procurement')),JSON.stringify(requests));
+ const personFound=saved.people.find(p=>p.id==='partial-iris'&&p.identityStatus==='confirmed');
+ if(ambiguous)assert.equal(personFound,undefined);
+ else {assert.equal(personFound?.name,'Iris Jensen');assert.match(personFound.publicNameUrl,/iris-jensen/);assert.ok(!personFound.publicEmail);}
 });

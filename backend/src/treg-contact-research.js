@@ -89,7 +89,9 @@ export async function findTregWorkEmail(env,context,candidate,person,companyId,{
     if(!rejectedBeforeDispatch)throw fail('The saved lookup belongs to a previous Treg connection. Review its retained receipt.',409,'ADDITIONAL_CONTACT_PROVIDER_CHANGED');
   }if(!poll&&retained._leadintel?.status==='settled'){total+=Number(saved.cost_micro)||0;if(saved.call_id)callIds.push(saved.call_id);return retained;}}
   const headers={'X-Treg-Token':credential.apiKey,'Content-Type':'application/json',Accept:'application/json','X-Treg-Meta':`customer=${tag(context.workspaceId)},workspace=${tag(context.workspaceId)},feature=buyer-email`,'X-Treg-Route-Max-Cost':poll?'0':phase==='phone'?'0.25':['find','profile'].includes(phase)?'0.05':'0.025','Idempotency-Key':`leadintel-${requestKey(phase)}-${phase}`};
-  if(phase==='find'){headers['X-Treg-Route-Verify']='false';headers['X-Treg-Route-Exclude']='tomba';}
+  if(phase==='find'){
+   // Prefer a finder that returns the matched name and company with the mailbox.
+   headers['X-Treg-Route-Prefer']='trykitt';headers['X-Treg-Route-Verify']='false';headers['X-Treg-Route-Exclude']='tomba';}
   if(phase==='verify')headers['X-Treg-Route-Prefer']='bounceban';
   let response;
   await guard({phase});
@@ -111,21 +113,20 @@ export async function findTregWorkEmail(env,context,candidate,person,companyId,{
  const result=(status,reason,extra={})=>({contact:null,reason,research:{provider:'treg',status,checkedAt:new Date().toISOString(),costMicro:total,callIds},request:{status:status==='processing'?'processing':status},...extra});
  const emailLookup=async()=>{
  const found=await call('find','treg.people.email.find',{full_name:name,first_name:parts[0],last_name:parts.slice(1).join(' '),domain,...(person.publicLinkedinUrl||person.linkedin_url?{linkedin_url:person.publicLinkedinUrl||person.linkedin_url}:{})});
- const output=object(found.output),raw=object(found.raw),record=object(raw.data||raw.person||raw),email=String(output.email||record.email||'').trim().toLowerCase();
+ const output=object(found.output),raw=object(found.raw),records=[output,raw,object(raw.data),object(raw.person),object(raw.contact),object(raw.data?.contact)],email=String(records.find(row=>row.email)?.email||'').trim().toLowerCase();
  if(!email)return result('not_found','Treg returned no work email for this buyer.');
  const personal=/@(gmail\.com|googlemail\.com|outlook\.com|hotmail\.com|live\.com|yahoo\.[a-z.]+|icloud\.com|proton\.me|protonmail\.com|aol\.com)$/i.test(email);
- if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||email.split('@')[1]!==domain&&!personal||/^(info|sales|contact|support|office|admin|team|noreply|hr|press)@/.test(email))return result('unconfirmed','The result was not a personal work email on this company domain.');
- const returnedName=output.full_name||output.fullName||record.full_name||record.fullName||[output.first_name||record.first_name,output.last_name||record.last_name].filter(Boolean).join(' ');
+ if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||email.split('@')[1]!==domain&&!personal||/^(info|sales|contact|kontakt|mail|support|office|admin|team|noreply|hr|press)@/.test(email))return result('unconfirmed','The result was not a personal work email on this company domain.');
  const expectedProfile=person.publicLinkedinUrl||person.linkedin_url;
- const records=[output,raw,object(raw.data),object(raw.person)],names=records.flatMap(row=>[row.full_name,row.fullName,row.name,row.first_name&&row.last_name?[row.first_name,row.last_name].join(' '):null]).filter(Boolean);
+ const names=records.flatMap(row=>[row.full_name,row.fullName,row.name,row.first_name&&row.last_name?[row.first_name,row.last_name].join(' '):null]).filter(Boolean);
+ if(records.some(row=>row.validIdentity===false))return result('unconfirmed','The finder could not match the selected buyer identity.');
  if(records.some(row=>row.first_name&&nameKey(row.first_name)!==nameKey(parts[0])||row.last_name&&nameKey(row.last_name)!==nameKey(parts.slice(1).join(' '))))return result('unconfirmed','The provider returned conflicting buyer name components.');
  const emails=records.map(row=>row.email).filter(Boolean),profiles=records.flatMap(row=>[row.employee_linkedin,row.linkedin_url,row.linkedin]).filter(Boolean),domains=records.flatMap(row=>[row.company_domain,row.domain,row.organization?.primary_domain,row.company?.domain]).filter(Boolean);
  if(names.some(value=>nameKey(value)!==nameKey(name))||emails.some(value=>String(value).trim().toLowerCase()!==email)||profiles.some(value=>expectedProfile&&(!profile(value)||profile(value)!==profile(expectedProfile)))||domains.some(value=>String(value).replace(/^https?:\/\//,'').replace(/^www\./,'').replace(/\/$/,'').toLowerCase()!==domain))return result('unconfirmed','The provider returned conflicting buyer or company evidence.');
- if(personal&&nameKey(returnedName)!==nameKey(name))return result('unconfirmed','Personal email requires exact returned person ownership.');
- if(returnedName&&nameKey(returnedName)!==nameKey(name))return result('unconfirmed','Treg returned a different buyer identity.');
- const returnedProfile=output.employee_linkedin||output.linkedin_url||output.linkedin||record.employee_linkedin||record.linkedin_url||record.linkedin;
+ if(personal&&!names.length)return result('unconfirmed','Personal email requires exact returned person ownership.');
+ const returnedProfile=profiles[0];
  if(returnedProfile&&expectedProfile&&String(returnedProfile).replace(/^https?:\/\/(?:[a-z]+\.)?linkedin.com/,'linkedin.com').replace(/\/$/,'')!==String(expectedProfile).replace(/^https?:\/\/(?:[a-z]+\.)?linkedin.com/,'linkedin.com').replace(/\/$/,''))return result('unconfirmed','The returned professional profile belongs to a different identity.');
- if(!returnedName&&!(returnedProfile&&expectedProfile)&&identity(email.split('@')[0])!==identity(name))return result('unconfirmed','The provider did not establish ownership of this mailbox.');
+ if(!names.length&&!(returnedProfile&&expectedProfile)&&identity(email.split('@')[0])!==identity(name))return result('unconfirmed',email+' was returned for this search. The finder did not confirm who owns it.');
  let checked=await call('verify','treg.people.email.verify',{email});
  let v=object(checked.output),r=object(checked.raw||checked),task=r.id||r.task_id;
  // BounceBan asynchronous results are polled through its free endpoint only.
@@ -138,12 +139,16 @@ export async function findTregWorkEmail(env,context,candidate,person,companyId,{
  const verificationRows=[v,r,object(r.data),object(r.person)];
  if(verificationRows.map(row=>row.email).filter(Boolean).some(value=>String(value).trim().toLowerCase()!==email))return result('unconfirmed','Verification returned a different email address.');
  const verdict=String(v.status||v.result||r.result||r.status||'').trim().toLowerCase();
- const flags=verificationRows.flatMap(row=>[row.is_accept_all,row.accept_all]);
+ const flags=verificationRows.flatMap(row=>[row.is_accept_all,row.accept_all,row.catch_all,row.domain_intelligence?.catch_all]);
  const truth=value=>value===true||value===1||typeof value==='string'&&['true','1'].includes(value.trim().toLowerCase());
- const unsafe=flags.some(truth)||verificationRows.some(x=>truth(x.is_disposable)||!personal&&truth(x.is_free)||truth(x.is_role)||truth(x.block))||verificationRows.flatMap(row=>[row.status,row.result]).filter(Boolean).some(value=>['invalid','undeliverable','unknown','pending','processing','risky','accept_all'].includes(String(value).trim().toLowerCase()));
- if(!['valid','deliverable'].includes(verdict)||unsafe||!flags.some(x=>x===false||x==='false'))return result(task&&['pending','processing','unknown',''].includes(verdict)?'processing':'unconfirmed','Mailbox verification is pending or inconclusive. No recipient was approved.');
+ const unsafe=flags.some(truth)||verificationRows.some(x=>truth(x.is_disposable)||truth(x.disposable)||!personal&&truth(x.is_free)||truth(x.is_role)||truth(x.role_account)||truth(x.block))||verificationRows.flatMap(row=>[row.status,row.result]).filter(Boolean).some(value=>['invalid','undeliverable','unknown','pending','processing','risky','accept_all','catchall','catch-all','catch_all'].includes(String(value).trim().toLowerCase()));
+ if(!['valid','deliverable','verified'].includes(verdict)||unsafe||!flags.some(x=>x===false||x==='false')){
+  const status=task&&['pending','processing','unknown',''].includes(verdict)?'processing':'unconfirmed';
+  const reason=flags.some(truth)?'the verifier reported a catch-all domain':'mailbox verification was '+(status==='processing'?'pending':'inconclusive');
+  return result(status,email+' remains unconfirmed because '+reason+'.');
+ }
  await guard();const checkedAt=new Date().toISOString();
- const evidence={status:'valid',deliverability:'deliverable',checked_at:checkedAt,provider:'Treg',served_by:checked._treg?.provider||'bounceban'};
+ const evidence={status:'valid',deliverability:'deliverable',checked_at:checkedAt,provider:'Treg',served_by:checked._treg?.served_by||checked._treg?.provider||'Treg'};
  const save=deps.save||(async()=>{
   const detail=await getCrmCompany(env.DB,context,companyId);
   if(['suppressed','archived'].includes(detail.company.lifecycle_status))throw fail('This company is blocked in CRM.');

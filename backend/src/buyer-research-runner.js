@@ -1,6 +1,6 @@
 import {buyerRunWindow,BUYER_RUN_WINDOW_REASON} from './buyer-research-window.js';
 import {stmt,parse,authoritySql,standaloneBuyerDiscovery,lost,workspaceBuyerContext,readBuyerJob,publicBuyerJob,recoverInterruptedContactJob} from './buyer-research-store.js';
-import {runBuyerPaidResearch,PAID_PRIORITY_RESEARCH_REQUIRED} from './buyer-paid-research.js';
+import {runBuyerPaidResearch,workEmailSearchComplete,PAID_PRIORITY_RESEARCH_REQUIRED} from './buyer-paid-research.js';
 import {storageFailure} from './workspace-storage.js';
 import {loadBuyerContactContext} from './buyer-contact-context.js';
 import {sha256} from './security.js';
@@ -172,11 +172,31 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
    candidate.people=D.retainBuyerIdentities(reconciled.people,input.profile,candidate).filter(person=>input.scope!=='selected_buyers'||input.personIds.includes(String(person.id))).slice(0,10);
    candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),pool:reconciled.people.slice(0,30),opportunityRoles:input.roles};confirmNamed();
   };
+  const addIdentities=people=>{
+   candidate.buyerDiscovery.pool=D.mergeBuyerPool(candidate.buyerDiscovery.pool||candidate.people||[],people,input.profile);
+   acquirePeople();
+  };
+  const resolveDirectoryNames=async(searchSources,sourceRows)=>{
+   const pending=(candidate.buyerDiscovery?.pool||[]).filter(person=>person.identitySource==='apollo'&&person.identityStatus==='pending');
+   const relevant=D.selectDecisionMakers(pending,input.profile,4);
+   if(!relevant.length)return;
+   const resolved=await D.resolvePendingBuyerIdentities(relevant,sourceRows,candidate,input.profile,searchSources);
+   await guard();
+   const confirmed=resolved.people.filter(person=>person.identityStatus==='confirmed');
+   if(confirmed.length)addIdentities(confirmed);
+   candidate.buyerDiscovery.resultDiagnostics=[...(candidate.buyerDiscovery.resultDiagnostics||[]),...resolved.diagnostics].slice(-500);
+  };
   const diagnostics=parse(row.diagnostic_json,[]);
   if(rescopeOfficial)diagnostics.push({phase:'official',reason:'Resuming the contact-source objective after a legacy financial-archive limit; completed source tasks retained',at:new Date().toISOString()});
   const settleQuality=async()=>{
    const quality=input.paidResearch?(await publicBuyerJob(env,{...row,result_json:JSON.stringify(candidate)})).quality:D.buyerQualityAssessment(candidate,{contactOptions});
    const scopedComplete=input.scope==='selected_buyers'&&quality.researchPassed&&quality.aiReviewStatus==='complete'&&!(candidate.publicResearch.conflicts||[]).length;
+   if(input.paidResearch?.workEmailSearch){
+    const completed=quality.aiReviewStatus==='complete'&&workEmailSearchComplete(candidate,input.paidResearch,contactOptions);
+    status=completed?'complete':'needs_review';
+    if(!completed)diagnostics.push({phase:'paid',reason:candidate.publicResearch?.paidResearch?.status==='blocked'?candidate.publicResearch.paidResearch.reason:'Work-email search finished with one or more unresolved buyer checks or addresses.',at:new Date().toISOString()});
+    return;
+   }
    status=(quality.passed||scopedComplete)&&(!input.paidResearch||['complete','disabled'].includes(candidate.publicResearch?.paidResearch?.status))?'complete':'needs_review';
    if(status==='needs_review')diagnostics.push({phase:'quality',reason:quality.gaps.join(' · ').slice(0,600),at:new Date().toISOString()});
   };
@@ -184,7 +204,7 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
   try{
    await guard();const context=await workspaceBuyerContext(env,row.workspace_id,input.taskId);if(context.hash!==input.workspaceContext)throw Object.assign(Error('The seller context changed'),{code:'CONTEXT_CHANGED'});
    const rows=await allRows(),phaseStart=clock(),remaining=Math.max(1000,windowMs-(clock()-start)-500);
-   if(!siteOnly&&input.scope!=='selected_buyers'&&!apolloIdentityChecked&&['identities','contacts','review','paid'].includes(phase)){
+   if(input.scope!=='selected_buyers'&&!apolloIdentityChecked&&['identities','contacts','review','paid'].includes(phase)){
     const before=new Set((candidate.people||[]).map(person=>person.id));
     const directory=await discoverApolloBuyerIdentities({candidate,profile:input.profile,task,guard,record:observe,observed:input.apolloIdentityReceipts,
       search:payload=>(services.apollo?services.apollo(payload,controller.signal,{workspaceId:row.workspace_id,userId:row.requested_by,guard}):searchWorkspaceApolloPeople(env,row.workspace_id,payload,{userId:row.requested_by,signal:controller.signal,guard,beforeDispatch:()=>{if(windowMs-(clock()-start)<15000)throw Object.assign(Error('Apollo discovery deferred to the next processing slice'),{code:'TIME_BUDGET'});}}))});
@@ -233,6 +253,8 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
     if(siteOnly){
      acquiredRows=(await allRows()).filter(source=>source.sourceRead===true);acquirePeople();
      const indexReport=await findPublicBuyerContactPages(candidate,{
+      profile:input.profile,
+      addIdentities,resolveDirectoryNames:searchSources=>resolveDirectoryNames(searchSources,acquiredRows),
       index:query=>task('search','Free public index | '+query,async()=>{
        const signal=AbortSignal.any([controller.signal,AbortSignal.timeout(6000)]);
        const hits=await (services.publicIndex||searchManagementIndex)(query,signal,fetchDirectPublicPage);
@@ -252,7 +274,9 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
     const plan=D.buyerResearchPlan(candidate,input.profile);
     for(const query of plan.queries.slice(0,6)){await guard();try{await search(query);}catch(error){if(error.code==='CANCELED'||controller.signal.aborted)throw error;}}
     await searchPeople();
-    const identityRows=await allRows(),trace=D.tracePublicBuyers(identityRows,candidate.company,{...input.profile,companyDomain:candidate.domain});
+    const identityRows=await allRows();
+    await resolveDirectoryNames(search,identityRows);
+    const trace=D.tracePublicBuyers(identityRows,candidate.company,{...input.profile,companyDomain:candidate.domain});
     const profiled=unheldProfilePeople(identityRows,candidate,{D});
     candidate.people=D.retainBuyerIdentities(D.mergeBuyerPool(candidate.people||[],[...trace.people,...profiled],input.profile),input.profile,candidate).slice(0,10);acquirePeople();phase=nextPhase[phase];}
    }else if(phase==='contacts'){
