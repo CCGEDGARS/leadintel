@@ -1,5 +1,5 @@
 import {buyerRunWindow,BUYER_RUN_WINDOW_REASON} from './buyer-research-window.js';
-import {stmt,parse,authoritySql,lost,workspaceBuyerContext,readBuyerJob,publicBuyerJob,recoverInterruptedContactJob} from './buyer-research-store.js';
+import {stmt,parse,authoritySql,standaloneBuyerDiscovery,lost,workspaceBuyerContext,readBuyerJob,publicBuyerJob,recoverInterruptedContactJob} from './buyer-research-store.js';
 import {runBuyerPaidResearch,PAID_PRIORITY_RESEARCH_REQUIRED} from './buyer-paid-research.js';
 import {storageFailure} from './workspace-storage.js';
 import {loadBuyerContactContext} from './buyer-contact-context.js';
@@ -35,10 +35,10 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
   if(!row&&await recoverInterruptedContactJob(env,{jobId}))row=await claim();
   if(!row)break;
   const input=parse(row.input_json),originalCandidate=parse(row.result_json,input.candidate),reconciledCandidate=D.reconcileBuyerEvidence(originalCandidate,{trustedAgentSources:true});
-  const adoptPendingDossier=input.peopleFirst==null&&!input.taskId&&!input.paidResearch&&!input.recheck&&input.scope==='all_buyers'&&row.phase==='dossier';
-  if(adoptPendingDossier){input.peopleFirst=true;input.freeDiscovery=true;}
+  const adoptLegacyJob=input.peopleFirst==null&&!input.paidResearch&&standaloneBuyerDiscovery(input);
+  if(adoptLegacyJob){input.peopleFirst=true;input.freeDiscovery=true;}
   const siteOnly=input.freeDiscovery===true;
-  const peopleFirst=input.peopleFirst&&!input.taskId&&!input.recheck&&input.scope==='all_buyers';
+  const peopleFirst=input.peopleFirst&&standaloneBuyerDiscovery(input);
   const nextPhase=peopleFirst?{...standardPhaseOrder,official:'identities',identities:'contacts',contacts:input.dossierPassFinished?'review':'dossier',dossier:'review'}:standardPhaseOrder;
   const {contactOptions}=await loadBuyerContactContext(env,{workspaceId:row.workspace_id},reconciledCandidate);
   // A stale legacy paid slice first settles through the existing paid evidence
@@ -48,7 +48,7 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
   const deferSemanticStamp=row.phase==='paid'&&(sourceScopeChanged||Number(input.executionContinuationVersion||0)<4&&(originalCandidate.publicResearch?.aiReview?.inputSignature!==D.buyerReviewSignature(reconciledCandidate)||!D.buyerResearchCoveragePassed(reconciledCandidate,{contactOptions})));
   const candidate=deferSemanticStamp?originalCandidate:reconciledCandidate,controller=new AbortController();let invocationExhausted=false,activeTaskReservations=0,accepting=true,phase=row.phase,phaseMs=row.phase_ms,phaseRuns=row.phase_runs,changed=0,contextVersion=-1;
   const rescopeOfficial=sourceScopeChanged&&!deferSemanticStamp&&!input.recheck;
-  if(adoptPendingDossier){phase=row.phase='official';phaseMs=0;phaseRuns=0;}
+  if(adoptLegacyJob||siteOnly&&!['official','identities'].includes(phase)){phase=row.phase='official';phaseMs=0;phaseRuns=0;}
   if(rescopeOfficial){phase=row.phase='official';phaseMs=0;phaseRuns=0;}
   const runWindow=buyerRunWindow(row,input,clock()),windowPause=()=>Object.assign(Error(BUYER_RUN_WINDOW_REASON),{code:'RUN_WINDOW'});
   const timer=setTimeout(()=>controller.abort(runWindow.remainingMs<=windowMs?windowPause():Object.assign(Error('Job processing slice ended'),{code:'TIME_BUDGET'})),Math.max(1,Math.min(windowMs,runWindow.remainingMs)));

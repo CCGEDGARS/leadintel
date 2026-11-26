@@ -119,3 +119,27 @@ test('Find buyers saves public staff results before any metered request and expa
  const held=await commandBuyerJob(f.env,workspaceId,f.users.owner,command);assert.equal(held.status,'needs_review');
  const expanded=await commandBuyerJob(f.env,workspaceId,f.users.owner,{...command,allowMeteredPublicResearch:true});assert.equal(expanded.status,'queued');assert.equal(JSON.parse(expanded.input_json).freeDiscovery,false);assert.ok(!JSON.parse(expanded.input_json).paidResearch);
 });
+
+for(const state of ['queued','needs_review'])test('legacy contact phase stays free when '+state,async t=>{
+ const f=await buyerJobsFixture(t),s=scenario(variants[0]),job=await startScenario(f,s);
+ const first=await phase(f,job,s.services);
+ const receipts=f.DB.raw.prepare("SELECT task_key,attempts FROM buyer_research_tasks WHERE job_id=? AND status='complete'").all(job.id);
+ assert.ok(receipts.length);
+ f.DB.raw.prepare("UPDATE buyer_research_jobs SET phase='contacts',status=?,input_json=json_remove(input_json,'$.peopleFirst','$.freeDiscovery') WHERE id=?").run(state,job.id);
+ const {commandBuyerJob}=await import('../src/buyer-research-store.js');
+ if(state==='needs_review'){
+  const resumed=await commandBuyerJob(f.env,workspaceId,f.users.owner,{action:'resume',jobId:job.id,expectedRevision:first.revision,resumeFreeCompany:true});
+  assert.equal(resumed.phase,'official');
+ }
+ let metered=0;
+ const unexpected=async()=>{metered++;throw Error('Unexpected metered call');};
+ const {row}=await terminal(f,job,{read:s.services.read,registry:async()=>({status:'not_found'}),search:unexpected,apollo:unexpected,review:unexpected,independent:unexpected,dossier:unexpected,paidLookup:unexpected});
+ assert.equal(metered,0);assert.equal(row.id,job.id);
+ assert.equal(JSON.parse(row.diagnostic_json).at(-1).code,'free_discovery_finished');
+ assert.equal(JSON.parse(row.result_json).people.length,4);
+ for(const receipt of receipts)assert.equal(f.DB.raw.prepare('SELECT attempts FROM buyer_research_tasks WHERE job_id=? AND task_key=?').get(job.id,receipt.task_key).attempts,receipt.attempts);
+ const command={action:'resume',jobId:job.id,expectedRevision:row.revision};
+ assert.equal((await commandBuyerJob(f.env,workspaceId,f.users.owner,command)).revision,row.revision);
+ const expanded=await commandBuyerJob(f.env,workspaceId,f.users.owner,{...command,allowMeteredPublicResearch:true});
+ assert.equal(JSON.parse(expanded.input_json).meteredPublicResearchApproved,true);
+});
