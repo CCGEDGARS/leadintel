@@ -154,7 +154,7 @@ test('a run pauses in the middle once its own requests reach the limit, and the 
   const sentAtPause=r.total();await r.run();assert.equal(r.total(),sentAtPause);
 });
 
-test('resume starts a new count: the paused job continues in the same phase and sends requests again',async t=>{
+test('ordinary company resume after a credit pause preserves prior usage and sends no further metered requests',async t=>{
   const r=await controlledRun(t,{limit:9});
   await r.run();
   const paused=await r.saved(),sentAtPause=r.total();
@@ -166,8 +166,8 @@ test('resume starts a new count: the paused job continues in the same phase and 
   assert.equal(resumed.status,'queued');assert.equal(resumed.phase,paused.phase);assert.equal(resumed.progress.windowPaused,false);
   assert.equal(resumed.progress.credits.used,0,'The new run window has spent nothing yet');assert.ok(resumed.progress.credits.total>=9);
   await r.run();
-  assert.ok(r.total()>sentAtPause,'The resumed run may spend again: '+JSON.stringify(r.sent));
-  assert.equal(r.count().length,2,'One count per run window');
+  assert.equal(r.total(),sentAtPause,'Free resume cannot spend another credit');
+  assert.equal(r.count().length,1,'Only the earlier billed run has a credit entry');
 });
 
 test('interrupted requests of earlier slices do not pause a run whose billed spend is far below the limit',async t=>{
