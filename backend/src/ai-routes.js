@@ -5,6 +5,7 @@ import {critiqueStoryselling,reserveStoryPreview} from './storyselling.js';
 import {prepareCompanyMaterialGeneration,assertCompanyMaterialsCurrent} from './company-materials-context.js';
 import {followUpContext,prepareFollowUp,validateFollowUp,followUpToken,saveFollowUp} from './follow-up-assistant.js';
 import {searchWorkspaceResearch} from './ai-task-routing.js';
+import {requireWorkspaceServiceCredential} from './service-integrations.js';
 import {researchWorkspaceDossier,dossierSettings} from './company-dossier.js';
 import {prepareAssistantRequest,validateAssistantReply,assertAssistantCurrent} from './writing-assistant.js';
 import {prepareContentGeneration,resolveContentMaterials} from './content-materials.js';
@@ -169,7 +170,12 @@ export async function handleAiRoute(request,env,cors={}){
       if(request.method!=='PUT')return error('Method not allowed',405,cors);
       const body=await request.json().catch(()=>null);if(!body)return error('Research settings required',400,cors);
       const primary=body.primary||null,secondary=body.secondary||null;
-      if(primary&&!AI_PROVIDERS.includes(primary)||secondary&&!AI_PROVIDERS.includes(secondary)||primary&&primary===secondary)return error('Select two different supported researchers or Automatic.',400,cors);
+      const supported=globalThis.LeadIntelCompanyDossier.PROVIDERS;
+      if(primary&&!supported.includes(primary)||secondary&&!supported.includes(secondary)||primary&&primary===secondary)return error('Select two different supported researchers or Automatic.',400,cors);
+      if([primary,secondary].includes('perplexity')){
+        try{await requireWorkspaceServiceCredential(env,workspaceId,'perplexity');}
+        catch(cause){if(cause.code==='CUSTOMER_SERVICE_KEY_REQUIRED')return error(cause.message,409,cors);throw cause;}
+      }
       await env.DB.prepare('INSERT INTO workspace_research_settings(workspace_id,primary_provider,secondary_provider) VALUES(?,?,?) ON CONFLICT(workspace_id) DO UPDATE SET primary_provider=excluded.primary_provider,secondary_provider=excluded.secondary_provider,updated_at=CURRENT_TIMESTAMP').bind(workspaceId,primary,secondary).run();
       await audit(env,{workspaceId,userId:access.user.id,type:'ai.research_settings_saved',provider:primary||'automatic',metadata:{secondary:secondary||'automatic'}});
       return json({saved:true,primary_provider:primary,secondary_provider:secondary},200,cors);
@@ -431,9 +437,9 @@ export async function searchWorkspaceBuyerContact(env,workspaceId,{company,domai
   return result;
 }
 
-export async function searchWorkspaceWeb(env,workspaceId,query,{signal}={}){
+export async function searchWorkspaceWeb(env,workspaceId,query,{signal,skipPerplexity}={}){
   if(!encryptionConfigured(env))return {results:[],status:'unavailable'};
-  const result=await searchWorkspaceResearch(env,workspaceId,{query,maxResults:8,purpose:'contact_research',signal:signal?AbortSignal.any([signal,AbortSignal.timeout(25000)]):AbortSignal.timeout(25000)});
+  const result=await searchWorkspaceResearch(env,workspaceId,{query,maxResults:8,purpose:'contact_research',skipPerplexity,signal:signal?AbortSignal.any([signal,AbortSignal.timeout(25000)]):AbortSignal.timeout(25000)});
   return {...result,status:'complete'};
 }
 

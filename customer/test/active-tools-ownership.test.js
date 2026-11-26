@@ -8,7 +8,7 @@ function mount(){
  const w=new JSDOM(read('index.html'),{url:'https://example.test/customer/',runScripts:'outside-only'}).window;
  w.eval(read('personal-linkedin.js'));
  w.LeadIntelServerBridge={session:{authenticated:false},workspace:{id:'first',role:'owner'}};
- w.eval(read('ai-settings.js').replace(/^import .*;\s*$/gm,'')+'\nwindow.probe={checkApolloStatus,refreshIntegrationStatus,items:activeToolItems,set:s=>{integrationStatus=s;},get:()=>integrationStatus};');
+ w.eval(read('ai-settings.js').replace(/^import .*;\s*$/gm,'')+'\nwindow.probe={refreshStatus,checkApolloStatus,refreshIntegrationStatus,items:activeToolItems,set:s=>{integrationStatus=s;},get:()=>integrationStatus};');
  w.LeadIntelServerBridge.session.authenticated=true;
  return w;
 }
@@ -51,5 +51,32 @@ test('an in-flight status response from a previous workspace cannot populate the
   const old=w.probe.refreshIntegrationStatus();w.LeadIntelServerBridge.workspace={id:'second',role:'owner'};w.LeadIntelServerBridge.session.authenticated=false;
   w.dispatchEvent(new w.CustomEvent('leadintel:workspace-changed'));resolve();await old;
   assert.equal(w.probe.get().apollo,null);assert.equal(w.probe.get().firecrawl,null);
+ }finally{w.close();}
+});
+
+test('Perplexity appears in Active tools and the saved main researcher selection for its connected workspace',async()=>{
+ const w=mount();
+ try{
+  w.eval(read('company-dossier.js'));
+  w.eval(read('company-dossier-ui.js'));
+  w.document.getElementById('ai-settings-drawer').hidden=false;
+  w.fetch=async()=>response({role:'owner',providers:[{provider:'openai',name:'OpenAI',model:'test',active:true,configured:true}],research_settings:{primary_provider:'perplexity'}});
+  await w.probe.refreshStatus();
+  const main=w.document.getElementById('dossier-main-provider');
+  const option=main.querySelector('[value="perplexity"]');
+  assert.equal(main.value,'perplexity');
+  assert.equal(option.disabled,true);
+  const connected={provider:'perplexity',configured:true,source:'customer',state:'good'};
+  w.LeadIntelServiceIntegrationStatus={workspace_id:'first',providers:[connected]};
+  w.dispatchEvent(new w.CustomEvent('leadintel:service-status'));
+  assert.equal(option.disabled,false);
+  assert.equal(main.value,'perplexity');
+  const summary=w.document.getElementById('ai-engine-summary').textContent;
+  assert.match(summary,/Main engine · OpenAI/);
+  assert.match(summary,/PerplexityMain researcher · web search/);
+  w.LeadIntelServiceIntegrationStatus={workspace_id:'another',providers:[connected]};
+  w.dispatchEvent(new w.CustomEvent('leadintel:service-status'));
+  assert.equal(option.disabled,true);
+  assert.doesNotMatch(w.document.getElementById('ai-engine-summary').textContent,/Perplexity/);
  }finally{w.close();}
 });

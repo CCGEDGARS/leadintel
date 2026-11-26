@@ -2,16 +2,17 @@ import '../../customer/company-dossier.js';
 import {workspaceCredential,observeSpecialist} from './ai-task-routing.js';
 import {generateText} from './ai-provider.js';
 import {searchDossierProvider} from './dossier-provider-search.js';
-import {readPublicBuyerPage} from './service-integrations.js';
+import {searchPerplexityWeb} from './perplexity-request.js';
+import {readPublicBuyerPage,resolveWorkspaceServiceCredential} from './service-integrations.js';
 const D=globalThis.LeadIntelCompanyDossier;
 const names=['openai','anthropic','gemini'];
 export function chooseResearchers(connections,settings={}){
- const map=new Map(connections.filter(c=>names.includes(c.provider)).map(c=>[c.provider,c]));
+ const map=new Map(connections.filter(c=>D.PROVIDERS.includes(c.provider)).map(c=>[c.provider,c]));
  const primary=settings.primary||connections.find(c=>c.active)?.provider||names.find(n=>map.has(n));
  if(!map.has(primary))throw Object.assign(Error('Selected main researcher is not connected. No research started.'),{status:409});
  if(settings.secondary&&settings.secondary===primary)throw Object.assign(Error('Choose a different second researcher.'),{status:400});
  const second=settings.secondary||['gemini','anthropic','openai'].find(p=>p!==primary&&map.has(p));
- if(!map.has(second))throw Object.assign(Error('Connect two different AI providers in Settings before dossier research. No research started.'),{status:409});
+ if(!map.has(second))throw Object.assign(Error('Connect two different research providers in Settings before dossier research. No research started.'),{status:409});
  return [map.get(primary),map.get(second),...connections.filter(c=>c.provider!==primary&&c.provider!==second)];
 }
 export function researchObjective(company){const today=new Date().toISOString().slice(0,10),since=new Date(Date.now()-90*86400000).toISOString().slice(0,10);return `CURRENT LEADERSHIP AND PROJECT DOSSIER for ${String(company.company).slice(0,160)} (${D.domain(company.domain)}). As of ${today}. First locate official management and newsroom sources, especially organisation or leadership changes since ${since}. Establish current incumbents, announced future appointments and effective dates. Identify full names of delivery-area/project leaders, their specific areas, explicit authority and reporting lines. Then cover current project status, procurement needs and commercial fit. Prefer recent primary sources; use older pages where needed to substantiate a continuing role. Return exact underlying source URLs with terse descriptions. Seller and confirmed offers: ${JSON.stringify(company.seller||{}).slice(0,800)}. Opportunity: ${String(company.opportunity||'').slice(0,300)}. Relevant buying functions: ${(company.roles||[]).join('; ').slice(0,400)}. Published contact routes are researched in a separate dedicated search. Search and inspect sources, report missing evidence, and never invent names, titles or mailbox verification.`.slice(0,3900);}
@@ -59,7 +60,7 @@ export async function runDossierResearch({connections,settings={},company,search
    await Promise.all(Array.from({length:Math.min(2,missing.length)},async()=>{while(cursor<missing.length){
     if(attemptSignal.aborted)throw Error('Provider attempt stopped');await guard();if(attemptSignal.aborted)throw Error('Provider attempt stopped');
     const family=missing[cursor++],state=familyState.get(family.name);state.status='attempted';state.attempts++;state.startedAt=new Date().toISOString();state.completedAt='';state.reason='';remember(partial());await checkpoint();
-    try{const result=await search(connection,family.query,attemptSignal);if(attemptSignal.aborted)throw Error('Provider attempt stopped');state.status=result.web_search===true?(result.status==='partial'?'partial':'complete'):'failed';state.results=(result.web_search===true?result.results||[]:[]).map(row=>({url:D.url(row.url)})).filter(row=>row.url).slice(0,8);state.reason=state.status==='failed'?'Grounded web search did not execute':state.status==='partial'?'Grounded web search did not complete':'';}
+    try{const result=await search(connection,family.query,attemptSignal,family);if(attemptSignal.aborted)throw Error('Provider attempt stopped');state.status=result.web_search===true?(result.status==='partial'?'partial':'complete'):'failed';state.results=(result.web_search===true?result.results||[]:[]).map(row=>({url:D.url(row.url)})).filter(row=>row.url).slice(0,8);state.reason=state.status==='failed'?'Grounded web search did not execute':state.status==='partial'?'Grounded web search did not complete':'';}
     catch(error){if(attemptSignal.aborted)throw error;state.status='failed';state.results=[];state.reason=dossierFailureReason(error,'web_search');}
     state.completedAt=new Date().toISOString();remember(partial());await checkpoint();
    }}));
@@ -111,7 +112,13 @@ export async function researchWorkspaceDossier(env,workspaceId,company,{signal,g
  const settings=await dossierSettings(env,workspaceId),connections=(await Promise.all(names.map(p=>workspaceCredential(env,workspaceId,p)))).filter(Boolean);
  const active=await env.DB.prepare('SELECT provider FROM workspace_ai_integrations WHERE workspace_id=? AND active=1 LIMIT 1').bind(workspaceId).first();
  const selected={primary:settings.primary_provider||active?.provider,secondary:settings.secondary_provider||undefined};
- const providerSignature=JSON.stringify([D.PLAN_VERSION,selected,connections.map(c=>[c.provider,c.model])]),contextKey=D.contextKey(company);
+ if([selected.primary,selected.secondary].includes('perplexity')){
+  const credential=await resolveWorkspaceServiceCredential(env,workspaceId,'perplexity');
+  if(!credential.configured)throw Object.assign(Error('Reconnect Perplexity or change your research settings before running company research.'),{status:409});
+  if(!connections.some(c=>c.provider===active?.provider))throw Object.assign(Error('Choose a main AI engine in Settings to extract company evidence from Perplexity search results.'),{status:409});
+  connections.push(credential);
+ }
+ const providerSignature=JSON.stringify([D.PLAN_VERSION,selected,connections.map(c=>[c.provider,c.model]),...(connections.some(c=>c.provider==='perplexity')?[active.provider]:[])]),contextKey=D.contextKey(company);
  const saved=await env.DB.prepare('SELECT payload_json,successful_json FROM workspace_company_dossiers WHERE workspace_id=? AND domain=?').bind(workspaceId,D.domain(company.domain)).first();
  let prior;try{const parsed=JSON.parse(saved?.payload_json||'null');if(!company.force&&parsed?.contextKey===contextKey&&parsed?.providerSignature===providerSignature)prior=parsed;}catch{}
  let expectedPayload=saved?.payload_json||null;
@@ -126,10 +133,17 @@ export async function researchWorkspaceDossier(env,workspaceId,company,{signal,g
   if(Number(committed?.meta?.changes||0)!==1){await guard();throw Object.assign(Error('Company dossier changed during research. Refresh to continue from the retained evidence.'),{status:409});}
   expectedPayload=payload;
  };
+ const extractionEngine=connections.find(c=>c.provider===active?.provider);
  const result=await runDossierResearch({connections,settings:selected,company,signal,guard,prior,onCheckpoint,maxProvidersPerRequest:company.incremental===true?1:Infinity,...(providerTimeoutMs?{timeoutMs:Math.max(1000,Math.min(180000,providerTimeoutMs))}:{}),
-  search:(c,q,s)=>observeSpecialist(env,workspaceId,c,'company_dossier_web_search',()=>searchDossierProvider(c,q,{signal:s}),{guard,signal:s}),
+  search:(c,q,s,family)=>c.provider==='perplexity'
+   ?searchPerplexityWeb(env,workspaceId,{credential:c,query:[
+    company.company,D.domain(company.domain),
+    family.kind==='leadership'?'current leadership management appointments project directors':
+     family.kind==='contacts'?'official contact supplier procurement registration media privacy':family.formula
+   ].join(' ').slice(0,4000),maxResults:8,purpose:'company_dossier',signal:s})
+   :observeSpecialist(env,workspaceId,c,'company_dossier_web_search',()=>searchDossierProvider(c,q,{signal:s}),{guard,signal:s}),
   read:readSource||((u,s)=>readPublicBuyerPage(env,workspaceId,u,{purpose:'company_dossier',signal:s,directTimeoutMs:3000,firecrawlTimeoutMs:12000,totalTimeoutMs:18000})),
-  extract:(c,p,s)=>observeSpecialist(env,workspaceId,c,'company_dossier_extraction',()=>generateText({...c,prompt:p,system:'Extract sourced business facts. No invented facts. Return JSON.',maxOutputTokens:c.provider==='gemini'?6000:3000,responseFormat:c.provider==='gemini'?'json':undefined,signal:s,reasoningEffort:'low'}),{guard,signal:s}).then(r=>r.text)
+  extract:(researcher,p,s)=>{const c=researcher.provider==='perplexity'?extractionEngine:researcher;return observeSpecialist(env,workspaceId,c,'company_dossier_extraction',()=>generateText({...c,prompt:p,system:'Extract sourced business facts. No invented facts. Return JSON.',maxOutputTokens:c.provider==='gemini'?6000:3000,responseFormat:c.provider==='gemini'?'json':undefined,signal:s,reasoningEffort:'low'}),{guard,signal:s}).then(r=>r.text);}
  });
  if(result.status!=='complete'){try{const previous=D.safe(JSON.parse(saved?.successful_json||'null'),company.domain);if(previous?.contextKey===contextKey)result.previousSuccessful=previous;}catch{}}
  return result;

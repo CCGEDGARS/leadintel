@@ -48,3 +48,16 @@ export async function requestPerplexitySearch(env,workspaceId,{credential,query,
     await sleep(retryWaitMs(response),requestSignal);requestSignal.throwIfAborted();
   }
 }
+
+export async function searchPerplexityWeb(env,workspaceId,{credential,query,maxResults,signal,fetchImpl,purpose}){
+  const timeout=AbortSignal.timeout(20000);
+  const response=await requestPerplexitySearch(env,workspaceId,{credential,query,maxResults,signal:signal?AbortSignal.any([signal,timeout]):timeout,fetchImpl,purpose});
+  if(!response.ok)throw Error(`Perplexity request failed (${response.status})`);
+  const payload=await response.json();
+  if(!Array.isArray(payload.results))throw Error('Invalid Perplexity search response');
+  const results=payload.results.flatMap(row=>{
+    if(!/^https?:\/\//i.test(String(row?.url||'')))return [];
+    return [{url:row.url,title:String(row.title||''),description:String(row.snippet||'').slice(0,300),date:String(row.date||''),evidenceKind:'search_excerpt'}];
+  });
+  return {provider:'perplexity',web_search:true,results,sources:results.map(({url,title})=>({url,title}))};
+}

@@ -66,7 +66,7 @@ export function createBuyerSourceSearch(env,workspaceId,{guard=async()=>{},obser
    await check();
   }
   try{
-   const result=await grounded(env,workspaceId,query,{signal:querySignal});await check();
+   const result=await grounded(env,workspaceId,query,{signal:querySignal,skipPerplexity:true});await check();
    if(result.status!=='complete'||result.web_search===false||!Array.isArray(result.results))throw Error('Grounded public research unavailable');
    observe({provider:'grounded',operation:'search',status:'succeeded',results:result.results.length});
    const secondary=rowsWithSource(result.results,'grounded');if(!primaryRows.length)return secondary;
