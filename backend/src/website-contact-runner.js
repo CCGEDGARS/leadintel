@@ -273,28 +273,49 @@ export async function runWebsiteContactJobs(env,{jobId,now=Date.now(),windowMs=4
       for(const person of state.people){
        const card=person.publishedStaffCard||{};
        Object.assign(person,D.matchPublicBuyerDetails([person],pages,input.domain,input.company)[0]);
-       let indexed=[];
+       const plan=D.buyerResearchQueryPlan(input,person);
+       const checks={};
        const officialGmail=D.gmailResearchMatches(person,input,pages);
-       if(!state.managementIndexUnavailable&&(!(card.email||person.publicEmail)||!(card.phone||person.publicPhone)||!person.publicLinkedinUrl||!officialGmail.length)){
-        const query='"'+person.name+'" "'+input.company+'"';
-        indexed=await optional(()=>task('public_index',query,signal=>(services.publicIndex||services.search||searchManagementIndex)(query,signal,fetchDirectPublicPage)));
-        if(!indexed){state.managementIndexUnavailable=true;indexed=[];}
-        if(!person.publicLinkedinUrl&&indexed.length){
-         const matched=D.matchPublicLinkedInProfiles([person],websiteLinkedInMatchRows(person,indexed,input),input.company)[0];
-         if(matched.linkedinIdentityEvidence?.url)Object.assign(person,matched);
+       person.gmailMatches=[...new Map([...(person.gmailMatches||[]),...officialGmail].map(m=>[m.email,m])).values()];
+       const channels=[
+        ['email',plan.direct_email,()=>card.email||person.publicEmail],
+        ['gmail',plan.gmail,()=>person.gmailMatches.length],
+        ['phone',plan.phone,()=>card.phone||person.publicPhone],
+        ['linkedin',plan.linkedin,()=>person.publicLinkedinUrl]
+       ];
+       for(const [channel,queries,found] of channels){
+        const queryLog=[];
+        let blocked=false;
+        for(const query of queries){
+         if(found())break;
+         const rows=await optional(()=>task('public_index',query,signal=>(services.publicIndex||services.search||searchManagementIndex)(query,signal,fetchDirectPublicPage)));
+         const receipt={query,status:rows?'complete':'unavailable'};
+         queryLog.push(receipt);
+         if(!rows){blocked=true;continue;}
+         const urls=[...new Set(rows.filter(hit=>sameHost(hit.url,input.domain)).map(hit=>hit.url))].slice(0,2);
+         const sources=[];
+         for(const url of urls){
+          const page=await optional(()=>read(url));
+          if(page)sources.push(page);
+          else{blocked=true;receipt.status='incomplete';}
+         }
+         Object.assign(person,D.matchPublicBuyerDetails([person],sources,input.domain,input.company)[0]);
+         const matches=D.gmailResearchMatches(person,input,[...sources,...rows]);
+         person.gmailMatches=[...new Map([...(person.gmailMatches||[]),...matches].map(m=>[m.email,m])).values()];
+         if(channel==='linkedin'){
+          const matched=D.matchPublicLinkedInProfiles([person],websiteLinkedInMatchRows(person,rows,input),input.company)[0];
+          if(matched.linkedinIdentityEvidence?.url)Object.assign(person,matched);
+         }
         }
+        checks[channel]={status:found()?'found':blocked||!queryLog.length?'incomplete':'searched',queryLog};
        }
-       const officialHit=indexed.find(hit=>sameHost(hit.url,input.domain)&&websiteNameKey(hit.title+' '+hit.description).includes(websiteNameKey(person.name)));
-       const extra=officialHit?await optional(()=>read(officialHit.url)):null;
-       if(extra)Object.assign(person,D.matchPublicBuyerDetails([person],[extra],input.domain,input.company)[0]);
-       const matches=[...officialGmail,...D.gmailResearchMatches(person,input,extra?[extra,...indexed]:indexed)];
-       person.gmailMatches=[...new Map([...(person.gmailMatches||[]),...matches].map(m=>[m.email,m])).values()];
+       person.freeChannelChecks=checks;
        person.publicSourcesChecked=true;person.freeCheckedAt=new Date().toISOString();
-       person.freeResearchStatus=state.gaps.length?'needs_review':'complete';
+       person.freeResearchStatus=Object.values(checks).some(c=>c.status==='incomplete')?'needs_review':'complete';
        const page=pages.find(p=>p.url===person.publicNameUrl);
        recordIdentity(input,person,{matchStatus:'not_checked'},page);
       }
-      delete state.personCheck;state.phase='contacts';status=state.gaps.length?'incomplete':'complete';state.stopReason='sources_checked';state.label='Published contact details checked for '+state.people.length+' decision-makers.';
+      delete state.personCheck;state.phase='contacts';status=state.gaps.length||state.people.some(p=>p.freeResearchStatus!=='complete')?'incomplete':'complete';state.stopReason='sources_checked';state.label='Published contact details checked for '+state.people.length+' decision-makers.';
      }
     }
    }

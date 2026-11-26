@@ -58,6 +58,7 @@ export function websiteFreeResearchComplete(candidate,person){
 export const websiteIdentityCheckKey=(candidate,person)=>JSON.stringify([candidate.company,candidate.domain,String(person.id),person.publicName||person.name,person.title,person.organization,websiteProfileKey(person.publicLinkedinUrl||person.linkedin_url),person.publicNameUrl||'']);
 export function websitePaidReadiness(candidate,person,jobStatus){
  if(jobStatus&&! ['complete','incomplete'].includes(jobStatus))return {eligible:false,reason:jobStatus==='canceled'?'Use Check identity to finish the stopped identity check.':'Public research is still running.',code:'WEBSITE_CONTACT_RESEARCH_ACTIVE'};
+ if(candidate.managementLimit&&!['email','gmail','phone','linkedin'].every(key=>['searched','found'].includes(person.freeChannelChecks?.[key]?.status)))return {eligible:false,reason:'Finish the free contact searches before approving a paid lookup.',code:'WEBSITE_CONTACT_FREE_RESEARCH_REQUIRED'};
  const support=websiteIdentitySupport(candidate,person),reviewed=websiteLinkedInReviewCurrent(candidate,person),check=person.identityCheck;
  if(!support.eligible)return {eligible:false,reason:support.reason,code:'WEBSITE_CONTACT_IDENTITY_REQUIRED'};
  const fresh=value=>{const age=Date.now()-Date.parse(value||'');return age>=0&&age<30*86400000;};
