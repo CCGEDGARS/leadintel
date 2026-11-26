@@ -2946,7 +2946,7 @@ async function keepBuyer(domain,index,{scope="selected",personId,selectionOwner}
   }finally{if(!inherited&&buyerActionSelectionOwners.get(actionKey)===token){buyerActionSelectionOwners.delete(actionKey);buyerSelectionPending.delete(actionKey);}renderAll();}
 }
 async function saveBuyerResearch(domain,options={}){
-  const candidate=(discovery.selectedProspects||[]).find(item=>canonicalDomain(item.domain)===canonicalDomain(domain));
+  const candidate=(discovery.selectedProspects||[]).find(item=>canonicalDomain(item.domain||item.website)===canonicalDomain(domain));
   if(!candidate||!crmAuthenticated()||candidate.peopleStatus==='loading'||bridge()?.conflict)return false;
   const b=bridge(),state=discovery,context=discoveryOperationContext(),originalPeople=candidate.people,people=originalPeople||[],owners=people.slice();let savedSignature='';
   const current=()=>discovery===state&&bridge()===b&&crmAuthenticated()&&!b?.conflict&&discoveryOperationContext()===context&&discovery.selectedProspects?.includes(candidate)&&candidate.people===originalPeople&&owners.length===people.length&&owners.every(person=>people.includes(person))&&(!savedSignature||window.LeadIntelCrm.buyerCrmSignature(candidate)===savedSignature);
@@ -2957,12 +2957,19 @@ async function saveBuyerResearch(domain,options={}){
     const mapped=window.LeadIntelCrm.mapDiscoveryCandidateToCrm(candidate);delete mapped.company.pipeline_stage;
     savedSignature=window.LeadIntelCrm.buyerCrmSignature(candidate);
     const saved=await b.saveCrmCompany({...mapped,contacts:[]});
-    if(!current())return false;
+    if(!current()){
+      if(discovery===state&&bridge()===b&&crmAuthenticated()&&discoveryOperationContext()===context)showToast('Buyer research changed during saving. Review the latest details and retry.');
+      return false;
+    }
     if(!saved?.ok)throw new Error(saved?.error||'Buyer research could not be saved');
     const company=validateCompanySave(candidate,saved),returnedDomain=canonicalDomain(company.normalized_domain||company.domain||company.website);
-    if(!returnedDomain||returnedDomain!==canonicalDomain(candidate.domain)||company.workspace_id!==b.workspace?.id||candidate.crmId&&String(candidate.crmId)!==String(company.id))throw new Error('Saved company identity changed. Review the company before retrying.');
-    saveDiscovery();await refreshCrmState({render:false});if(!current())return false;
-    options.onSaved?.(savedSignature);showToast('Buyer research and qualification saved in CRM');return true;
+    if(!returnedDomain||returnedDomain!==canonicalDomain(candidate.domain||candidate.website)||company.workspace_id!==b.workspace?.id||candidate.crmId&&String(candidate.crmId)!==String(company.id))throw new Error('Saved company identity changed. Review the company before retrying.');
+    saveDiscovery();
+    // The explicit save owns the next workspace write. Hydration may replace
+    // the buyer objects or merge CRM fields before that write is acknowledged.
+    if(options.onSaved){options.onSaved(savedSignature);return true;}
+    await refreshCrmState({render:false});if(!current())return false;
+    showToast('Buyer research and qualification saved in CRM');return true;
   }catch(error){if(current())showToast(error.message||'Buyer research could not be saved');return false;}
 }
 function buyerCompanySnapshot(){
