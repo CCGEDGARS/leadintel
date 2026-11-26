@@ -90,5 +90,5 @@
       return new RegExp('(?:^|[^\\p{L}\\p{N}])'+term+'(?![\\p{L}\\p{N}])','u').test(content);
     });
   }
-  return {MARKET_RULES,supportsMarketContext,host,companyDomain,firstParty,publication,recency,usable,claimText,terms,researchText,isResearchBoilerplate:value=>RESEARCH_BOILERPLATE.test(String(value||'')),isDisclaimer:value=>DISCLAIMER.test(String(value||''))};
+  return {MARKET_RULES,supportsMarketContext,host,companyDomain,firstParty,parseDate,publication,recency,usable,claimText,terms,researchText,isResearchBoilerplate:value=>RESEARCH_BOILERPLATE.test(String(value||'')),isDisclaimer:value=>DISCLAIMER.test(String(value||''))};
 });

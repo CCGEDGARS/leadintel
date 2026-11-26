@@ -1293,7 +1293,7 @@
           if(requested&&/\b(?:in|near|at)\s+(?:china|united states|usa|japan|india|brazil)\b/i.test(sentence))continue;
           if(foreignEvent)continue;
           const eventYear=sentence.match(/\b(?:in|during|since|by|for|until|opened in|announced in)\s+(20\d{2})\b/i);
-          const explicitEventDate=EvidencePolicy.publication({text:sentence}).date;
+          const explicitEventDate=EvidencePolicy.parseDate(sentence);
           const eventYearNumber=eventYear?Number(eventYear[1]):explicitEventDate?Number(explicitEventDate.slice(0,4)):null;
           const eventTimingUnverified=eventYearNumber!==null&&eventYearNumber!==new Date().getUTCFullYear();
           // Bind each event action to its local named subject. Official hosting
