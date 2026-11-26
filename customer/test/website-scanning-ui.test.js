@@ -47,7 +47,7 @@ test('Find contacts verifies an unchecked company, saves provenance and opens it
  const {w,events}=contactJourney();try{
   await wait();w.document.querySelector('#website-scanning-open').click();w.document.querySelector('[data-scan-action="buyers"]').click();await settled(w);
   assert.deepEqual(events.map(e=>e[0]),['verify','save','activity','get','research']);
-  assert.deepEqual(events.find(e=>e[0]==='research')[1],{action:'start',companyId:'crm-liljas'});
+  assert.deepEqual(events.find(e=>e[0]==='research')[1],{action:'shortlist',companyId:'crm-liljas',managementLimit:10,buyerRoles:''});
   assert.equal(events[2][2].metadata.identityUrl,'https://www.liljassvets.se/');
   assert.equal(w.document.querySelector('#website-contact-results').hidden,false);
   assert.match(w.document.querySelector('#website-contact-results').textContent,/Liljas Svets/);

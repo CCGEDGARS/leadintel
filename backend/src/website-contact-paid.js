@@ -24,7 +24,7 @@ export async function websitePaidScope(env,context,body){
  const current=async()=>{await guard();const fresh=await readWebsiteContacts(env,context.workspaceId,{id:row.id}),saved=parse(fresh.state_json),selected=saved.people.find(p=>String(p.id)===String(person.id));if(identity(selected)!==original)throw contactError('The selected contact changed.');return {fresh,saved,selected};};
  const candidate=async detail=>{const {saved}=await current();if(detail.company.id!==row.company_id||detail.company.company_name!==input.company||detail.company.normalized_domain!==input.domain)throw contactError('The saved company changed.');return {company:input.company,domain:input.domain,people:saved.people,publicResearch:{},lifecycle_status:detail.company.lifecycle_status};};
  const readiness=async(_candidate,selected)=>{
-  const {selected:server}=await current(),candidate={company:input.company,domain:input.domain,people:[server]};
+  const {selected:server}=await current(),candidate={company:input.company,domain:input.domain,managementLimit:input.managementLimit,people:[server]};
   const ready=websitePaidReadiness(candidate,server);
   return {...ready,eligible:identity(selected)===original&&ready.eligible};
  };
