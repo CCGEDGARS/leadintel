@@ -224,7 +224,8 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
    // and, only after that receipt is saved, as a marker in the candidate, so slices and resumes reuse it.
    // The step never fails the job: an outage or a refused receipt is retried once and then left.
    const register=candidate.buyerDiscovery?.registerManagement;
-   if(input.scope!=='selected_buyers'&&!['official','done'].includes(phase)&&(!register||register.status==='unavailable'&&Number(register.attempts)<2)){
+   // A register answer saved before it carried the company's city is asked once more for it (free).
+   if(input.scope!=='selected_buyers'&&!['official','done'].includes(phase)&&(!register||register.status==='unavailable'&&Number(register.attempts)<2||register.status==='found'&&!register.city&&Number(register.attempts)<2)){
     const before=new Set((candidate.people||[]).map(person=>person.id)),sliceEnds=error=>controller.signal.aborted||['TIME_BUDGET','RUN_WINDOW','CREDIT_LIMIT','LEASE_EXPIRED','CANCELED','CONTEXT_CHANGED'].includes(error?.code);let answer,added=false;
     try{answer=await (services.registry||lookupCompanyManagement)({market:candidate.market,company:candidate.company,website:candidate.website||candidate.domain,pages:rows.filter(source=>source.sourceRead===true).map(source=>({url:source.url,text:String(source.markdown||'')}))},{signal:controller.signal});}
     catch(error){if(sliceEnds(error))throw error;answer={status:'unavailable'};}
@@ -235,7 +236,9 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
      const receipt=await task('read',url,async()=>({url,markdown:page.markdown,links:[],sourceType:'registry',metadata:{sourceURL:url,statusCode:200,source:'registry'},sourceRead:true,extractedAt:new Date().toISOString()}),{phase:'official'});
      if(receipt?.sourceType==='registry')added=true;else outcome='unavailable';
     }catch(error){if(sliceEnds(error))throw error;outcome='unavailable';}
-    candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),registerManagement:{status:outcome,id:String(answer?.id||'').slice(0,40),people:added?page.people:0,attempts:Number(register?.attempts||0)+1,checkedAt:new Date().toISOString()}};
+    // Asking a found register again only for its city never turns the saved answer into a failure.
+    const cityOnly=register?.status==='found'&&outcome!=='found';
+    candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),registerManagement:cityOnly?{...register,attempts:Number(register.attempts||0)+1}:{status:outcome,id:String(answer?.id||'').slice(0,40),people:added?page.people:0,attempts:Number(register?.attempts||0)+1,checkedAt:new Date().toISOString(),...(outcome==='found'&&answer?.city?{city:String(answer.city).slice(0,80)}:{})}};
     if(added){
      acquiredRows=(await allRows()).filter(source=>source.sourceRead===true);acquirePeople();
      if(['review','paid'].includes(phase)&&(candidate.people||[]).some(person=>!before.has(person.id))){phase='contacts';phaseMs=0;phaseRuns=0;}

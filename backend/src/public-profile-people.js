@@ -126,12 +126,15 @@ export function publicPeopleQueries(candidate={},roles=[],{D=globalThis.LeadInte
     if(roleWords.length>=MAX_ROLE_WORDS)break;
   }
   const register=clean(candidate.buyerDiscovery?.registerManagement?.id).replace(/[^\p{L}\p{N}-]/gu,'').slice(0,20);
+  // The registered city tells a short or common name from namesakes (live, 26 Nov 2026: "AS SCAN" without its town
+  // returned other companies' people; with it, the chair and the business manager came back).
+  const city=clean(candidate.buyerDiscovery?.registerManagement?.city||candidate.city).slice(0,60),at=city?' '+city:'';
   return [
-    `${company} ${words.management}`,
+    `${company}${at} ${words.management}`,
     `${company} LinkedIn ${words.employees}`,
-    roleWords.length?`"${short}" ${roleWords.join(' ')}`:'',
+    roleWords.length?`"${short}"${at} ${roleWords.join(' ')}`:'',
     `${company}${register?` ${words.register} ${register}`:''} ${words.board}`,
-    `"${short}"${market?' '+market:''} manager`,
-    `"${short}" ${words.chair}`
+    `"${short}"${at}${market?' '+market:''} manager`,
+    `"${short}"${at} ${words.chair}`
   ].filter(Boolean).slice(0,PUBLIC_PEOPLE_MAX_QUERIES);
 }
