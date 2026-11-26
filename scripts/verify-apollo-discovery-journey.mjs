@@ -6,10 +6,11 @@ import {searchWorkspaceApolloPeople} from '../backend/src/service-integrations.j
 import {encryptSecret,importAesKey} from '../backend/src/oauth.js';
 
 export async function verifyApolloDiscoveryJourney({artifactDir='/tmp/leadintel-apollo-journey'}={}){
- let f,apiCalls=0;const errors=[],evidence={};
+ let f,apiCalls=0,paidContactCalls=0;const errors=[],evidence={};
  f=await journeyFixture({durableJobs:true,externalFetch:async(input,options)=>{
   const url=new URL(typeof input==='string'?input:input.url);if(url.hostname!=='api.apollo.io')return null;
-  assert.match(url.pathname,/\/mixed_people\/api_search$/);assert.equal(JSON.parse(options.body).reveal_phone_number,undefined);apiCalls++;
+  if(url.pathname==='/api/v1/auth/health')return Response.json({is_logged_in:true});
+  if(!url.pathname.endsWith('/mixed_people/api_search')){paidContactCalls++;throw Error('Unexpected Apollo endpoint: '+url.pathname);}assert.equal(JSON.parse(options.body).reveal_phone_number,undefined);apiCalls++;
   return Response.json({people:[{id:'apollo-robert',name:'Robert Lund',title:'Head of Procurement',organization:{name:'Forge Industries'},email:'not-revealed@forge.example',phone_number:'+46999999999'},{id:'apollo-alice',name:'Alice Berg',title:'Chief Operating Officer',organization:{name:'Forge Industries'}}]});
  },researchServices:{apollo:(payload,signal,context)=>searchWorkspaceApolloPeople(f.env,context.workspaceId,payload,{...context,signal})}});
  f.env.OAUTH_TOKEN_ENCRYPTION_KEY=Buffer.alloc(32,23).toString('base64');const encrypted=await encryptSecret('controlled-apollo-key',await importAesKey(f.env.OAUTH_TOKEN_ENCRYPTION_KEY));
@@ -29,8 +30,17 @@ export async function verifyApolloDiscoveryJourney({artifactDir='/tmp/leadintel-
    const meta=JSON.parse(f.DB.raw.prepare("SELECT metadata_json FROM workspace_service_integrations WHERE provider='apollo'").get().metadata_json);assert.equal(meta.discovery_enabled,enabled);assert.equal(meta.email_enrichment_enabled,false);assert.equal(meta.phone_enrichment_enabled,false);
   }
   evidence.settingsSaveAndRestore=true;await page.setViewportSize({width:390,height:844});await card.scrollIntoViewIfNeeded();const box=await card.boundingBox();assert.ok(box.x>=0&&box.x+box.width<=390);await page.screenshot({path:artifactDir+'/apollo-settings-mobile.png'});await page.setViewportSize({width:1440,height:1000});await page.locator('#close-settings').click();
-  await page.locator('.selected-prospect-company [data-find-prospect-buyers]').click();await page.waitForFunction(()=>discovery.selectedProspects[0].buyerResearchJob?.id);
+  const research=page.locator('.selected-prospect-company [data-find-prospect-buyers]');
+  await research.click();await page.waitForFunction(()=>discovery.selectedProspects[0].buyerResearchJob?.id);
   const job=f.DB.raw.prepare('SELECT id FROM buyer_research_jobs ORDER BY rowid DESC LIMIT 1').get();
+  for(let i=0;i<8;i++){
+   await f.runJobs(job.id);
+   const saved=f.DB.raw.prepare('SELECT diagnostic_json FROM buyer_research_jobs WHERE id=?').get(job.id);
+   if(JSON.parse(saved.diagnostic_json).at(-1)?.code==='free_discovery_finished')break;
+  }
+  assert.equal(apiCalls,0,'website and register discovery must not call Apollo');
+  await research.filter({hasText:'Expand web research'}).click();
+  await page.waitForFunction(()=>['queued','running'].includes(discovery.selectedProspects[0].buyerResearchJob?.status));
   for(let i=0;i<8&&!apiCalls;i++)await f.runJobs(job.id);
   assert.equal(apiCalls,1);await page.waitForFunction(()=>discovery.selectedProspects[0].publicResearch?.accountability?.tools?.find(x=>x.provider==='apollo')?.succeeded===1);
   assert.equal(await page.evaluate(()=>discovery.selectedProspects[0].people.some(p=>p.id==='robert')),true,'Apollo aliases cannot replace the saved official buyer identity');
@@ -38,7 +48,7 @@ export async function verifyApolloDiscoveryJourney({artifactDir='/tmp/leadintel-
   await page.locator('[data-stop-buyer-job]').click();await page.waitForFunction(()=>discovery.selectedProspects[0].buyerResearchJob?.status==='canceled');await settleInitialSave(page);
   await page.context().close();await open();await page.waitForFunction(()=>discovery.selectedProspects[0].publicResearch?.accountability?.tools?.find(x=>x.provider==='apollo')?.succeeded===1);assert.equal(apiCalls,1);
   const stored=f.DB.raw.prepare("SELECT result_json FROM buyer_research_tasks WHERE request_value LIKE 'Apollo people search%'").all();assert.doesNotMatch(JSON.stringify(stored),/not-revealed|46999999999|controlled-apollo-key/);
-  evidence.freeSearchCalls=apiCalls;evidence.executedReceiptsRestored=true;evidence.paidContactCalls=0;evidence.pageErrors=errors;assert.deepEqual(errors,[]);await fs.writeFile(artifactDir+'/evidence.json',JSON.stringify(evidence,null,2));return evidence;
+  assert.equal(paidContactCalls,0);evidence.freeSearchCalls=apiCalls;evidence.executedReceiptsRestored=true;evidence.paidContactCalls=paidContactCalls;evidence.pageErrors=errors;assert.deepEqual(errors,[]);await fs.writeFile(artifactDir+'/evidence.json',JSON.stringify(evidence,null,2));return evidence;
  }catch(error){await page?.screenshot({path:artifactDir+'/failure.png',fullPage:true});await fs.writeFile(artifactDir+'/failure.json',JSON.stringify({message:error.message,errors,apiCalls},null,2));throw error;}
  finally{await browser.close();await f.close();}
 }

@@ -161,3 +161,14 @@ test('a collapsed company whose free discovery finished does not read as needing
  assert.match(row,/Free discovery finished/);
  assert.doesNotMatch(row,/needs attention/);
 });
+
+test('a completed free scan with a saved contact heading shows a single empty result',()=>{
+ const {ctx,candidate,person}=runtime();
+ candidate.people=[{...person,name:'Kontakt RS Stålteknik'}];
+ candidate.buyerResearchProgress={executionStatus:'needs_review',diagnostics:[{code:'free_discovery_finished'}]};
+ vm.runInContext(source.slice(source.indexOf('function buyerResearchProgressHtml('),source.indexOf('async function findExecutiveBuyer(',source.indexOf('function buyerResearchProgressHtml('))),ctx);
+ const doc=documentFor(ctx.renderSelectedProspects([candidate]));
+ assert.match(doc.body.textContent,/No named buyer found in the sources checked/);
+ assert.doesNotMatch(doc.body.textContent,/Research not started|Kontakt RS Stålteknik/);
+ assert.equal(doc.querySelectorAll('.selected-prospect-person').length,0);
+});
