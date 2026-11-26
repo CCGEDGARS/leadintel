@@ -2967,9 +2967,9 @@ async function saveBuyerResearch(domain,options={}){
     saveDiscovery();
     // The explicit save owns the next workspace write. Hydration may replace
     // the buyer objects or merge CRM fields before that write is acknowledged.
-    if(options.onSaved){options.onSaved(savedSignature);return true;}
+    if(options.deferRefresh){options.onSaved?.(savedSignature);return true;}
     await refreshCrmState({render:false});if(!current())return false;
-    showToast('Buyer research and qualification saved in CRM');return true;
+    options.onSaved?.(savedSignature);showToast('Buyer research and qualification saved in CRM');return true;
   }catch(error){if(current())showToast(error.message||'Buyer research could not be saved');return false;}
 }
 function buyerCompanySnapshot(){
@@ -3000,7 +3000,7 @@ async function saveSelectedBuyerCompany(value){
   const clearOwnMarker=()=>{if(!marker)return;const meta=loadMeta();if(JSON.stringify(meta.buyerCrmSaves?.[domain])!==JSON.stringify(marker))return;delete meta.buyerCrmSaves[domain];saveMeta(meta);};
   owners.set(domain,token);buyerCompanySavePending.add(domain);
   try{
-    renderAll();if(!await saveBuyerResearch(domain,{onSaved:signature=>{savedSignature=signature;}})||!savedSignature||!current())return false;
+    renderAll();if(!await saveBuyerResearch(domain,{deferRefresh:true,onSaved:signature=>{savedSignature=signature;}})||!savedSignature||!current())return false;
     marker={workspaceId,signature:savedSignature,operationId:Date.now().toString(36)+':'+Math.random().toString(36).slice(2)};
     const meta=loadMeta();meta.buyerCrmSaves={...meta.buyerCrmSaves,[domain]:marker};saveMeta(meta);saveDiscovery();
     const result=await b.saveNow({saveIntent:true,explicitSave:true});if(!current())return false;
@@ -3033,7 +3033,7 @@ async function removeSelectedBuyerCompany(value){
     if(!window.LeadIntelCrm?.removeBuyerCompanyRecords||!window.LeadIntelWorkspaceSync?.merge)throw new Error('Company removal could not initialize. Refresh and retry.');
     if(choice==='alternative'){
       let savedSignature;
-      if(!await saveBuyerResearch(domain,{onSaved:signature=>{savedSignature=signature;}})||!current())return false;
+      if(!await saveBuyerResearch(domain,{deferRefresh:true,onSaved:signature=>{savedSignature=signature;}})||!current())return false;
       if(window.LeadIntelCrm.buyerCrmSignature(candidate)!==savedSignature)throw new Error('Research changed during saving. Review it and retry Save to CRM.');
       selectionOnly=true;before=JSON.parse(JSON.stringify(buyerCompanySelectionSnapshot()));staged={discovery:{...before.discovery},meta:{...before.meta}};
       staged.discovery.selectedProspects=(staged.discovery.selectedProspects||[]).filter(row=>canonicalDomain(row.domain||row.website)!==domain);
