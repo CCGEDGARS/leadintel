@@ -1,6 +1,6 @@
 import './workspace-storage-ui.js?v=20261119-management-v1&active-tools-order=20261012-v1&rescue=20261013-v1';
 import './personal-linkedin.js?v=20261009-personal-profile-v1';
-import './tool-account-links.js?v=20261011-v1&workspace-auth=20261012-v1';
+import './tool-account-links.js?v=20261011-v1&workspace-auth=20261012-v1&perplexity=20261126-v1';
 const API_BASE='https://leadintel-api.edgars-7e7.workers.dev';
 const SETTINGS_VERSION='20261014-microsoft-all-entrypoints-v5';
 const PROVIDERS=Object.freeze([

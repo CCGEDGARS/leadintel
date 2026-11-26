@@ -9,8 +9,8 @@ import {fetchWithScrapling,scraplingConfigured} from './scrapling.js';
 import {creditFailure,recordProviderCredit,providerCreditIssue,verifiedCreditBalance} from './provider-credit-health.js';
 import {parseRetryAfterMs,recordFirecrawlRateLimit} from './firecrawl-rate-gate.js';
 
-const PROVIDERS=Object.freeze(['apollo','firecrawl','hunter','treg']);
-const PROVIDER_NAMES=Object.freeze({apollo:'Apollo.io',firecrawl:'Firecrawl',hunter:'Hunter',treg:'Treg'});
+const PROVIDERS=Object.freeze(['apollo','firecrawl','hunter','treg','perplexity']);
+const PROVIDER_NAMES=Object.freeze({apollo:'Apollo.io',firecrawl:'Firecrawl',hunter:'Hunter',treg:'Treg',perplexity:'Perplexity'});
 const MAX_DIRECT_PAGE_BYTES=2_000_000;
 const MAX_DIRECT_PAGE_CHARS=60_000;
 const MAX_DIRECT_REDIRECTS=4;
@@ -109,7 +109,19 @@ export async function verifyTreg(apiKey){
   if(!Number.isSafeInteger(account.balance_micro))throw tregConnectionFailure('TREG_BALANCE_RESPONSE_INVALID',response.status);
   return {team:clean(account.team,100),balance_usd:account.balance_micro/1_000_000,authentication_surface:'rest'};
 }
-async function verifyCredential(provider,apiKey){if(provider==='treg')return verifyTreg(apiKey);if(provider==='apollo')return verifyApollo(apiKey);if(provider==='firecrawl')return verifyFirecrawl(apiKey);return verifyHunter(apiKey);}
+// Perplexity has no account or balance endpoint. An empty query is refused with 400 invalid_request once the key is
+// accepted, and with 401 invalid_api_key when it is not; invalid requests are not billed (Perplexity pricing and probe,
+// 26 Nov 2026). The check therefore costs nothing.
+export async function verifyPerplexity(apiKey,{fetchImpl=fetch}={}){
+  const response=await fetchImpl('https://api.perplexity.ai/search',{method:'POST',headers:{Accept:'application/json','Content-Type':'application/json',Authorization:`Bearer ${apiKey}`},body:JSON.stringify({query:[]})});
+  const failure=message=>Object.assign(new Error(message),{httpStatus:response.status});
+  if(response.status===400||response.ok)return {search_api:'available',check:'no_credit_validation',checked_at:new Date().toISOString()};
+  if(response.status===401||response.status===403)throw failure('Perplexity rejected this API key');
+  if(response.status===402)throw failure('Perplexity credits exhausted or payment required');
+  if(response.status===429)throw failure('Perplexity rate limit reached; check the connection again shortly');
+  throw failure(`Perplexity connection check failed (${response.status})`);
+}
+async function verifyCredential(provider,apiKey){if(provider==='perplexity')return verifyPerplexity(apiKey);if(provider==='treg')return verifyTreg(apiKey);if(provider==='apollo')return verifyApollo(apiKey);if(provider==='firecrawl')return verifyFirecrawl(apiKey);return verifyHunter(apiKey);}
 
 function privateIpv4(hostname){
   const parts=hostname.split('.');if(parts.length!==4||parts.some(part=>!/^\d+$/.test(part)||Number(part)>255))return false;
