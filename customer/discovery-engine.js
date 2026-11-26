@@ -1968,7 +1968,10 @@
   }
   function recordBuyerResearchTool(report,entry={}){
     if(!report||!BUYER_RESEARCH_TOOLS.includes(entry.provider))return;
-    const row=report.tools.find(row=>row.provider===entry.provider);if(!row)return;
+    let row=report.tools.find(row=>row.provider===entry.provider);
+    // A report saved before a tool joined the list (a job resumed after 26 Nov 2026) has no row for it; the tool still ran.
+    if(!row&&Array.isArray(report.tools)){row={provider:entry.provider,attempted:0,succeeded:0,failed:0,skipped:0,results:0,reason:''};report.tools.push(row);}
+    if(!row)return;
     if(entry.status==='skipped'){row.skipped++;row.reason=clean(entry.reason).slice(0,180);return;}
     if(!['succeeded','failed'].includes(entry.status))return;
     row.attempted++;row[entry.status]++;row.results+=Math.max(0,Number(entry.results)||0);

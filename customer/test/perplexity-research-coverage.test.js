@@ -23,6 +23,19 @@ test('Buyers research accountability records Perplexity searches and keeps them 
   assert.equal(saved.tools.find(r=>r.provider==='perplexity').results,4);
 });
 
+test('a research report saved before Perplexity existed still records Perplexity searches',()=>{
+  // A job started before 26 Nov 2026 resumes with its saved eight-tool report (live: nordisk-staal.dk, 27 Perplexity
+  // searches that the saved report did not count).
+  const report=D.createBuyerResearchAccountability();report.tools=report.tools.filter(r=>r.provider!=='perplexity');
+  D.recordBuyerResearchTool(report,{provider:'perplexity',operation:'search',status:'succeeded',results:8});
+  const row=report.tools.find(r=>r.provider==='perplexity');
+  assert.ok(row,'the resumed report gains a Perplexity row');
+  assert.deepEqual({attempted:row.attempted,succeeded:row.succeeded,results:row.results},{attempted:1,succeeded:1,results:8});
+  assert.equal(D.safeBuyerResearchAccountability(JSON.parse(JSON.stringify(report))).tools.find(r=>r.provider==='perplexity').results,8);
+  D.recordBuyerResearchTool(report,{provider:'unknown-tool',operation:'search',status:'succeeded'});
+  assert.equal(report.tools.some(r=>r.provider==='unknown-tool'),false,'providers outside the research tool list are still ignored');
+});
+
 test('a saved public web discovery status keeps Perplexity as a named source',()=>{
   const state=D.normalizeDiscoveryState({selectedProspects:[{company:'Example',domain:'example.com',website:'https://example.com/',buyerSearchMode:'user_selected_target',buyerDiscovery:{providerStatus:{firecrawl:{status:'complete',results:3,sources:['perplexity','grounded']}}}}]});
   assert.equal(state.selectedProspects.length,1,'the selected company is kept');
@@ -44,9 +57,9 @@ test('the accountability panel names Perplexity when it ran and is unchanged whe
 
 test('browsers fetch the changed research engine and Buyers page',()=>{
   const html=read('index.html');
-  for(const target of ['discovery-engine.js','discovery-ui.js']){
+  for(const [target,version] of [['discovery-engine.js','20261126-v2'],['discovery-ui.js','20261126-v1']]){
     const match=html.match(new RegExp(target.replace('.','\\.')+'\\?([^"\'\\s`]+)'));
     assert.ok(match,`index.html loads ${target}`);
-    assert.equal(new URLSearchParams(match[1].replace(/&amp;/g,'&')).get('perplexity-search'),'20261126-v1',target);
+    assert.equal(new URLSearchParams(match[1].replace(/&amp;/g,'&')).get('perplexity-search'),version,target);
   }
 });

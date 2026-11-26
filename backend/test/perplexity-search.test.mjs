@@ -127,6 +127,28 @@ test('a diversified search merges grounded results with Perplexity rows without 
  assert.equal(rows.find(r=>r.url==='https://example.com/p0').searchProvider,'perplexity','the Perplexity row wins over a grounded duplicate');
 });
 
+// Live run 26 Nov 2026 (nordisk-staal.dk): 40 Perplexity rows for site:linkedin.com/in/ searches were titled only
+// "<name> | LinkedIn" (no role, no company in any title), so the headline reader that turns "Name - Role - Company"
+// into a buyer found nobody. Firecrawl titles carry the headline (Firecrawl run 6774ff16: 39 rows, every one in parts,
+// 26 with a role). LinkedIn profile searches therefore stay with Firecrawl first, with Perplexity as their fallback.
+test('LinkedIn profile searches ask Firecrawl first while other searches still ask Perplexity first',async()=>{
+ const sent=[];
+ const search=createBuyerSourceSearch({},'w',{credential:async()=>({apiKey:'fixture'}),perplexityCredential:async()=>KEY,grounded:async()=>assert.fail('No grounded fallback expected'),fetchImpl:route({sent,perplexity:()=>Response.json({results:results(2)}),firecrawl:()=>Response.json({success:true,data:[{url:'https://www.linkedin.com/in/anna',title:'Anna Andersson - CEO - Example A/S | LinkedIn',description:'CEO at Example A/S'}]})})});
+ const rows=await search('site:linkedin.com/in/ "Example A/S" ("CEO" OR "Managing Director")');
+ assert.deepEqual(sent,['firecrawl']);assert.equal(rows[0].searchProvider,'firecrawl');
+ sent.length=0;assert.equal((await search('site:example.com (team OR kontakt)'))[0].searchProvider,'perplexity');assert.deepEqual(sent,['perplexity']);
+});
+
+test('a LinkedIn profile search uses Perplexity when Firecrawl cannot answer it',async()=>{
+ for(const firecrawl of ['missing','empty']){
+  const sent=[];
+  const search=createBuyerSourceSearch({},'w',{credential:firecrawl==='missing'?async()=>{throw Error('not configured');}:async()=>({apiKey:'fixture'}),perplexityCredential:async()=>KEY,grounded:async()=>assert.fail('No grounded fallback expected'),fetchImpl:route({sent,perplexity:()=>Response.json({results:results(1)}),firecrawl:()=>Response.json({success:true,data:[]})})});
+  const rows=await search('site:linkedin.com/in/ "Example A/S" ("CEO")');
+  assert.equal(rows[0].searchProvider,'perplexity',firecrawl);
+  assert.deepEqual(sent,firecrawl==='missing'?['perplexity']:['firecrawl','perplexity'],firecrawl);
+ }
+});
+
 test('cancellation stops Perplexity work instead of becoming a provider failure',async()=>{
  const parent=new AbortController();parent.abort(Error('Research scope ended'));
  const ended=createBuyerSourceSearch({},'w',{signal:parent.signal,perplexityCredential:async()=>assert.fail('Canceled scopes cannot request a credential'),credential:async()=>assert.fail('Canceled scopes cannot request a credential'),grounded:async()=>assert.fail('Canceled scopes cannot start a fallback')});

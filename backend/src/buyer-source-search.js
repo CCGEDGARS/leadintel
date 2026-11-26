@@ -2,6 +2,7 @@ import {requestFirecrawl} from './firecrawl-request.js';
 import {requestPerplexitySearch,PERPLEXITY_MAX_RESULTS} from './perplexity-request.js';
 import {requireWorkspaceServiceCredential} from './service-integrations.js';
 import {searchWorkspaceWeb} from './ai-routes.js';
+const LINKEDIN_PROFILE_SEARCH=/\bsite:\s*(?:[a-z]{2,3}\.)?linkedin\.com\b/i;
 // Public research only. This boundary never invokes paid contact reveal APIs.
 // Owner decision, 26 Nov 2026: Perplexity searches, Firecrawl reads pages, the AI engine reasons. A workspace that
 // connected its own Perplexity key is answered by Perplexity first; Firecrawl search and then grounded search stay the
@@ -17,26 +18,33 @@ export function createBuyerSourceSearch(env,workspaceId,{guard=async()=>{},obser
  return async function search(query,{limit=8,diversify=false,signal:requestSignal}={}){
   const querySignal=requestSignal&&signal?AbortSignal.any([signal,requestSignal]):requestSignal||signal,check=async()=>{if(querySignal?.aborted)throw querySignal.reason||Error('Public source search canceled');await guard();};
   await check();let empty=false,primaryRows=[],primaryProvider='firecrawl',perplexityEmpty=false;
-  if(!perplexityUnavailable){
+  // Answers with rows to return at once, or nothing when the search goes on (rows kept for a diversified merge, an
+  // empty answer, a failure, or no key).
+  const askPerplexity=async()=>{
+   if(perplexityUnavailable)return;
    if(!perplexity)try{perplexity=await perplexityCredential(env,workspaceId,'perplexity');}catch{perplexityUnavailable=true;}
    await check();
-   if(perplexity){
-    let httpStatus;
-    try{
-     const timeout=Math.min(10000,Math.max(1000,primaryTimeoutMs));
-     const response=await requestPerplexitySearch(env,workspaceId,{credential:perplexity,query,maxResults:Math.min(limit,PERPLEXITY_MAX_RESULTS),signal:querySignal?AbortSignal.any([querySignal,AbortSignal.timeout(timeout)]):AbortSignal.timeout(timeout),fetchImpl,purpose});
-     await check();
-     // A rejected or exhausted key is not asked again by this search owner; other failures fall back per query.
-     if(!response.ok){httpStatus=response.status;if([401,402,403].includes(response.status))perplexityUnavailable=true;throw Error(`Perplexity search HTTP ${response.status}`);}
-     const payload=await response.json();
-     if(!Array.isArray(payload?.results))throw Error('Perplexity search returned an invalid result list');
-     const rows=perplexityRows(payload.results);
-     await check();observe({provider:'perplexity',operation:'search',status:'succeeded',results:rows.length});
-     if(rows.length&&!diversify)return rowsWithSource(rows,'perplexity');
-     if(rows.length){primaryRows=rowsWithSource(rows,'perplexity');primaryProvider='perplexity';}else perplexityEmpty=true;
-    }catch(error){await check();observe({provider:'perplexity',operation:'search',status:'failed',reason:String(error.message||'Perplexity search unavailable').slice(0,180),...(httpStatus?{httpStatus}:{})});}
-   }
-  }
+   if(!perplexity)return;
+   let httpStatus;
+   try{
+    const timeout=Math.min(10000,Math.max(1000,primaryTimeoutMs));
+    const response=await requestPerplexitySearch(env,workspaceId,{credential:perplexity,query,maxResults:Math.min(limit,PERPLEXITY_MAX_RESULTS),signal:querySignal?AbortSignal.any([querySignal,AbortSignal.timeout(timeout)]):AbortSignal.timeout(timeout),fetchImpl,purpose});
+    await check();
+    // A rejected or exhausted key is not asked again by this search owner; other failures fall back per query.
+    if(!response.ok){httpStatus=response.status;if([401,402,403].includes(response.status))perplexityUnavailable=true;throw Error(`Perplexity search HTTP ${response.status}`);}
+    const payload=await response.json();
+    if(!Array.isArray(payload?.results))throw Error('Perplexity search returned an invalid result list');
+    const rows=perplexityRows(payload.results);
+    await check();observe({provider:'perplexity',operation:'search',status:'succeeded',results:rows.length});
+    if(rows.length&&!diversify)return rowsWithSource(rows,'perplexity');
+    if(rows.length){primaryRows=rowsWithSource(rows,'perplexity');primaryProvider='perplexity';}else perplexityEmpty=true;
+   }catch(error){await check();observe({provider:'perplexity',operation:'search',status:'failed',reason:String(error.message||'Perplexity search unavailable').slice(0,180),...(httpStatus?{httpStatus}:{})});}
+  };
+  // LinkedIn profile searches keep Firecrawl first. Perplexity titles a profile "<name> | LinkedIn" without the role
+  // and company that the headline reader needs (live run 26 Nov 2026: 40 such rows, none with a role or company;
+  // Firecrawl titles carry "Name - Role - Company"). Perplexity answers them only when Firecrawl cannot.
+  const linkedInProfiles=LINKEDIN_PROFILE_SEARCH.test(String(query||''));
+  if(!linkedInProfiles){const answer=await askPerplexity();if(answer)return answer;}
   if(!unavailable&&!primaryRows.length){
    if(!connection)try{connection=await credential(env,workspaceId,'firecrawl');}catch{unavailable=true;observe({provider:'firecrawl',operation:'search',status:'skipped',reason:'Workspace Firecrawl credential unavailable'});}
    await check();
@@ -51,6 +59,7 @@ export function createBuyerSourceSearch(env,workspaceId,{guard=async()=>{},obser
     if(rows.length&&!diversify)return rowsWithSource(rows,'firecrawl');primaryRows=rowsWithSource(rows,'firecrawl');empty=rows.length===0;
    }catch(error){if(error?.code==='CREDIT_LIMIT')throw error;await check();observe({provider:'firecrawl',operation:'search',status:'failed',reason:String(error.message||'Public search unavailable').slice(0,180)});}
   }
+  if(linkedInProfiles&&!primaryRows.length){const answer=await askPerplexity();if(answer)return answer;}
   await check();
   if(beforeGrounded){
    try{await beforeGrounded();}catch(error){if(primaryRows.length)return primaryRows;throw error;}
