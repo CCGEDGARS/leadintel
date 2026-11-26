@@ -85,3 +85,40 @@ test('each kept company shows the register entry and one reason per criterion',a
  assert.doesNotMatch(unchecked.textContent,/marketing protection/i);assert.equal(unchecked.querySelector('a'),null);
  assert.equal(block('legacy.example'),null);
 });
+
+test('AI suggestions respect manual choices and only reviewed divisions reach the search',async t=>{
+ let submitted,aiCalls=0;
+ const h=setup(t,(_query,body)=>{
+  if(body.task){aiCalls++;const prompt=JSON.parse(body.prompt);assert.equal(prompt.context.targeting.idealCustomer,'Manufacturers');
+   return {text:JSON.stringify({suggestions:[{code:'25',reason:'Fabrication work.'},{code:'33',reason:'Maintenance work.'},{code:'33',reason:'Duplicate.'},{code:'XX',reason:'Unknown.'}]})};}
+  submitted=body;return started(body);
+ });
+ await h.click('new');h.tick('[name="industry"][value="24"]');await h.click('suggest-industries');
+ assert.equal(h.w.document.querySelectorAll('[data-industry-choice]').length,2);
+ assert.equal(h.find('#cl-industry-count').textContent,'3 selected');
+ h.tick('[data-industry-choice="33"]');assert.equal(h.find('[name="industry"][value="33"]').checked,false);
+ await h.click('review');assert.equal(submitted,undefined);await h.click('start');
+ assert.deepEqual(submitted.target.industries,['24','25']);assert.equal(aiCalls,1);
+});
+
+test('a late suggestion cannot apply after the requested work changes',async t=>{
+ let finish,requested;
+ const h=setup(t,(_q,body)=>{requested=JSON.parse(body.prompt).context;return new Promise(resolve=>{finish=resolve;});});
+ await h.click('new');h.type('industryFocus','Subcontracted welding');
+ h.tick('[name="industry"][value="24"]');await h.click('suggest-industries');
+ assert.equal(requested.workRequested,'Subcontracted welding');
+ h.type('industryFocus','Equipment repair');
+ finish({text:JSON.stringify({suggestions:[{code:'25',reason:'Welding work'}]})});await tick();
+ assert.equal(h.find('[name="industry"][value="25"]').checked,false);
+ assert.equal(h.find('[name="industry"][value="24"]').checked,true);
+ assert.match(h.find('#cl-industry-status').textContent,/Targeting changed/);
+});
+
+test('the picker caps suggestions at fifteen and leaves manual selection available after an AI failure',async t=>{
+ let fail=true;
+ const h=setup(t,()=>fail?{error:'Workspace AI unavailable'}:{text:JSON.stringify({suggestions:T.DIVISIONS.slice(0,20).map(d=>({code:d.code,reason:'The selected offer fits this sector.'}))})});
+ await h.click('new');await h.click('suggest-industries');assert.match(h.find('#cl-industry-status').textContent,/Workspace AI unavailable/);
+ h.tick('[name="industry"][value="96"]');fail=false;await h.click('suggest-industries');
+ assert.equal(h.w.document.querySelectorAll('[data-industry-choice]').length,15);
+ assert.equal(h.find('#cl-industry-count').textContent,'16 selected');
+});

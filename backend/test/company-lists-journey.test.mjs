@@ -164,3 +164,29 @@ test('lookalike list with five references and no optional triggers progresses wi
   assert.ok(originalDomains.every(domain=>finalState.results.some(r=>r.domain===domain)));
   assert.deepEqual(errors,[]);
 });
+
+test('industry suggestions stay editable and fit desktop and mobile company list forms',async t=>{
+ let chromium;try{({chromium}=await loadPlaywright());await fs.access(process.env.LEADINTEL_CHROMIUM_PATH||'/usr/bin/chromium');}catch(e){if(process.env.LEADINTEL_REQUIRE_BROWSER==='true')throw e;t.skip('Chromium unavailable');return;}
+ const f=await step1Fixture(),browser=await chromium.launch({executablePath:process.env.LEADINTEL_CHROMIUM_PATH||'/usr/bin/chromium',args:['--no-sandbox']}),errors=[];
+ t.after(async()=>{await browser.close();await f.close();});
+ const saved=await f.getState();
+ Object.assign(saved.payload.main,{...profileMain(),profile:{companyName:'Seller',priorityOffers:'Contract welding',idealCustomer:'Industrial operators',decisionMakers:'Maintenance manager',targetMarkets:'Sweden'},answers:{priority_offers:'Contract welding',ideal_customer:'Industrial operators',buyer_roles:'Maintenance manager',exclusions:'Retail'}});
+ await putCustomerState(f.env,{workspaceId,userId:'storage-owner',expectedVersion:saved.version,payload:saved.payload});
+ const page=await openCompanies(browser,f,[],errors);
+ await page.route('**/api/ai/generate?*',route=>route.fulfill({json:{text:JSON.stringify({suggestions:[{code:'25',reason:'Structural fabrication can require subcontracted welding.'},{code:'33',reason:'Maintenance contractors repair and install industrial equipment.'}]})}}));
+ await page.locator('[data-cl="new"]').click();
+ await page.getByRole('button',{name:'Suggest industries with AI'}).click();
+ const picker=page.locator('.cl-industry-picker');
+ await picker.locator('[data-industry-choice="25"]').waitFor();
+ for(const width of [1440,390,320]){
+  await page.setViewportSize({width,height:900});
+  const box=await picker.boundingBox();assert.ok(box.x>=0&&box.x+box.width<=width+1);
+  assert.equal(await picker.evaluate(el=>el.scrollWidth<=el.clientWidth+1),true);
+ }
+ await picker.locator('[data-industry-choice="33"]').uncheck();
+ await page.getByText('Browse all industries').click();
+ assert.equal(await picker.locator('[name="industry"][value="33"]').isChecked(),false);
+ await page.getByRole('button',{name:'Review criteria'}).click();
+ assert.match(await page.locator('#company-list-preview').innerText(),/industry divisions? 25/i);
+ assert.deepEqual(errors,[]);
+});
