@@ -47,3 +47,48 @@ export async function searchManagementIndex(query,signal,read){
  if(!rows.length&&!/no results found/i.test(markdown))throw Error('Public web index unavailable. Company sources were checked.');
  return rows;
 }
+
+// Search excerpts locate pages. Only acquired page bodies enter the shared
+// identity and contact checks. Save the first-party roster before this pass.
+export async function findPublicBuyerContactPages(candidate,{index,read,refresh,interrupted}){
+ const D=globalThis.LeadIntelDiscovery;
+ let checked=0,readFailures=0,indexUnavailable=false;
+ const lookup=async(query,name='')=>{
+  let hits;
+  try{
+   ({hits}=await index(query));
+   checked++;
+  }catch(error){
+   if(interrupted(error))throw error;
+   indexUnavailable=true;
+   return;
+  }
+  const targets=hits.filter(hit=>{
+   const host=D.canonicalDomain(hit.url);
+   if(!host||D.isBlockedDomain(host))return false;
+   if(host===candidate.domain)return true;
+   const text=(hit.title+' '+hit.description).toLowerCase();
+   return name&&text.includes(name.toLowerCase())&&(text.includes(candidate.domain)||text.includes(candidate.company.toLowerCase()));
+  });
+  for(const hit of targets.slice(0,2)){
+   try{const page=await read(hit.url);if(!page?.sourceRead)readFailures++;}
+   catch(error){if(interrupted(error))throw error;readFailures++;}
+  }
+ };
+ if(!candidate.people?.length){
+  await lookup('site:'+candidate.domain+' (management OR leadership OR team OR ledelse OR kontakt)');
+  await refresh();
+ }
+ const missing=(candidate.people||[]).filter(person=>D.sourcedBuyerIdentity(person,candidate)&&!D.confirmedBuyerContactData(candidate,person).email).slice(0,4);
+ for(const person of missing){
+  if(indexUnavailable)break;
+  const name=person.publicName||person.name;
+  await lookup('"'+name+'" "'+candidate.domain+'" email',name);
+ }
+ if(missing.length&&checked)await refresh();
+ const notes=[];
+ if(checked)notes.push('Free public index: '+checked+' completed '+(checked===1?'query.':'queries.'));
+ if(indexUnavailable)notes.push('Free public index unavailable.');
+ if(readFailures)notes.push(readFailures+' linked source checks unavailable.');
+ return notes.join(' ')||'Free website and register checks finished.';
+}

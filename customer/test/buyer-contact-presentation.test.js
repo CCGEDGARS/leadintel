@@ -172,3 +172,15 @@ test('a completed free scan with a saved contact heading shows a single empty re
  assert.doesNotMatch(doc.body.textContent,/Research not started|Kontakt RS Stålteknik/);
  assert.equal(doc.querySelectorAll('.selected-prospect-person').length,0);
 });
+
+test('a published reception route is visible outside the research details and separate from named channels',()=>{
+ const {ctx,candidate}=runtime();
+ const contact='https://example.com/contact/';
+ candidate.buyerDiscovery={officialContactInventory:D.officialCompanyContactInventory([{url:contact,sourceRead:true,markdown:'# Contact us\n+44 20 7000 1234\nmail@example.com'}],candidate)};
+ vm.runInContext(source.slice(source.indexOf('function companyContactDossierHtml('),source.indexOf('function buyerOutcomeEvidenceHtml(')),ctx);
+ const doc=documentFor(ctx.companyContactDossierHtml(candidate)),summary=doc.querySelector('.company-contact-summary');
+ assert.ok(summary);assert.equal(summary.closest('details'),null);
+ assert.equal(summary.querySelector('[href^="mailto:"]').textContent,'mail@example.com');
+ assert.equal(summary.querySelector('[href^="tel:"]').textContent,'+44 20 7000 1234');
+ assert.equal(summary.querySelector('a[target="_blank"]').href,contact);
+});

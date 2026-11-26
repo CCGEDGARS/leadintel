@@ -5,6 +5,7 @@ import {storageFailure} from './workspace-storage.js';
 import {loadBuyerContactContext} from './buyer-contact-context.js';
 import {sha256} from './security.js';
 import {researchWorkspaceDossier} from './company-dossier.js';
+import {findPublicBuyerContactPages,searchManagementIndex} from './website-management.js';
 import {createBuyerSourceSearch} from './buyer-source-search.js';
 import {buyerCreditWindowKey,buyerCreditLimitFor,createBuyerCreditMeter,readBuyerCredits} from './buyer-research-credits.js';
 import {fetchDirectPublicPage,readPublicBuyerPage,searchWorkspaceApolloPeople} from './service-integrations.js';
@@ -214,12 +215,22 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
    }else if(phase==='identities'){
     if(siteOnly){
      acquiredRows=(await allRows()).filter(source=>source.sourceRead===true);acquirePeople();
+     const indexReport=await findPublicBuyerContactPages(candidate,{
+      index:query=>task('search','Free public index | '+query,async()=>{
+       const signal=AbortSignal.any([controller.signal,AbortSignal.timeout(6000)]);
+       const hits=await (services.publicIndex||searchManagementIndex)(query,signal,fetchDirectPublicPage);
+       return {hits:hits.slice(0,8).map(hit=>({url:C.url(hit.url),title:String(hit.title||'').slice(0,250),description:String(hit.description||'').slice(0,550)}))};
+      }),
+      read,
+      refresh:async()=>{acquiredRows=(await allRows()).filter(source=>source.sourceRead===true);acquirePeople();},
+      interrupted:error=>controller.signal.aborted||['TIME_BUDGET','RUN_WINDOW','LEASE_EXPIRED','CANCELED','CONTEXT_CHANGED'].includes(error.code)
+     });
      for(const person of candidate.people||[]){
       const published=D.gmailResearchMatches(person,candidate,acquiredRows);
       if(published.length)person.gmailMatches=[...new Map([...(person.gmailMatches||[]),...published].map(match=>[match.email,match])).values()].slice(0,8);
      }
      report.status='partial';status='needs_review';
-     diagnostics.push({phase,code:'free_discovery_finished',reason:'Free website and register checks finished. Expand research to use metered web sources for remaining gaps.',at:new Date().toISOString()});
+     diagnostics.push({phase,code:'free_discovery_finished',reason:indexReport,at:new Date().toISOString()});
     }else if(input.scope==='selected_buyers'){phase=nextPhase[phase];}else{
     const plan=D.buyerResearchPlan(candidate,input.profile);
     for(const query of plan.queries.slice(0,6)){await guard();try{await search(query);}catch(error){if(error.code==='CANCELED'||controller.signal.aborted)throw error;}}
