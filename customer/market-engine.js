@@ -54,10 +54,10 @@
     }catch{return "";}
   }
   function normalizeProviders(value){
-    const allowed=new Set(["openai","anthropic","gemini","firecrawl","scrapling"]),seen=new Set();
+    const allowed=new Set(["openai","anthropic","gemini","firecrawl","scrapling","perplexity"]),seen=new Set();
     const input=Array.isArray(value)?value:[value];
     input.map(item=>clean(item).toLowerCase()).filter(item=>allowed.has(item)).forEach(item=>seen.add(item));
-    return ["openai","anthropic","gemini","firecrawl","scrapling"].filter(item=>seen.has(item));
+    return ["openai","anthropic","gemini","firecrawl","scrapling","perplexity"].filter(item=>seen.has(item));
   }
   function priorityWeight(priority){return /^high$/i.test(clean(priority))?9:/^medium$/i.test(clean(priority))?7:/^low$/i.test(clean(priority))?5:6;}
   function defaultKeywords(signal){
@@ -360,7 +360,7 @@
     if(!value||typeof value!=="object"||value.version!==1||!clean(value.runId))return null;
     const statuses=new Set(["planned","not_run","running","zero_results","complete","partial","failed","unavailable","cancelled"]);
     const runStatuses=new Set([...statuses,"partial","error"]);
-    const providers=new Set(["ai","openai","anthropic","firecrawl","gemini","scrapling"]);
+    const providers=new Set(["ai","openai","anthropic","firecrawl","gemini","scrapling","perplexity"]);
     const stages=new Set(["discovery","custom_source","extraction","extraction_batch","verification"]);
     const integer=(input,maximum=Number.MAX_SAFE_INTEGER)=>Number.isFinite(Number(input))?Math.min(maximum,Math.max(0,Math.floor(Number(input)))):0;
     const timestamp=input=>integer(input,8640000000000000);
@@ -471,7 +471,7 @@
     const markets=effectiveResearchMarkets(profile);
     const offer=splitList(profile.priorityOffers)[0]||"priority offer";
     return (markets.length?markets:["Priority market"]).slice(0,6).map(market=>{
-      const evidence=(researchResults||[]).filter(item=>(item.evidenceKind!=="model_summary"||item.extractedAt)&&clean(item.market).toLowerCase()===clean(market).toLowerCase()&&EvidencePolicy?.supportsMarketContext(item,market)===true&&item?.verification?.relevance!=="reject"&&!item?.verification?.contradiction&&(hasActiveTenderSignal(signals)||!isTenderSignal({name:item.title,keywords:item.url}))).slice(0,5);
+      const evidence=(researchResults||[]).filter(item=>(!["model_summary","search_excerpt"].includes(item.evidenceKind)||item.extractedAt)&&clean(item.market).toLowerCase()===clean(market).toLowerCase()&&EvidencePolicy?.supportsMarketContext(item,market)===true&&item?.verification?.relevance!=="reject"&&!item?.verification?.contradiction&&(hasActiveTenderSignal(signals)||!isTenderSignal({name:item.title,keywords:item.url}))).slice(0,5);
       const independentStories=new Set(evidence.map(item=>clean(item.text||item.description||item.title).toLowerCase().normalize("NFKC").replace(/[^\p{L}\p{N}]+/gu," ").trim()));
       const score=evidence.length?{
         fit:fitScore(evidence),
@@ -563,7 +563,7 @@
     }).filter(item=>item.id);
     const allowed=new Set(["idle","running","complete","partial","error"]),sourceAllowed=new Set(["idle","running","complete","partial","error","unavailable"]);
     const rawSourceStatus=input.researchSourceStatus&&typeof input.researchSourceStatus==="object"?input.researchSourceStatus:{};
-    const researchSourceStatus={...(sourceAllowed.has(rawSourceStatus.discovery)?{discovery:rawSourceStatus.discovery}:{}),...(sourceAllowed.has(rawSourceStatus.anthropic)?{anthropic:rawSourceStatus.anthropic}:{}),openai:sourceAllowed.has(rawSourceStatus.openai)?rawSourceStatus.openai:"idle",firecrawl:sourceAllowed.has(rawSourceStatus.firecrawl)?rawSourceStatus.firecrawl:"idle",gemini:sourceAllowed.has(rawSourceStatus.gemini)?rawSourceStatus.gemini:"idle"};
+    const researchSourceStatus={...(sourceAllowed.has(rawSourceStatus.discovery)?{discovery:rawSourceStatus.discovery}:{}),...(sourceAllowed.has(rawSourceStatus.perplexity)?{perplexity:rawSourceStatus.perplexity}:{}),...(sourceAllowed.has(rawSourceStatus.anthropic)?{anthropic:rawSourceStatus.anthropic}:{}),openai:sourceAllowed.has(rawSourceStatus.openai)?rawSourceStatus.openai:"idle",firecrawl:sourceAllowed.has(rawSourceStatus.firecrawl)?rawSourceStatus.firecrawl:"idle",gemini:sourceAllowed.has(rawSourceStatus.gemini)?rawSourceStatus.gemini:"idle"};
     const rawVerification=input.researchVerification&&typeof input.researchVerification==="object"?input.researchVerification:{};
     const researchVerification={status:sourceAllowed.has(rawVerification.status)?rawVerification.status:"idle",provider:"gemini",role:"verification",webSearch:false,reason:clean(rawVerification.reason).slice(0,300),summary:clean(rawVerification.summary).slice(0,1000),disagreements:(Array.isArray(rawVerification.disagreements)?rawVerification.disagreements:[]).map(clean).filter(Boolean).slice(0,12),missingEvidence:(Array.isArray(rawVerification.missingEvidence)?rawVerification.missingEvidence:[]).map(clean).filter(Boolean).slice(0,12),verifiedAt:clean(rawVerification.verifiedAt),...(rawVerification.coverage&&typeof rawVerification.coverage==="object"?{coverage:Object.fromEntries(["supplied","eligible","reviewed","omitted","unreviewed"].map(key=>[key,Math.max(0,Math.min(2000,Math.floor(Number(rawVerification.coverage[key])||0)))]))}:{})};
     const rawProgress=input.researchProgress&&typeof input.researchProgress==="object"?input.researchProgress:{};

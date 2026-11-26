@@ -932,13 +932,13 @@ async function searchOpenAiWeb(queryMeta,maxResults=5,signal){
   const payload=await response.json().catch(()=>{throw new Error(`AI page discovery returned an unreadable response (${response.status})`);});assertStrategyContext(context);assertMarketResearchRun(run,signal);
   // The server owns routing. Save only providers that actually executed, including failed fallbacks.
   if(run)for(const attempt of payload.attempts||[]){
-    if(!['openai','anthropic','gemini'].includes(attempt.provider))continue;
+    if(!['openai','anthropic','gemini','perplexity'].includes(attempt.provider))continue;
     const receipt=recordMarketResearchReceipt(run,attempt.provider,'discovery',query);
     Object.assign(receipt,{status:attempt.status,attempt:1,startedAt:attempt.startedAt,completedAt:attempt.completedAt,resultCount:attempt.resultCount||0,reason:attempt.reason||''});
   }
   if(response.status===409&&payload.code==='AI_SEARCH_PROVIDER_NOT_CONNECTED')return {available:false,reason:payload.error,results:[]};
   if(!response.ok)throw new Error(payload.error||`AI page discovery returned ${response.status}`);
-  const provider=['openai','anthropic','gemini'].includes(payload.provider)?payload.provider:'unknown';
+  const provider=['openai','anthropic','gemini','perplexity'].includes(payload.provider)?payload.provider:'unknown';
   return {available:true,provider,status:payload.status,reason:payload.warning||'',warning:payload.warning?String(payload.warning).slice(0,240):'',results:LeadIntelMarket.normalizeSearchResults({results:payload.results},{...queryMeta,query},provider)};
 }
 async function searchMarket(queryMeta,limit=5,signal){
@@ -1110,7 +1110,7 @@ async function runMarketResearch(modeOverride="",{retryOnly=false,previewDraft=n
   const buildOutcome=()=>{
     outcomeBuilt=true;selectOutcomeEvidence();
     state.market.researchResults=mergeRetainedResearchEvidence(previous.results,results);
-    const usable=results.filter(item=>(item.evidenceKind!=="model_summary"||item.extractedAt)&&item.verification?.relevance!=="reject"&&!item.verification?.contradiction);
+    const usable=results.filter(item=>(!["model_summary","search_excerpt"].includes(item.evidenceKind)||item.extractedAt)&&item.verification?.relevance!=="reject"&&!item.verification?.contradiction);
     if(results.length){state.market.opportunities=LeadIntelMarket.buildMarketOpportunities(profile,state.market.icps,signals,results,contentLanguage());state.market.marketConditions=mode==="quick"?null:globalThis.LeadIntelMarketConditions?.buildPack(usable)||null;}
     state.market.researchQuality=globalThis.LeadIntelMarketConditions?.buildQualityGate(usable,{mode})||null;
   };
@@ -1135,7 +1135,7 @@ async function runMarketResearch(modeOverride="",{retryOnly=false,previewDraft=n
     state.market.researchQuality=null;state.market.researchContextStale=false;state.market.researchContextFingerprint=run.context.signature;
     state.market.researchQueries=queries;state.market.researchResults=previous.results;state.market.researchErrors=retryOnly?state.market.researchErrors.filter(item=>!["ai discovery","openai"].includes(String(item.provider).toLowerCase())):[];
     state.market.researchStatus="running";state.market.researchStartedAt=run.startedAt;state.market.researchPhase="finding";state.market.strategyApproved=false;
-    state.market.researchSourceStatus={...state.market.researchSourceStatus,discovery:queries.length?"running":"idle",openai:"idle",anthropic:"idle",...(!retryOnly?{firecrawl:"running",gemini:requestsGemini?"running":"idle"}:{})};
+    state.market.researchSourceStatus={...state.market.researchSourceStatus,discovery:queries.length?"running":"idle",openai:"idle",anthropic:"idle",...(state.market.researchSourceStatus.perplexity?{perplexity:"idle"}:{}),...(!retryOnly?{firecrawl:"running",gemini:requestsGemini?"running":"idle"}:{})};
     if(!retryOnly)state.market.researchVerification={status:requestsGemini?"running":"idle",provider:"gemini",role:"verification",webSearch:false,reason:"",summary:"",disagreements:[],missingEvidence:[],verifiedAt:""};
     state.market.researchProgress={completed:0,total:totalJobs};if(retryOnly)state.market.openAiRetryProgress={completed:0,total:queries.length,attempt:1,startedAt:run.startedAt,deadlineAt:run.deadlineAt};publish();renderMarketStrategy();
     elapsedTimer=setInterval(()=>{if(marketResearchScopeCurrent(run)&&!run.controller.signal.aborted)renderResearchStatus();},1000);researchElapsedTimer=elapsedTimer;
@@ -1160,7 +1160,7 @@ async function runMarketResearch(modeOverride="",{retryOnly=false,previewDraft=n
     await LeadIntelMarket.mapWithConcurrency(customJobs,async job=>{assertMarketResearchRun(run);try{const rows=await marketResearchRequest(run,signal=>searchCustomSource(job.url,job.index,signal),runtime.requestTimeoutMs,"Custom source",job.receipt);assertMarketResearchRun(run);firecrawlSuccesses++;addResults(rows);}catch(error){assertMarketResearchRun(run);firecrawlFailures++;recordResearchError("Custom URL",job.url,error);}completedJobs++;updateProgress();},{concurrency:runtime.concurrency});assertMarketResearchRun(run);
     let extracted=[];
     const extractEvidence=async()=>{state.market.researchPhase="extracting";publish();const receipt=recordMarketResearchReceipt(run,"firecrawl","extraction_batch","Evidence extraction");try{const rows=await marketResearchRequest(run,signal=>extractResearchPages(results,mode,signal,{previouslyExtracted:extracted,profile}),researchExtractionTimeoutMs(mode),"Evidence extraction",receipt);assertMarketResearchRun(run);extracted=LeadIntelMarket.mergeResearchResults(extracted,rows);addResults(rows);}catch(error){assertMarketResearchRun(run);firecrawlFailures++;recordResearchError("Firecrawl extraction","Evidence extraction",error);}};
-    if(!retryOnly)await extractEvidence();assertMarketResearchRun(run);
+    if(!retryOnly||results.some(item=>item.evidenceKind==="search_excerpt"&&!item.extractedAt))await extractEvidence();assertMarketResearchRun(run);
     // Each pass uses newly collected evidence; intelligence may spend its reserved budget over two passes.
     for(let pass=0;!retryOnly&&mode!=="quick"&&pass<(mode==="intelligence"?2:1);pass++){
       assertMarketResearchRun(run);const remainingQueries=limits.maxQueries-state.market.researchQueries.length;if(remainingQueries<=0)break;
@@ -1191,7 +1191,7 @@ async function runMarketResearch(modeOverride="",{retryOnly=false,previewDraft=n
       if(researchElapsedTimer===elapsedTimer)researchElapsedTimer=null;
       const cancelled=run.controller.signal.aborted;for(const receipt of run.execution.receipts)if(["planned","running"].includes(receipt.status)){receipt.status=receipt.status==="planned"?"not_run":"cancelled";receipt.completedAt=Date.now();}
       if(cancelled){run.execution.status="cancelled";state.market.researchErrors=[{provider:"LeadIntel",query:"Research run",message:run.stopReason||"Market research cancelled"},...state.market.researchErrors].slice(0,12);}run.execution.stopReason=run.stopReason;run.execution.completedAt=Date.now();
-      for(const provider of ["openai","anthropic","firecrawl","gemini"]){
+      for(const provider of ["openai","anthropic","firecrawl","gemini","perplexity"]){
         if(provider==="gemini"&&requestsGemini)continue;
         if(!run.execution.receipts.some(row=>row.provider===provider))continue;
         const receipts=run.execution.receipts.filter(row=>row.provider===provider),completed=receipts.some(row=>["complete","zero_results"].includes(row.status));

@@ -1,3 +1,5 @@
+import {resolveWorkspaceServiceCredential} from './service-integrations.js';
+import {searchPerplexityWeb} from './perplexity-request.js';
 import {importAesKey,decryptSecret} from './oauth.js';
 import {searchAnthropicWeb} from './anthropic-web-search.js';
 import {searchWeb,sanitizedUpstreamError} from './ai-provider.js';
@@ -52,23 +54,31 @@ export async function observeSpecialist(env,workspaceId,credential,task,run,{gua
  await env.DB.prepare('UPDATE workspace_ai_integrations SET last_used_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND provider=?').bind(workspaceId,credential.provider).run();
  return result;
 }
-export async function searchWorkspaceResearch(env,workspaceId,{query,maxResults=5,purpose='general',signal,fetchImpl=fetch,guard=()=>{}}){
+export async function searchWorkspaceResearch(env,workspaceId,{query,maxResults=5,purpose='general',signal,fetchImpl=fetch,guard=()=>{},skipPerplexity=false}){
  await guard();cancelled(signal);
  const rows=(await env.DB.prepare('SELECT provider,active FROM workspace_ai_integrations WHERE workspace_id=?').bind(workspaceId).all()).results||[];
  const settings=await env.DB.prepare('SELECT primary_provider,secondary_provider FROM workspace_research_settings WHERE workspace_id=?').bind(workspaceId).first()||{};
  const connected=['openai','anthropic','gemini'].filter(p=>rows.some(row=>row.provider===p));
- const primary=settings.primary_provider||rows.find(row=>row.active)?.provider||connected[0];
- if(!connected.includes(primary))throw Object.assign(Error(settings.primary_provider?'Selected main researcher is not connected. Review research settings before retrying.':'Connect Claude, OpenAI or Google Gemini in Settings before running research discovery. No search was started.'),{status:409,code:'AI_SEARCH_PROVIDER_NOT_CONNECTED'});
+ const perplexity=!skipPerplexity&&[settings.primary_provider,settings.secondary_provider].includes('perplexity')
+  ?await resolveWorkspaceServiceCredential(env,workspaceId,'perplexity'):null;
+ if(perplexity?.configured)connected.push('perplexity');
+ const preferred=skipPerplexity&&settings.primary_provider==='perplexity'
+  ?connected.find(provider=>provider===settings.secondary_provider):settings.primary_provider;
+ const primary=preferred||rows.find(row=>row.active)?.provider||connected[0];
+ if(!connected.includes(primary))throw Object.assign(Error(preferred?'Selected main researcher is not connected. Review research settings before retrying.':'Connect Claude, OpenAI or Google Gemini in Settings before running research discovery. No search was started.'),{status:409,code:'AI_SEARCH_PROVIDER_NOT_CONNECTED'});
  // At most one connected fallback per query; a single provider is sufficient for discovery.
  const secondary=[settings.secondary_provider,'gemini','anthropic','openai'].find(p=>p!==primary&&connected.includes(p));
  const attempts=[];
  const search=async(provider,task)=>{
-  await guard();cancelled(signal);const connection=await workspaceCredential(env,workspaceId,provider);
+  await guard();cancelled(signal);const connection=provider==='perplexity'?perplexity:await workspaceCredential(env,workspaceId,provider);
   if(!connection)throw Object.assign(Error('Research provider was disconnected. Review Settings.'),{status:409});
   const receipt={provider,startedAt:Date.now(),status:'running',resultCount:0};attempts.push(receipt);
   try{
    const adapter={openai:searchWeb,anthropic:searchAnthropicWeb,gemini:searchGeminiWeb}[provider];
-   const result=await observeSpecialist(env,workspaceId,connection,task,()=>adapter({...connection,query,maxResults,purpose,signal,fetchImpl}),{guard,signal});
+   const result=provider==='perplexity'
+    ?await searchPerplexityWeb(env,workspaceId,{credential:connection,query,maxResults,purpose,signal,fetchImpl})
+    :await observeSpecialist(env,workspaceId,connection,task,()=>adapter({...connection,query,maxResults,purpose,signal,fetchImpl}),{guard,signal});
+   await guard();cancelled(signal);
    if(result.web_search!==true)throw Error(provider+' did not complete grounded web search');
    receipt.resultCount=result.results?.length||0;receipt.status=result.status==='partial'?'partial':receipt.resultCount?'complete':'zero_results';
    return result;

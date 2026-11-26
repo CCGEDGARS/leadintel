@@ -186,13 +186,14 @@ function workspaceProviderAction(provider){
 }
 // Every customer-owned tool that is ready, in journey order. The fast status rows (loaded with the page) feed the list
 // at once; a completed verification wins over the cached row for Firecrawl, so a failed check hides it.
-function activeToolItemsFrom({active,integrations={},serviceRows=[],calendly=null}){
+function activeToolItemsFrom({active,integrations={},serviceRows=[],calendly=null,mainResearcher}){
   const items=[];
   const row=provider=>serviceRows.find(item=>item.provider===provider)||null;
   const customerGood=item=>Boolean(item&&item.configured&&item.source==='customer'&&item.state==='good');
   if(active)items.push({name:active.name,detail:`AI · ${active.model}`,state:'ACTIVE'});
   const firecrawl=integrations.firecrawl;
   if(firecrawl?firecrawl.source==='customer'&&firecrawl.state==='good':customerGood(row('firecrawl')))items.push({name:'Firecrawl',detail:'Research · your connection',state:'READY'});
+  if(customerGood(row('perplexity')))items.push({name:'Perplexity',detail:mainResearcher==='perplexity'?'Main researcher · web search':'Web and people search · your connection',state:'READY'});
   if(customerGood(row('treg')))items.push({name:'Treg',detail:'Buyer e-mails · your connection',state:'READY'});
   if(customerGood(row('apollo')))items.push({name:'Apollo.io',detail:'People discovery · 0 API credits',state:'READY'});
   if(calendly?.connected)items.push({name:'Calendly',detail:'Meeting bookings',state:'CONNECTED'});
@@ -223,7 +224,7 @@ function activeToolItems(active){
   const services=window.LeadIntelServiceIntegrationStatus;
   const serviceRows=services&&services.workspace_id===workspace()?.id?(services.providers||[]):[];
   const calendly=window.LeadIntelCalendlyStatus&&window.LeadIntelCalendlyStatus.workspace_id===workspace()?.id?window.LeadIntelCalendlyStatus:null;
-  return activeToolItemsFrom({active,integrations:integrationStatus,serviceRows,calendly});
+  return activeToolItemsFrom({active,integrations:integrationStatus,serviceRows,calendly,mainResearcher:status.research_settings?.primary_provider});
 }
 function activeToolsSummary(active){
   const items=activeToolItems(active);
@@ -247,11 +248,15 @@ function renderActiveToolsSummary(){
     else summary.innerHTML=`<span>Active tools</span><strong>${statusKnown||connectedCount?'No main AI engine':statusUnavailable?'AI engine status unavailable':'Checking AI engines…'}</strong>${activeToolsSummary(null)}<small>${esc(statusNotice())}${connectedCount?`${connectedCount} AI provider${connectedCount===1?' is':'s are'} connected. Choose one as the main engine below.`:'Test and save an AI provider below to activate AI generation.'} Manage every connection in its card below.</small>`;
   }
 }
+function perplexityResearchReady(){
+  const services=window.LeadIntelServiceIntegrationStatus;
+  return Boolean(services?.workspace_id===workspace()?.id&&services?.providers?.some(row=>row.provider==='perplexity'&&row.configured&&row.source==='customer'&&row.state==='good'));
+}
 function render(){
   const grid=document.getElementById('ai-provider-grid');if(!grid)return;
   if(!settingsDrawerOpen()){unmountCredentialControls();return;}
   renderActiveToolsSummary();
-  const researchHost=document.getElementById('company-research-settings');if(researchHost)researchHost.innerHTML=window.LeadIntelCompanyDossierUi?.settingsHtml(status.providers,status.research_settings||{},!signedIn()||!isOwner())||'';
+  const researchHost=document.getElementById('company-research-settings');if(researchHost)researchHost.innerHTML=window.LeadIntelCompanyDossierUi?.settingsHtml([...status.providers,{provider:'perplexity',configured:perplexityResearchReady()}],status.research_settings||{},!signedIn()||!isOwner())||'';
   grid.innerHTML=PROVIDERS.map(config=>providerCard(config,providerState(config.provider)||(statusKnown?null:{pending:true}))).join('');
   renderIntegrationMonitoring();
 }
@@ -592,6 +597,10 @@ window.LeadIntelMicrosoftConnection={version:SETTINGS_VERSION,openSignIn(trigger
 window.LeadIntelIntegrationAlertTone=integrationTone;window.LeadIntelPaymentError=paymentError;
 injectUi();
 window.addEventListener('leadintel:service-status',()=>{renderIntegrationMonitoring();renderActiveToolsSummary();});
+window.addEventListener('leadintel:service-status',()=>{
+  const ready=perplexityResearchReady();
+  document.querySelectorAll('.company-dossier-settings option[value="perplexity"]').forEach(option=>{option.disabled=!ready;});
+});
 window.addEventListener('leadintel:calendly-status',()=>renderActiveToolsSummary());
 window.addEventListener('leadintel:server-ready',()=>refreshAllStatus());
 addEventListener('leadintel:service-credential-changed',()=>{if(signedIn())void refreshIntegrationStatus();});
