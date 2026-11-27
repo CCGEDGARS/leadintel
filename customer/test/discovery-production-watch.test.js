@@ -267,7 +267,7 @@ const boundedDiscoveryRuntime = [
   'pipeline:discovery.pipeline',
   'delete meta.lastCompanyRun',
   'window.LeadIntelDiscoveryUI={open:openDiscoveryFromHandoff};',
-  'openWebsiteBuyers renderWebsiteBuyerPanel pipelineClickHandler',
+  'openWebsiteBuyers renderWebsiteBuyerPanel pipelineClickHandler data-website-buyer-report',
   'initDiscoveryWhenReady();',
   'companyResearchIncomplete=true;',
   'Research incomplete',
@@ -434,7 +434,7 @@ test('production proof blocks a Discovery runtime that performs hidden-stage sta
         'function discoveryRunTimeoutMs(',
   'async function withDiscoveryDeadline( const firstPool= const fitCache=new Map(); Checking purchasing fit maxDurationMs:DISCOVERY_REQUEST_TIMEOUT_MS*2 Completed evidence was kept.',
         'window.LeadIntelDiscoveryUI={open:openDiscoveryFromHandoff};',
-  'openWebsiteBuyers renderWebsiteBuyerPanel pipelineClickHandler',
+  'openWebsiteBuyers renderWebsiteBuyerPanel pipelineClickHandler data-website-buyer-report',
         'initDiscoveryWhenReady();'
       ].join('\n')
     }),

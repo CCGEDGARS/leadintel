@@ -463,3 +463,11 @@ test('contact headings beside owner titles never become discovered, retained or 
   assert.deepEqual(reopened.people.map(p=>p.name),['Anna Nielsen']);
  }
 });
+
+test('an official Danish production director is ranked for the English production director role',()=>{
+ const candidate={company:'Fjord Fabrication',domain:'fjord.example',buyerRoles:['Production Director']};
+ const person={id:'staff',name:'Jens Thomsen',title:'produktionsdirektør',organization:candidate.company,publicNameUrl:'https://fjord.example/om-os/',identitySource:'public',identityStatus:'confirmed'};
+ const profile={decisionMakers:['Production Director']};
+ assert.deepEqual(D.rankedBuyerShortlist([person],profile,candidate).priorityIds,['staff']);
+ assert.equal(D.rankedBuyerShortlist([person],{decisionMakers:['Content Production Director']},candidate).priorityIds.length,0);
+});

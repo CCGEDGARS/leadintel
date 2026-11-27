@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import app from '../src/app.js';
 import {buyerJobsFixture,workspaceId} from './buyer-research-jobs-fixture.mjs';
-import {startBuyerJob,readBuyerJob,commandBuyerJob} from '../src/buyer-research-store.js';
+import {startBuyerJob,readBuyerJob,commandBuyerJob,publicBuyerJob} from '../src/buyer-research-store.js';
 import {runBuyerResearchJobs} from '../src/buyer-research-runner.js';
 import {sha256} from '../src/security.js';
 import {upsertCrmCompany} from '../src/crm.js';
@@ -80,11 +80,13 @@ test('a Full research resume retains an interrupted provider dispatch and a free
  assert.equal(f.DB.raw.prepare('SELECT status FROM buyer_research_tasks WHERE job_id=? AND task_key=?').get(job.id,key).status,'running');
  f.DB.raw.prepare("UPDATE buyer_research_jobs SET phase='identities' WHERE id=?").run(job.id);
  let planned=0;
- await runBuyerResearchJobs(f.env,{jobId:job.id,windowMs:50000,services:{apollo:async()=>({people:[]}),registry:async()=>({status:'unavailable'}),plan:async()=>{planned++;return {queries:[]};}}});
+ await runBuyerResearchJobs(f.env,{jobId:job.id,windowMs:50000,services:{apollo:async()=>({people:[]}),registry:async()=>({status:'unavailable'}),search:async()=>[],peopleSearch:async()=>[],plan:async()=>{planned++;return {queries:[]};}}});
  assert.equal(planned,0);
  const current=await readBuyerJob(f.env,workspaceId,{id:job.id});
- assert.equal(current.status,'needs_review');
- assert.match(current.diagnostic_json,/prior provider request/);
+ assert.equal(current.status,'queued');
+ assert.equal(current.phase,'dossier');
+ assert.match(current.diagnostic_json,/planner_fallback/);
+ assert.equal(f.DB.raw.prepare('SELECT attempts FROM buyer_research_tasks WHERE job_id=? AND task_key=?').get(job.id,key).attempts,1);
  f.DB.raw.prepare("INSERT INTO workspace_research_settings(workspace_id,full_research_policy) VALUES(?,'free_only')").run(workspaceId);
  assert.equal((await call(f,'/api/company-lists',{action:'start'})).status,403);
  assert.equal(f.DB.raw.prepare('SELECT count(*) n FROM company_lists').get().n,0);
@@ -112,4 +114,21 @@ test('Fast opened after Full reuses its official page and completed Apollo domai
  const saved=await savedFastResearch(f.env,workspaceId,f.candidate);
  assert.equal(saved.pages.get(home)?.extractedAt,date);assert.ok(!reads.includes(home));
  assert.deepEqual(saved.directory.people,[]);assert.equal(apollo,0);
+});
+
+test('an interrupted empty full run recovers named staff on reopening from completed company reads without another provider request',async t=>{
+ const f=await buyerJobsFixture(t);
+ const job=await startBuyerJob(f.env,workspaceId,f.users.owner,{...f.body,candidate:{...f.body.candidate,people:[]},peopleFirst:true,fullResearch:true});
+ const domain=f.candidate.domain,url='https://'+domain+'/team',stamp=new Date().toISOString();
+ const page={url,sourceRead:true,markdown:'## Management\n### Anna Hansen\n#### Head of Procurement\n',metadata:{sourceURL:url,statusCode:200},extractedAt:stamp};
+ f.DB.raw.prepare("UPDATE buyer_research_jobs SET phase='identities',status='needs_review',result_json=json_set(result_json,'$.people',json('[]')) WHERE id=?").run(job.id);
+ const add=f.DB.raw.prepare("INSERT INTO buyer_research_tasks(job_id,task_key,kind,phase,request_value,result_json,status,attempts) VALUES(?,?,'read','official',?,?,'complete',1)");
+ add.run(job.id,'official',url,JSON.stringify(page));
+ add.run(job.id,'wrong','https://other.example/team',JSON.stringify({...page,url:'https://other.example/team',markdown:'### Other Buyer\n#### CEO',metadata:{sourceURL:'https://other.example/team'}}));
+ const row=await readBuyerJob(f.env,workspaceId,{id:job.id});
+ const result=await publicBuyerJob(f.env,row);
+ assert.deepEqual(result.candidate.people.map(p=>p.publicName||p.name),['Anna Hansen']);
+ assert.equal(result.candidate.people[0].publicNameUrl,url);
+ assert.equal(f.DB.raw.prepare('SELECT sum(attempts) used FROM buyer_research_tasks WHERE job_id=?').get(job.id).used,2);
+ assert.deepEqual((await publicBuyerJob(f.env,{...row,input_json:JSON.stringify({...JSON.parse(row.input_json),scope:'selected_buyers'})})).candidate.people,[]);
 });
