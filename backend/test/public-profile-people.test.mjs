@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../../customer/discovery-engine.js';
-import {readPublicProfilePeople,unheldProfilePeople,publicPeopleQueries,publicPeopleCountry,isPublicProfileRow,PUBLIC_PEOPLE_MAX_QUERIES} from '../src/public-profile-people.js';
+import {readPublicProfilePeople,unheldProfilePeople,publicPeopleQueries,publicPeopleCountry,isPublicProfileRow,collapseSameRecords,PUBLIC_PEOPLE_MAX_QUERIES} from '../src/public-profile-people.js';
 
 // Owner gate, 26 Nov 2026: LeadIntel itself must find the current people that a manual Perplexity search found. Three
 // of them were only in public profile excerpts ("**Role**" / "**Employer**" / "March 2023 - Present"), which no reader
@@ -86,6 +86,20 @@ test('a person the job already shows or pools is not added again from a profile'
 test('Danish buyer-role words are the local titles, one per role family',()=>{
  const queries=publicPeopleQueries(target,['Procurement Director','Procurement Manager','Operations Director','Project Manager','Workshop Manager.']);
  assert.equal(queries[2],'"Fjord Staal" indkøbschef driftschef projektleder værkfører');
+});
+
+// Live, 27 Nov 2026: one register record was saved four times (the same profile on dk. and www., twice without it),
+// carried in from the browser's saved list into a job whose later phases do not merge again.
+test('one identity record printed several times is saved once, richest copy first; different profiles stay',()=>{
+ const rich={id:'registry-1',name:'Bent Mørk',title:'Direktør',publicLinkedinUrl:'https://dk.linkedin.com/in/bent-mork-1',contactResearch:{status:'complete'},emailResearch:{status:'complete'}};
+ const list=[{id:'registry-1',name:'Bent Mørk',title:'Direktør'},{...rich},{...rich,publicLinkedinUrl:'https://www.linkedin.com/in/Bent-Mork-1'},{id:'registry-1',name:'Bent Mørk',title:'Direktør'},{id:'other',name:'Ida Larsen',title:'Projektleder'}];
+ const out=collapseSameRecords(list);
+ assert.deepEqual(out.map(p=>p.id),['registry-1','other']);
+ assert.equal(out[0].contactResearch?.status,'complete','the richest copy is kept');
+ assert.equal(out[0].publicLinkedinUrl,'https://dk.linkedin.com/in/bent-mork-1');
+ const conflict=collapseSameRecords([{id:'x',name:'Bent Mørk',publicLinkedinUrl:'https://www.linkedin.com/in/bent-mork-1'},{id:'x',name:'Bent Mørk',publicLinkedinUrl:'https://www.linkedin.com/in/bent-mork-2'}]);
+ assert.equal(conflict.length,2,'one id with two different profiles is left for review');
+ assert.deepEqual(collapseSameRecords([{name:'No Id'},{name:'No Id'}]).length,2,'records without an id are not guessed');
 });
 
 test('the people search asks like the manual search: management, employees, buyer roles, register number, country, chair',()=>{

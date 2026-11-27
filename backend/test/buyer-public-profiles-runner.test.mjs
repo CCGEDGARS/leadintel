@@ -74,6 +74,17 @@ test('the register\'s city is saved and narrows the people searches; asking agai
  assert.deepEqual({status:kept.status,people:kept.people,attempts:kept.attempts},{status:'found',people:1,attempts:2});
 });
 
+test('copies of one record carried into a job are saved once, also by a phase that does not merge',async t=>{
+ const f=await buyerJobsFixture(t);
+ const robert=f.body.candidate.people[0];
+ f.body.candidate={...f.body.candidate,people:[robert,{...robert},{...robert,publicLinkedinUrl:'https://dk.linkedin.com/in/robert-lund-1'},{...robert,publicLinkedinUrl:'https://www.linkedin.com/in/robert-lund-1'}]};
+ const job=await startBuyerJob(f.env,workspaceId,f.users.owner,f.body);
+ f.DB.raw.prepare("UPDATE buyer_research_jobs SET phase='contacts' WHERE id=?").run(job.id);
+ await run(f.env,{jobId:job.id,services:services()});
+ const saved=JSON.parse((await readBuyerJob(f.env,workspaceId,{id:job.id})).result_json);
+ assert.equal(saved.people.filter(person=>person.id==='robert').length,1,JSON.stringify(saved.people.map(person=>[person.id,person.publicLinkedinUrl||''])));
+});
+
 test('a person the job already holds keeps the evidence it has',async t=>{
  const {f,job}=await identitiesJob(t);
  const peopleSearch=async()=>[profileRow('robert-lund-3','Robert Lund','- **Procurement Lead**\n**Forge Industries**\nJanuary 2021 - Present')];

@@ -83,6 +83,29 @@ export function readPublicProfilePeople(rows=[],candidate={},{D=globalThis.LeadI
   }
   return {people:[...people.values()],former:[...former.values()]};
 }
+// One identity record (one id) printed several times — the same profile on dk. and www., or copies carried in from the
+// browser's saved list into a job whose later phases do not merge again — is saved once: the richest copy stands where
+// the first one stood. One id with two different profiles is left as it is.
+const profileKey=value=>String(value||'').match(PROFILE_URL)?.[0]?.toLowerCase().replace(/^https?:\/\/(?:[a-z]{2,3}\.)?linkedin\.com/,'https://www.linkedin.com').replace(/\/+$/,'')||'';
+export function collapseSameRecords(list){
+  if(!Array.isArray(list))return list;
+  const groups=new Map(),out=[];
+  for(const person of list){
+    const id=String(person?.id||'');
+    if(!id){out.push(person);continue;}
+    const key=profileKey(person.publicLinkedinUrl||person.linkedin_url),group=groups.get(id);
+    if(group&&(!key||!group.key||key===group.key)){
+      const kept=out[group.index];
+      out[group.index]=Object.keys(person).length>Object.keys(kept).length?person:kept;
+      if(!out[group.index].publicLinkedinUrl&&(kept.publicLinkedinUrl||person.publicLinkedinUrl))out[group.index]={...out[group.index],publicLinkedinUrl:kept.publicLinkedinUrl||person.publicLinkedinUrl};
+      if(!group.key&&key)group.key=key;
+      continue;
+    }
+    if(!group)groups.set(id,{index:out.length,key});
+    out.push(person);
+  }
+  return out;
+}
 // Only people the job does not hold yet, shown or pooled: a held person keeps the evidence it already has (a register
 // or an official page names someone without a profile link, so the same name can arrive as a second identity).
 export function unheldProfilePeople(rows=[],candidate={},{D=globalThis.LeadIntelDiscovery,now}={}){

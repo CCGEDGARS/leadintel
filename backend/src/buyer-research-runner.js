@@ -7,7 +7,7 @@ import {sha256} from './security.js';
 import {researchWorkspaceDossier} from './company-dossier.js';
 import {findPublicBuyerContactPages,searchManagementIndex} from './website-management.js';
 import {createBuyerSourceSearch,searchPublicPeople} from './buyer-source-search.js';
-import {unheldProfilePeople,publicPeopleQueries,publicPeopleCountry,isPublicProfileRow} from './public-profile-people.js';
+import {unheldProfilePeople,publicPeopleQueries,publicPeopleCountry,isPublicProfileRow,collapseSameRecords} from './public-profile-people.js';
 import {PERPLEXITY_MAX_RESULTS} from './perplexity-request.js';
 import {buyerCreditWindowKey,buyerCreditLimitFor,createBuyerCreditMeter,readBuyerCredits} from './buyer-research-credits.js';
 import {fetchDirectPublicPage,readPublicBuyerPage,searchWorkspaceApolloPeople,requireWorkspaceServiceCredential} from './service-integrations.js';
@@ -356,6 +356,9 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
    }
    if(siteOnly&&status==='queued'&&!['identities','official'].includes(phase)){phase='identities';phaseMs=0;phaseRuns=0;}
    if(status==='queued'&&phase==='done')await settleQuality();
+   // One identity record is saved once, however many copies earlier slices or the browser's list carried in.
+   candidate.people=collapseSameRecords(candidate.people);
+   if(Array.isArray(candidate.buyerDiscovery?.pool))candidate.buyerDiscovery={...candidate.buyerDiscovery,pool:collapseSameRecords(candidate.buyerDiscovery.pool)};
    candidate.peopleStatus=candidate.people?.length?'complete':status==='queued'?'loading':'empty';
    candidate.publicContactStatus=['queued','running'].includes(status)?'loading':status==='complete'?'complete':'error';
    candidate.publicContactVersion='20261021-adaptive-depth-v3';

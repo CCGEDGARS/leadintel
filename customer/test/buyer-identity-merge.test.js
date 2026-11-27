@@ -47,6 +47,23 @@ test('a middle initial or a missing middle name is one person in a compatible ro
  assert.equal(D.mergeBuyerPool([],[at('o','Bent Vestergaard Mørk','Direktør'),at('p','Bent Vestergaard Mørk','Owner'),at('q','Bent V. Mørk','Direktør - Salg - Adm')],{}).length,1);
 });
 
+// Live, 27 Nov 2026 (a control company): a profile headline matched two earlier records of the same person (one with
+// the profile, one without) and, being ambiguous, became a third record instead of joining them.
+test('a record that matches several records of one person joins them when no two profiles disagree',()=>{
+ const merged=D.mergeBuyerPool([],[
+  at('registry-1','Bent Vestergaard Mørk','Direktør',{publicLinkedinUrl:'https://www.linkedin.com/in/bent-mork-1'}),
+  at('registry-1','Bent Vestergaard Mørk','Direktør'),
+  at('headline-1','Bent Vestergaard Mørk','Owner',{publicLinkedinUrl:'https://dk.linkedin.com/in/bent-mork-1'})
+ ],{});
+ assert.equal(merged.length,1,JSON.stringify(merged.map(p=>[p.id,p.title,p.publicLinkedinUrl])));
+ const apart=D.mergeBuyerPool([],[
+  at('x','Bent Vestergaard Mørk','Direktør',{publicLinkedinUrl:'https://www.linkedin.com/in/bent-mork-1'}),
+  at('y','Bent Vestergaard Mørk','Direktør',{publicLinkedinUrl:'https://www.linkedin.com/in/bent-mork-2'}),
+  at('z','Bent Vestergaard Mørk','Direktør')
+ ],{});
+ assert.ok(apart.length>=2,'two different profiles are not joined through a record without one');
+});
+
 test('name variants in unrelated roles, with another first name or another profile stay apart',()=>{
  assert.equal(D.mergeBuyerPool([],[at('g','Bent Mørk','Lagermedarbejder'),at('h','Bent V. Mørk','Salgschef')],{}).length,2);
  assert.equal(D.mergeBuyerPool([],[at('i','Kim Lund','Warehouse Manager'),at('j','Kim L. Lund','Sales Manager')],{}).length,2);
