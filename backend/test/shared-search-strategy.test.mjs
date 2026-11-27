@@ -180,11 +180,15 @@ test('Find buyers ranks the company before checking missing emails, even when ot
    batches.push({names,maxCredits});return names.map(()=>({status:'not_found'}));
   }
  };
- const waits=[];
- await app.scheduled({cron:'* * * * *',scheduledTime:Date.now()},f.env,{waitUntil:p=>waits.push(p)},{
-  runBuyerResearchJobs:env=>runBuyerResearchJobs(env,{jobId:job.id,maxJobs:1,services}),runWebsiteContactJobs:async()=>[]
- });
- await Promise.all(waits);
+ for(let tick=0;tick<12;tick++){
+  const row=await readBuyerJob(f.env,workspaceId,{id:job.id});
+  if(row.phase!=='contacts'||!['queued','running'].includes(row.status))break;
+  const waits=[];
+  await app.scheduled({cron:'* * * * *',scheduledTime:Date.now()},f.env,{waitUntil:p=>waits.push(p)},{
+   runBuyerResearchJobs:env=>runBuyerResearchJobs(env,{jobId:job.id,maxJobs:1,services}),runWebsiteContactJobs:async()=>[]
+  });
+  await Promise.all(waits);
+ }
  const result=JSON.parse((await readBuyerJob(f.env,workspaceId,{id:job.id})).result_json);
  const blair=result.people.find(p=>p.name==='Blair Jones');
  assert.equal(blair.publicEmail,'blair@'+domain);
