@@ -38,7 +38,15 @@ export async function websiteContactView(env,row){
  for(const person of view.people){
   const bound=c=>websiteNameKey(c.name)===websiteNameKey(person.publicName||person.name)&&(!c.linkedin_url||!person.publicLinkedinUrl&&!person.linkedin_url||websiteProfileKey(c.linkedin_url)===websiteProfileKey(person.publicLinkedinUrl||person.linkedin_url));
   const primary=results.filter(c=>String(c.external_person_id)===String(person.id)&&bound(c)),aliases=new Set((person.identitySourceIds||[]).map(String)),found=primary.length?primary:results.filter(c=>aliases.has(String(c.external_person_id))&&bound(c));
-  if(found.length===1){person.savedContact=found[0];person.savedContactRoleDiffers=String(found[0].title||'').trim().toLowerCase()!==String(person.title||'').trim().toLowerCase();}
+  if(found.length===1){
+   person.savedContact={...found[0]};
+   person.savedContactRoleDiffers=String(found[0].title||'').trim().toLowerCase()!==String(person.title||'').trim().toLowerCase();
+   const phones=results.filter(c=>aliases.has(String(c.external_person_id))&&bound(c)&&['verified','provider_listed','pending'].includes(c.phone_status));
+   if(primary.length===1&&!person.savedContact.phone_number&&phones.length===1){
+    person.savedContact.phone_number=phones[0].phone_number;
+    person.savedContact.phone_status=phones[0].phone_status;
+   }
+  }
  }
  return view;
 }
@@ -57,6 +65,10 @@ export async function startWebsiteContacts(env,context,body){
   return old;
  }
  if(old&&contactActive(old.status)){if(old.requested_by!==context.userId&&context.role!=='owner')throw contactError('Another user is researching this company.');const canceled=await contactSql(env,`UPDATE website_contact_jobs SET status='canceled',lease_token=NULL,lease_until=0,revision=revision+1 WHERE id=? AND workspace_id=? AND revision=? AND EXISTS(SELECT 1 FROM sessions s JOIN workspace_members m ON m.user_id=s.user_id WHERE s.token_hash=? AND s.expires_at>datetime('now') AND m.workspace_id=? AND m.user_id=? AND m.role=?)`,old.id,context.workspaceId,old.revision,context.sessionHash,context.workspaceId,context.userId,context.role).run();if(!canceled.meta.changes)throw contactError('The previous research changed. Refresh its saved progress.');}
+ if(limit&&await contactSql(env,`SELECT id FROM buyer_research_jobs WHERE workspace_id=? AND domain=? AND status IN ('queued','running')
+  AND json_extract(input_json,'$.fullResearch')=1 AND json_extract(input_json,'$.candidate.company')=?`,context.workspaceId,company.normalized_domain,company.company_name).first()){
+  throw contactError('Full research is already running for this company. Open its progress in Buyers.');
+ }
  const id=crypto.randomUUID(),input={company:company.company_name,domain:company.normalized_domain,website:'https://'+company.normalized_domain+'/',purpose:'website_contacts',paidResearch:false,...(limit?{managementLimit:limit,buyerRoles:roles}:{})};
  const state={phase:'discovery',label:'Read company website and find management first',people:[],sources:[],tasks:[],tools:[],gaps:[],discoveryStep:0,batchLimit:10,freeRevision:1,passStartedAt:Date.now(),passBudgetMs:WEBSITE_CONTACT_PASS_MS,coverage:{peopleLimit:300,sourceLimit:40,apolloPageLimit:4,exhaustive:false}};
  if(limit){
@@ -67,8 +79,14 @@ export async function startWebsiteContacts(env,context,body){
    state.people=managementShortlist(previous.people||[],limit,roles);
   }
  }
- const result=await contactSql(env,`INSERT INTO website_contact_jobs(id,workspace_id,company_id,requested_by,requested_role,session_hash,input_json,state_json,deadline_at) SELECT ?,?,?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM sessions s JOIN workspace_members m ON m.user_id=s.user_id WHERE s.token_hash=? AND s.expires_at>datetime('now') AND m.workspace_id=? AND m.user_id=? AND m.role=?) AND EXISTS(SELECT 1 FROM crm_companies c WHERE c.id=? AND c.workspace_id=? AND c.company_name=? AND c.normalized_domain=? AND c.deleted_at IS NULL AND c.lifecycle_status NOT IN ('suppressed','archived'))`,id,context.workspaceId,company.id,context.userId,context.role,context.sessionHash,JSON.stringify(input),JSON.stringify(state),Date.now()+WEBSITE_CONTACT_PASS_MS,context.sessionHash,context.workspaceId,context.userId,context.role,company.id,context.workspaceId,input.company,input.domain).run();
- if(!result.meta.changes)throw contactError('The company or workspace authority changed.');
+ const result=await contactSql(env,`INSERT INTO website_contact_jobs(id,workspace_id,company_id,requested_by,requested_role,session_hash,input_json,state_json,deadline_at) SELECT ?,?,?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM sessions s JOIN workspace_members m ON m.user_id=s.user_id WHERE s.token_hash=? AND s.expires_at>datetime('now') AND m.workspace_id=? AND m.user_id=? AND m.role=?) AND EXISTS(SELECT 1 FROM crm_companies c WHERE c.id=? AND c.workspace_id=? AND c.company_name=? AND c.normalized_domain=? AND c.deleted_at IS NULL AND c.lifecycle_status NOT IN ('suppressed','archived')) ON CONFLICT DO NOTHING`,id,context.workspaceId,company.id,context.userId,context.role,context.sessionHash,JSON.stringify(input),JSON.stringify(state),Date.now()+WEBSITE_CONTACT_PASS_MS,context.sessionHash,context.workspaceId,context.userId,context.role,company.id,context.workspaceId,input.company,input.domain).run();
+ if(!result.meta.changes){
+  const concurrent=await contactSql(env,`SELECT * FROM website_contact_jobs WHERE workspace_id=? AND company_id=? AND status IN ('queued','running') AND ${contactCompanyAuthority}
+   AND EXISTS(SELECT 1 FROM sessions s JOIN workspace_members m ON m.user_id=s.user_id WHERE s.token_hash=? AND s.expires_at>datetime('now') AND m.workspace_id=? AND m.user_id=? AND m.role=?)`,context.workspaceId,company.id,context.sessionHash,context.workspaceId,context.userId,context.role).first();
+  const other=concurrent&&contactParse(concurrent.input_json);
+  if(other&&other.company===input.company&&other.domain===input.domain&&other.managementLimit===input.managementLimit&&other.buyerRoles===input.buyerRoles)return concurrent;
+  throw contactError('The company or workspace authority changed.');
+ }
  return readWebsiteContacts(env,context.workspaceId,{id});
 }
 export async function commandWebsiteContacts(env,context,body){

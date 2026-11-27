@@ -3,7 +3,7 @@ const D=globalThis.LeadIntelDiscovery;
 
 // Every actual attempt has a durable task receipt. Applied receipt IDs are
 // checkpointed with the candidate so a resumed slice cannot double-count it.
-export async function discoverApolloBuyerIdentities({candidate,profile,task,search,guard,record,observed}){
+export async function discoverApolloBuyerIdentities({candidate,profile,task,search,guard,record,observed,savedDirectory}){
   const query=async payload=>{
     for(let attempt=1;attempt<=2;attempt++){
       const key=`Apollo people search · ${candidate.domain} · ${payload.companyNameFallback?'company name':'domain'} · attempt ${attempt}`;
@@ -27,7 +27,11 @@ export async function discoverApolloBuyerIdentities({candidate,profile,task,sear
       if(result.status!=='failed'||attempt===2||['SERVICE_APOLLO_AUTH_FAILED','SERVICE_APOLLO_RATE_LIMIT'].includes(result.code))return result;
     }
   };
-  const first=await query(D.buildApolloPeopleSearchPayload(candidate,profile));
+  const first=savedDirectory?{status:'succeeded',people:savedDirectory.people}:await query(D.buildApolloPeopleSearchPayload(candidate,profile));
+  if(savedDirectory&&!observed.includes('fast-directory')){
+    record({provider:'apollo',operation:'identity',status:'skipped',results:first.people.length,reason:'Reused the saved Apollo Free company search from Step 2'});
+    observed.push('fast-directory');
+  }
   const fallback=first.status==='succeeded'&&first.people.length<2?await query(D.buildApolloPeopleSearchPayload(candidate,profile,{companyNameFallback:true})):null;
   const people=[...(first.people||[]),...(fallback?.people||[])];
   const trace=D.traceIdentityBuyers({people},candidate,{...profile,collectAllCompanyContacts:true});

@@ -1,8 +1,9 @@
 import {websiteContactRole,websiteNameKey,websiteProfileKey,websitePaidReadiness} from './website-contact-evidence.js';
+import {enrichCrmContact} from './crm-routes.js';
 import {lookupAdditionalEmail} from './additional-contact-services.js';
 import {mergeTregContactData,tregLookupAccounting} from './treg-contact-research.js';
 import {withWorkspaceServiceCredentials,searchWorkspaceApolloPeople} from './service-integrations.js';
-import {contactSql as sql,contactParse as parse,contactCompanyAuthority,contactError,readWebsiteContacts} from './website-contact-store.js';
+import {contactSql as sql,contactParse as parse,contactCompanyAuthority,contactError,readWebsiteContacts,websiteContactView} from './website-contact-store.js';
 import '../../customer/discovery-engine.js';
 const D=globalThis.LeadIntelDiscovery;
 const identity=p=>JSON.stringify([String(p.id),p.publicName||p.name,p.title,p.organization,p.publicLinkedinUrl||p.linkedin_url||'']);
@@ -11,7 +12,7 @@ const identity=p=>JSON.stringify([String(p.id),p.publicName||p.name,p.title,p.or
 // a client candidate can supply a qualification override or research receipt.
 export async function websitePaidScope(env,context,body){
  if(body.approved!==true||!['email','phone'].includes(body.channel)||!['apollo','treg','hunter'].includes(body.provider))throw contactError('Approve one named person, provider and contact channel.',403,'WEBSITE_CONTACT_APPROVAL_REQUIRED');
- if(body.channel==='phone'&&body.provider!=='treg')throw contactError('Phone research uses the enabled phone provider.',400);
+ if(body.channel==='phone'&&!['treg','apollo'].includes(body.provider))throw contactError('Phone research uses the enabled phone provider.',400);
  const row=await readWebsiteContacts(env,context.workspaceId,{id:body.jobId});
  if(!row||row.revision!==body.revision)throw contactError('Research evidence changed. Review it before approving paid research.');
  const input=parse(row.input_json),state=parse(row.state_json),people=state.people||[],person=people.find(p=>String(p.id)===String(body.personId));
@@ -33,7 +34,8 @@ export async function websitePaidScope(env,context,body){
   const {saved}=await current(),candidate={company:input.company,domain:input.domain},name=String(selected.publicName||selected.name).trim().toLowerCase(),profile=D.normalizeLinkedInUrl(selected.publicLinkedinUrl||selected.linkedin_url);
 
   const matches=raw=>[...new Map(D.traceIdentityBuyers({people:raw.filter(p=>String(p.id||'').trim())},candidate,{collectAllCompanyContacts:true}).people.filter(p=>websiteNameKey(p.publicName||p.name)===websiteNameKey(name)&&(profile?websiteProfileKey(p.linkedin_url)===websiteProfileKey(profile):websiteContactRole(p.title)===websiteContactRole(selected.title))).map(p=>[String(p.id),p])).values()];
-  let found=matches(saved.apolloPeople||[]);
+  const directory=(saved.tasks||[]).find(t=>t.kind==='apollo'&&t.value==='management-company-identities'&&t.status==='complete'&&!t.archived);
+  let found=matches([...(saved.apolloPeople||[]),...(directory?.result?.people||[])]);
   if(found.length!==1){const result=await searchWorkspaceApolloPeople(runtime,context.workspaceId,{domain:input.domain,person_titles:[selected.title]},{userId:context.userId,guard});await guard();found=matches(result.people||[]);}
   if(found.length!==1)throw contactError('Apollo did not supply one exact current company identity. Public results remain saved.',409,'WEBSITE_CONTACT_APOLLO_IDENTITY_REQUIRED');
   return {...selected,id:found[0].id};
@@ -52,7 +54,30 @@ export async function websitePaidScope(env,context,body){
 }
 
 export async function lookupWebsiteContact(request,env,context,body,deps={}){
- const {scope,guard,row}=await websitePaidScope(env,context,body),runtime=await withWorkspaceServiceCredentials(request,env);await guard();
+ const {scope,guard,row,person}=await websitePaidScope(env,context,body);
+ const view=await websiteContactView(env,row),shown=view.people.find(p=>p.id===person.id);
+ if(!shown||view.researchBlocked)throw contactError('Review the current company and person before purchase.');
+ const card=shown.publishedStaffCard,crm=shown.savedContact;
+ const email=body.channel==='email'&&(D.acceptedOfficialBuyerEmail(view,shown)||card?.email||crm?.email_status==='verified'&&crm.work_email);
+ const phone=body.channel==='phone'&&(card?.phone||shown.contactData?.phone?.number||['verified','provider_listed'].includes(crm?.phone_status)&&crm.phone_number);
+ if(email||phone)return {cached:true,contact:crm,reason:'Reused the saved '+body.channel+' for this person.',request:{status:'already_confirmed',credits_used:0}};
+ if(body.channel==='phone'&&crm?.phone_status==='pending')return {duplicate:true,reason:'phone_request_already_pending',request:{status:'pending_phone'}};
+ const runtime=await withWorkspaceServiceCredentials(request,env);await guard();
+ if(body.provider==='apollo'&&body.channel==='phone'){
+  const resolved=await scope.resolvePerson(runtime,person);await guard();
+  // Retain the exact directory ID so the signed, asynchronous CRM webhook
+  // result can be shown on the source identity after reopening the shortlist.
+  if(!(person.identitySourceIds||[]).includes(resolved.id)){
+   const state=parse(row.state_json),selected=state.people.find(p=>p.id===person.id);
+   selected.identitySourceIds=[...new Set([...(selected.identitySourceIds||[]),resolved.id])];
+   const authority=guard.writeAuthority(),saved=await sql(env,`UPDATE website_contact_jobs SET state_json=?,revision=revision+1 WHERE id=? AND workspace_id=? AND state_json=? AND ${authority.sql}`,JSON.stringify(state),row.id,context.workspaceId,row.state_json,...authority.args).run();
+   if(!saved.meta.changes)throw contactError('Contact research changed. Reopen the saved contact.');
+  }
+  const lookup=new Request('https://leadintel.internal/enrich',{method:'POST',body:JSON.stringify({person_id:resolved.id,name:person.publicName||person.name,title:person.title,phone_lookup:true}),signal:request.signal});
+  const response=await (deps.enrich||enrichCrmContact)(lookup,runtime,{},{context,guard},row.company_id),result=await response.json();
+  if(!response.ok)throw contactError(result.error||'Apollo phone lookup unavailable.',response.status,result.code);
+  return result;
+ }
  // These inputs are constructed here: automatic/combined/reveal flags supplied
  // by the browser never acquire authority over a sibling channel.
  return (deps.lookup||lookupAdditionalEmail)(runtime,{workspaceId:context.workspaceId,userId:context.userId,role:context.role,writeAuthority:guard.writeAuthority},row.company_id,{person_id:String(body.personId),approved:true,automatic:false,provider:body.provider,hunter_approved:body.provider==='hunter',email_lookup:body.channel==='email',data_lookup:body.channel==='phone',phone_approved:body.channel==='phone'},{signal:request.signal,guard,researchScope:scope,...deps.providerDeps});

@@ -2224,7 +2224,7 @@ async function runDurableBuyerResearch(candidate,options={}){
     if(lastRevision!==revision){lastRevision=revision;saveDiscovery();renderAll();}
     options.persist?.(candidate,job);
   };
-  const settings={profile,paidResearch,paidEmailLimit:options.paidEmailLimit,allowMeteredPublicResearch:options.allowMeteredPublicResearch===true,onMismatch:error=>{if(!current())return;candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),lastError:{name:error.code||error.name,message:error.message,phase:error.phase||'start'}};saveDiscovery();},resumeExisting:options.resumeExisting===true,personIds:options.personIds,force:options.force===true,resumeIncomplete:options.resumeIncomplete===true,signal:options.signal,isCurrent:current,persist,hydrateCrm:(owner,detail)=>{
+  const settings={profile,paidResearch,fullResearch:options.fullResearch===true,paidEmailLimit:options.paidEmailLimit,allowMeteredPublicResearch:options.allowMeteredPublicResearch===true,onMismatch:error=>{if(!current())return;candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),lastError:{name:error.code||error.name,message:error.message,phase:error.phase||'start'}};saveDiscovery();},resumeExisting:options.resumeExisting===true,personIds:options.personIds,force:options.force===true,resumeIncomplete:options.resumeIncomplete===true,signal:options.signal,isCurrent:current,persist,hydrateCrm:(owner,detail)=>{
     if(!current()||!buyerHydrationScope(owner,detail))return;
     for(const person of owner.people||[]){const ids=options.personIds||owner.buyerResearchJob?.personIds;if(ids?.length&&!ids.map(String).includes(String(person.id)))continue;const contact=buyerHydrationContact(owner,person,detail);if(contact)enrichmentResults.set(personKey(owner,person),{contact,request:{status:LeadIntelDiscovery.phoneLookupState?.(contact,detail.phoneRequests||[],person.id)||'not_requested'}});
       const raw=(detail.contactData||[]).find(data=>String(data.personId)===String(person.id)),data=raw&&LeadIntelDiscovery.safeContactData(raw,person,owner.domain);if(data&&(!person.contactData||Date.parse(data.checkedAt)>=Date.parse(person.contactData.checkedAt||'')))person.contactData=data;
@@ -4308,7 +4308,9 @@ function buyerResearchProgressHtml(candidate,{companyActionVisible=false}={}){
   // and beside it the part since the last resume when that differs. Shown only when the server sent a count.
   const credits=progress.credits&&typeof progress.credits.used==="number"&&Number.isFinite(progress.credits.used)?progress.credits:null;
   const creditTotal=credits&&Number.isFinite(Number(credits.total))?Math.max(Number(credits.total),credits.used):credits?.used,creditUnknown=credits?Number(credits.totalUnreported??credits.unreported)||0:0,creditUnknownRequests=credits?Number(credits.totalUnreportedRequests??credits.unreportedRequests)||0:0;
-  const creditLine=credits&&progress.jobId?`<p>Firecrawl credits used by this research: <strong>${creditTotal}</strong>${creditTotal!==credits.used?` · ${credits.used} since it was last resumed`:""}${creditUnknown>0?` · includes up to ${creditUnknown} for ${creditUnknownRequests} request${creditUnknownRequests===1?"":"s"} whose cost Firecrawl did not report`:""}${credits.aboveExpected===true&&Number.isFinite(Number(credits.expected))?` · more than the ${Number(credits.expected)} a company of this size usually needs`:""}</p>`:"";
+  const sequence=progress.fullResearch?'<p><strong>Full research</strong> · Saved evidence → connected web search → direct reading or Firecrawl → buyer identities → contact evidence → AI review</p>':'';
+  const reused=(progress.diagnostics||[]).find(item=>item.code==='fast_evidence');
+  const creditLine=sequence+(reused?'<p>'+esc(reused.reason)+'</p>':'')+(credits&&progress.jobId?`<p>Firecrawl credits used by this research: <strong>${creditTotal}</strong>${creditTotal!==credits.used?` · ${credits.used} since it was last resumed`:""}${creditUnknown>0?` · includes up to ${creditUnknown} for ${creditUnknownRequests} request${creditUnknownRequests===1?"":"s"} whose cost Firecrawl did not report`:""}${credits.aboveExpected===true&&Number.isFinite(Number(credits.expected))?` · more than the ${Number(credits.expected)} a company of this size usually needs`:""}</p>`:"");
   if(progress.executionStatus==='needs_review'&&progress.diagnostics?.at(-1)?.code==='free_discovery_finished'){
     const count=(candidate.people||[]).filter(person=>LeadIntelDiscovery.hasFullBuyerName(person.publicName||person.name)&&person.identityStatus!=='pending').length;
     const detail=progress.diagnostics.at(-1).reason||'';
@@ -4362,7 +4364,11 @@ async function controlSavedBuyerResearch(domain,action,button){
  if(!candidate||!crmAuthenticated())return false;
  if(action==='check')return runDurableBuyerResearch(candidate,{restore:true});
  if(action==='expand')return runDurableBuyerResearch(candidate,{resumeExisting:true,allowMeteredPublicResearch:true});
- if(action==='resume')return runDurableBuyerResearch(candidate,{resumeExisting:true,personIds:candidate.buyerResearchJob?.personIds||undefined});
+ if(action==='resume'){
+  const full=candidate.buyerResearchProgress?.fullResearch===true;
+  if(full&&!(await window.LeadIntelDialogs.confirm('Continue unfinished checks using your connected research providers?',{title:'Resume Full research?',action:'Resume metered research'})))return;
+  return runDurableBuyerResearch(candidate,{resumeExisting:true,allowMeteredPublicResearch:full,personIds:candidate.buyerResearchJob?.personIds||undefined});
+ }
  const b=bridge(),state=discovery,scope=discoveryOperationContext(),profile={...companyQualificationProfile(mainState()),decisionMakers:LeadIntelDiscovery.buyerRolesForTarget(mainState(),candidate)||candidate.buyerRoles||''};
  const current=()=>bridge()===b&&discovery===state&&discoveryOperationContext()===scope&&selectedProspects().includes(candidate)&&crmAuthenticated();
  if(button)button.disabled=true;
@@ -4858,13 +4864,16 @@ window.addEventListener('leadintel:module-opened',event=>{if(Number(event.detail
 const initialStage=()=>{try{return Number(JSON.parse(localStorage.getItem('leadintel_customer_v2_state')||'{}').step)}catch{return 0;}};
 function restoreInitialMessagesStage(){if(initialStage()===6)void ensureMessagesStageLoaded();}
 if(window.LeadIntelAccountCache)window.LeadIntelAccountCache.afterVerification(restoreInitialMessagesStage);else restoreInitialMessagesStage();
-async function openListCompany(row){
+async function openListCompany(row,{fullResearch=false}={}){
   const key=canonicalDomain(row?.website||row?.domain);if(!key||!row?.company||!row.crmId)throw new Error('Save the selected list company to CRM first.');
   const existing=(discovery.selectedProspects||[]).find(c=>canonicalDomain(c.domain)===key);
   const candidate=existing||{company:row.company,domain:key,website:row.website,crmId:row.crmId,market:row.market,people:[],peopleStatus:'idle',buyerSearchMode:'user_selected_target',qualified:false,qualificationGaps:['List relevance is not confirmed buying intent'],evidence:row.matches.map(m=>({url:m.url,excerpt:m.quote,sourceRead:true})),companyListEvidence:row};
   if(!candidate.crmId)candidate.crmId=row.crmId;
   const roles=LeadIntelDiscovery.buyerRolesForTarget(mainState(),candidate);if(roles&&!candidate.buyerRoles)candidate.buyerRoles=roles;
-  rememberSelectedProspect(candidate);focusBuyerCompany(candidate);setJourneyFocus('buyers',{scroll:false});saveDiscovery();renderAll();void startSelectedBuyerResearch(candidate);return true;
+  rememberSelectedProspect(candidate);focusBuyerCompany(candidate);setJourneyFocus('buyers',{scroll:false});saveDiscovery();renderAll();
+  if(fullResearch)void runDurableBuyerResearch(candidate,{fullResearch:true});
+  else void startSelectedBuyerResearch(candidate);
+  return true;
 }
 function openDiscoveryFromHandoff(options={}){if(!moduleReady())return false;showDiscoveryStep(options.focus||"companies");return Boolean($("step-5")?.classList.contains("active"));}
 function companySearchPlan(){

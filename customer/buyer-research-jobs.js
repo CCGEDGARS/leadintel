@@ -157,7 +157,7 @@
       // longer runs it must not depend on when the job is read, or every reading makes an untouched workspace count
       // as changed and sends it to the server again: so how long the job ran, not how long ago it started.
       const elapsedMs=(running?Date.now():Date.parse(job.updatedAt))-Date.parse(ref.startedAt);
-      owner.buyerResearchProgress={peopleFirst:Boolean(job.input?.peopleFirst),phase:running?job.phase||'company':job.status==='complete'?'complete':'error',label:job.progress?.label||'Buyer research needs review',step:({official:1,dossier:job.input?.peopleFirst?4:2,identities:job.input?.peopleFirst?2:3,company:1,roles:2,people:3,identity:4,contacts:job.input?.peopleFirst?3:4,review:5,paid:5})[job.phase]||1,total:5,executionStatus:job.status,aiReviewStatus:job.quality?.aiReviewStatus||'not_assessed',startedAt:ref.startedAt,elapsedSeconds:Number.isFinite(elapsedMs)?Math.max(0,Math.floor(elapsedMs/1000)):0,timing:running?job.progress?.timing||{}:endedTiming(job.progress?.timing),credits:job.progress?.credits||null,windowPaused:job.progress?.windowPaused,stages:job.progress?.stages,connection:'connected',completedChecks:Number(job.progress?.completed)||0,inProgressChecks:Number(job.progress?.inProgress)||0,checkpointAt:job.progress?.lastActivityAt||job.updatedAt,jobId:job.id,diagnostics:(job.diagnostics||[]).slice(-10),...options.progressFields};
+      owner.buyerResearchProgress={fullResearch:Boolean(job.input?.fullResearch),peopleFirst:Boolean(job.input?.peopleFirst),phase:running?job.phase||'company':job.status==='complete'?'complete':'error',label:job.progress?.label||'Buyer research needs review',step:({official:1,dossier:job.input?.peopleFirst?4:2,identities:job.input?.peopleFirst?2:3,company:1,roles:2,people:3,identity:4,contacts:job.input?.peopleFirst?3:4,review:5,paid:5})[job.phase]||1,total:5,executionStatus:job.status,aiReviewStatus:job.quality?.aiReviewStatus||'not_assessed',startedAt:ref.startedAt,elapsedSeconds:Number.isFinite(elapsedMs)?Math.max(0,Math.floor(elapsedMs/1000)):0,timing:running?job.progress?.timing||{}:endedTiming(job.progress?.timing),credits:job.progress?.credits||null,windowPaused:job.progress?.windowPaused,stages:job.progress?.stages,connection:'connected',completedChecks:Number(job.progress?.completed)||0,inProgressChecks:Number(job.progress?.inProgress)||0,checkpointAt:job.progress?.lastActivityAt||job.updatedAt,jobId:job.id,diagnostics:(job.diagnostics||[]).slice(-10),...options.progressFields};
       if(job.crm)options.hydrateCrm?.(owner,job.crm);
       if(scope.restoreReceipts&&!ACTIVE.has(job.status)&&receiptOwners.length===(owner.people||[]).length&&Array.isArray(job.savedBuyerResearch))root.LeadIntelDiscovery?.restoreBuyerResearchReceipts?.(owner,job.savedBuyerResearch);
       scope.acceptRoster();options.onProgress?.({...job.progress,phase:job.phase,job,status:job.status});options.persist?.(owner,job);return true;
@@ -195,11 +195,12 @@
           if(active.get(key)===old)active.delete(key);
           return execute(owner,options,readOnly);
         }
-        return old.promise;
+        if(readOnly||!options.fullResearch||old.fullResearch)return old.promise;
+        // Full upgrades the same server job. Stop only this tab’s old observer.
       }
       old?.controller.abort();const controller=new AbortController();let stop;
       stop=()=>controller.abort();options.signal?.addEventListener('abort',stop,{once:true});
-      const entry={scope,controller,promise:null,readOnly};
+      const entry={scope,controller,promise:null,readOnly,fullResearch:options.fullResearch===true};
       entry.promise=(async()=>{
         const expectedJobId=options.resumeExisting?owner.buyerResearchJob?.id:null;
         let observedJob=await request(scope,'GET',null,null,controller);
@@ -213,7 +214,10 @@
         }
         let job=observedJob;
         if(job&&!matching(scope,job)){options.onMismatch?.(contextFailure(scope,job));job=null;}
-        if(!readOnly&&options.resumeExisting){
+        if(!readOnly&&options.fullResearch){
+          if(scope.bridge.conflict)throw Error('Resolve the workspace sync conflict before starting Full research.');
+          job=await request(scope,'POST',{action:'start',...requestInput(owner,scope.profile),peopleFirst:true,fullResearch:true},null,controller);
+        }else if(!readOnly&&options.resumeExisting){
           if(scope.bridge.conflict)throw Error('Resolve the workspace synchronization conflict before resuming buyer research.');
           if(!job){
             if(observedJob)throw contextFailure(scope,observedJob);

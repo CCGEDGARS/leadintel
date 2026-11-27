@@ -1,6 +1,7 @@
 import {websiteContactAccess,contactError,publicWebsiteContacts,websiteContactView,readWebsiteContacts,startWebsiteContacts,commandWebsiteContacts} from './website-contact-store.js';
 import {runWebsiteContactJobs} from './website-contact-runner.js';
 import {lookupWebsiteContact} from './website-contact-paid.js';
+import {apolloCapabilities} from './service-integrations.js';
 import {readAdditionalContactPolicy} from './additional-contact-services.js';
 import {storageErrorResponse} from './workspace-storage.js';
 
@@ -10,7 +11,7 @@ export async function handleWebsiteContactRoute(request,env,cors={},ctx){
  try{
   const workspaceId=url.searchParams.get('workspace_id');if(!workspaceId||workspaceId.length>160)throw contactError('Workspace is required.',400);
   const context=await websiteContactAccess(request,env,workspaceId);
-  if(request.method==='GET')return json({job:await websiteContactView(env,await readWebsiteContacts(env,workspaceId,{id:url.searchParams.get('job_id'),companyId:url.searchParams.get('company_id')})),paidPolicy:await readAdditionalContactPolicy(env,workspaceId)});
+  if(request.method==='GET')return json({job:await websiteContactView(env,await readWebsiteContacts(env,workspaceId,{id:url.searchParams.get('job_id'),companyId:url.searchParams.get('company_id')})),paidPolicy:{...await readAdditionalContactPolicy(env,workspaceId),apollo:await apolloCapabilities(env,workspaceId)}});
   if(request.method!=='POST')throw contactError('Method not allowed.',405);
   const text=await request.text();if(text.length>12000)throw contactError('Contact request is too large.',413);
   let body;try{body=JSON.parse(text);}catch{throw contactError('A contact research request is required.',400);}

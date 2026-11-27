@@ -176,9 +176,13 @@ export async function handleAiRoute(request,env,cors={}){
         try{await requireWorkspaceServiceCredential(env,workspaceId,'perplexity');}
         catch(cause){if(cause.code==='CUSTOMER_SERVICE_KEY_REQUIRED')return error(cause.message,409,cors);throw cause;}
       }
-      await env.DB.prepare('INSERT INTO workspace_research_settings(workspace_id,primary_provider,secondary_provider) VALUES(?,?,?) ON CONFLICT(workspace_id) DO UPDATE SET primary_provider=excluded.primary_provider,secondary_provider=excluded.secondary_provider,updated_at=CURRENT_TIMESTAMP').bind(workspaceId,primary,secondary).run();
-      await audit(env,{workspaceId,userId:access.user.id,type:'ai.research_settings_saved',provider:primary||'automatic',metadata:{secondary:secondary||'automatic'}});
-      return json({saved:true,primary_provider:primary,secondary_provider:secondary},200,cors);
+      const policy=body.fullResearchPolicy??null;
+      if(policy!==null&&!['ask','free_only'].includes(policy))return error('Choose a supported full research spending preference.',400,cors);
+      await env.DB.prepare(`INSERT INTO workspace_research_settings(workspace_id,primary_provider,secondary_provider,full_research_policy)
+        VALUES(?,?,?,COALESCE(?,'ask')) ON CONFLICT(workspace_id) DO UPDATE SET primary_provider=excluded.primary_provider,
+        secondary_provider=excluded.secondary_provider,full_research_policy=COALESCE(?,workspace_research_settings.full_research_policy),updated_at=CURRENT_TIMESTAMP`).bind(workspaceId,primary,secondary,policy,policy).run();
+      await audit(env,{workspaceId,userId:access.user.id,type:'ai.research_settings_saved',provider:primary||'automatic',metadata:{secondary:secondary||'automatic',fullResearchPolicy:policy}});
+      return json({saved:true,...await dossierSettings(env,workspaceId)},200,cors);
     }catch{return error('Research settings storage unavailable',503,cors);}
   }
   if(path==='/api/ai/company-dossier'&&request.method==='GET'){

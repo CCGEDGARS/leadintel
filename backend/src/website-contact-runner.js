@@ -1,3 +1,4 @@
+import {sha256} from './security.js';
 import {managementShortlist,searchManagementIndex,managementDirectoryPeople,managementChannels,MANAGEMENT_RESEARCH_VERSION} from './website-management.js';
 import {websiteSourceChunks as sourceChunks,websiteStaffCards as localStaffCards} from './website-contact-staff.js';
 import {reviewWebsiteLinkedIn,websiteLinkedInMatchRows,websiteLinkedInQueries,websiteLinkedInReviewCurrent,WEBSITE_LINKEDIN_REVIEW_VERSION} from './website-linkedin-review.js';
@@ -133,8 +134,25 @@ export async function runWebsiteContactJobs(env,{jobId,now=Date.now(),windowMs=4
  }
  const managementIndex=query=>task('public_index',query,signal=>(services.publicIndex||services.search||searchManagementIndex)(query,signal,fetchDirectPublicPage));
  const search=async query=>task('search',query,async signal=>{const raw=await searchSource(query,{signal});if(signal.aborted)throw signal.reason;const rows=(Array.isArray(raw)?raw:raw?.results||[]).slice(0,8).map(r=>({url:S.safeUrl(r.url),title:clean(r.title).slice(0,300),description:String(r.description||r.text||'').slice(0,1800),evidenceKind:'search_excerpt'})).filter(r=>r.url);if(services.search)observe({provider:'controlled-public-search',operation:'search',status:'succeeded',results:rows.length});return rows;});
+ let fullJob;
+ async function priorFullTask(kind,value){
+  if(!input.managementLimit)return null;
+  fullJob??=sql(env,`SELECT id FROM buyer_research_jobs WHERE workspace_id=? AND domain=? AND json_extract(input_json,'$.fullResearch')=1
+   AND json_extract(input_json,'$.candidate.company')=? AND updated_at>=datetime('now','-30 days') ORDER BY rowid DESC LIMIT 1`,row.workspace_id,input.domain,input.company).first();
+  const job=await fullJob;
+  if(!job)return null;
+  const receipt=await sql(env,`SELECT result_json FROM buyer_research_tasks WHERE job_id=? AND task_key=? AND status='complete'
+   AND updated_at BETWEEN datetime('now','-30 days') AND datetime('now')`,job.id,await sha256(kind+'|'+value)).first();
+  return receipt?parse(receipt.result_json):null;
+ }
  const establishes=(page,officialContactPage=false)=>page&&sameHost(page.url,input.domain)&&S.assessIdentity({name:input.company,website:input.website},{url:page.url,text:page.markdown,title:page.title},{officialContactPage}).verified;
  const read=async (url,{confirmCompany=false}={})=>task('read',S.safeUrl(url),async(signal,operationMs)=>{
+  const saved=sameHost(url,input.domain)?await priorFullTask('read',S.safeUrl(url)):null;
+  const age=Date.now()-Date.parse(saved?.extractedAt);
+  if(age>=0&&age<=30*86400000&&saved.sourceRead&&saved.markdown&&D.buyerSourceReadLocation(candidateFor(input),url,saved)&&(!confirmCompany||establishes(saved,true))){
+   observe({provider:'saved',operation:'extract',status:'reused',results:1});
+   return saved;
+  }
   let raw;try{raw=await (services.read||(input.managementLimit?((url,signal)=>fetchDirectPublicPage(url,{signal})):null)||((url,signal)=>readPublicBuyerPage(env,row.workspace_id,url,{purpose:'website_contacts',signal,totalTimeoutMs:Math.min(18000,operationMs)})))(url,signal);}catch(error){
    for(const entry of error.researchTrace||[])observe(entry);
    const details=(error.researchTrace||[]).map(entry=>[entry.provider,entry.reason].filter(Boolean).join(' · ')).join(', ');
@@ -283,8 +301,15 @@ export async function runWebsiteContactJobs(env,{jobId,now=Date.now(),windowMs=4
       const readResult=url=>optional(()=>read(url));
       if(!state.managementDirectoryDone&&state.people.length<input.managementLimit){
        if(services.apollo||(await apolloCapabilities(env,row.workspace_id)).discovery&&(await resolveWorkspaceServiceCredential(env,row.workspace_id,'apollo')).configured){
-        const directory=await optional(()=>apollo('management-company-identities',{domain:input.domain,discovery_scope:'company',page:1}));
-        observe({provider:'apollo',operation:'identity_search',status:directory?'succeeded':'unavailable',results:directory?.people?.length||0,paidReveal:false});
+        const directory=await optional(()=>task('apollo','management-company-identities',async signal=>{
+         for(const attempt of [1,2]){
+          const retained=await priorFullTask('search','Apollo people search · '+input.domain+' · domain · attempt '+attempt);
+          if(retained?.status==='succeeded'&&Array.isArray(retained.people))return {people:retained.people,reused:true};
+         }
+         const lookup=services.apollo||((payload,options)=>searchWorkspaceApolloPeople(env,row.workspace_id,payload,{userId:row.requested_by,guard,...options}));
+         return lookup({domain:input.domain,discovery_scope:'company',page:1},{signal});
+        }));
+        observe({provider:'apollo',operation:'identity_search',status:directory?.reused?'reused':directory?'succeeded':'unavailable',results:directory?.people?.length||0,paidReveal:false});
         if(directory)state.managementDirectoryPeople=await managementDirectoryPeople(input,directory.people||[],{index,read:readResult,sourceRows:()=>reads(state)});
         await guard();acquire(state,input);
        }

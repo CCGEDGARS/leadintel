@@ -58,3 +58,9 @@ No runtime architecture change, real customer conflict resolution, new contact i
 ## Implementation follow-up
 
 See `2026-11-02-step5-durable-research-plan.md` for the implemented boundary, controlled authenticated browser/SQL acceptance, industry and failure scenarios, remaining live-customer evidence gap, and release verification. The initial OPEN table above records the starting point; it is not the current implementation status. The change does not claim that every architectural direction above has been fully migrated.
+
+### 27 November 2026 · Fast and Full research
+
+The management shortlist and Buyers used separate task stores. An explicit Full search could start a second run for the same company and repeat completed page and directory checks. Full now reopens the matching job, waits for an active Fast shortlist, and consumes its recent scoped receipts before requesting missing evidence. A repeated start preserves the current spending window. An interrupted metered dispatch retains its reservation across a resume. Apollo directory discovery and paid channel approval remain separate.
+
+The shared search strategy tests exercise authenticated requests, scheduled work, concurrent starts, uncertain dispatch, workspace isolation and the free-only policy. The website and company-list browser journeys cover the Fast entry, save/reopen, and the Step 4 metered handoff. Provider fixtures measure dispatch counts. A real contact outcome still requires separate source or provider evidence.

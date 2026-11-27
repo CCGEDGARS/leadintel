@@ -264,7 +264,7 @@ async function saveDossierSettings(event){
  const button=event.target.closest('#save-dossier-settings');if(!button||button.disabled)return;
  const originContext=settingsContext(),primary=document.getElementById('dossier-main-provider')?.value||'',secondary=document.getElementById('dossier-second-provider')?.value||'';
  if(primary&&primary===secondary){toast('Choose a different second researcher.');return;}button.disabled=true;
- try{const {response,payload}=await api('/api/integrations/ai/research-settings',{method:'PUT',body:JSON.stringify({primary,secondary})});if(!settingsCurrent(originContext))return;if(!response.ok)throw Error(payload.error||'Research settings could not be saved');status.research_settings=payload;render();toast('Company research settings saved');}catch(error){if(settingsCurrent(originContext)){toast(error.message);button.disabled=false;}}
+ try{const {response,payload}=await api('/api/integrations/ai/research-settings',{method:'PUT',body:JSON.stringify({primary,secondary,fullResearchPolicy:document.getElementById('full-research-policy')?.value||'ask'})});if(!settingsCurrent(originContext))return;if(!response.ok)throw Error(payload.error||'Research settings could not be saved');status.research_settings=payload;render();toast('Company research settings saved');}catch(error){if(settingsCurrent(originContext)){toast(error.message);button.disabled=false;}}
 }
 function handleModelModeChange(event){
   // Model choice is a curated list now; nothing to reveal or hide on change.
