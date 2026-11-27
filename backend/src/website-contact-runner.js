@@ -132,7 +132,7 @@ export async function runWebsiteContactJobs(env,{jobId,now=Date.now(),windowMs=4
   catch(error){saved.status='failed';saved.reason=error.code==='TIME_BUDGET'?'Processing slice ended':clean(error.message).slice(0,180);if(error.code==='TIME_BUDGET'||controller.signal.aborted)saved.attempts--;throw error;}
   finally{clearTimeout(operationTimer);controller.signal.removeEventListener('abort',canceled);operationController.abort();}
  }
- const managementIndex=query=>task('public_index',query,signal=>(services.publicIndex||services.search||searchManagementIndex)(query,signal,fetchDirectPublicPage));
+ const managementIndex=query=>task('public_index',query,signal=>(services.publicIndex||services.search||searchManagementIndex)(query,AbortSignal.any([signal,AbortSignal.timeout(6000)]),fetchDirectPublicPage));
  const search=async query=>task('search',query,async signal=>{const raw=await searchSource(query,{signal});if(signal.aborted)throw signal.reason;const rows=(Array.isArray(raw)?raw:raw?.results||[]).slice(0,8).map(r=>({url:S.safeUrl(r.url),title:clean(r.title).slice(0,300),description:String(r.description||r.text||'').slice(0,1800),evidenceKind:'search_excerpt'})).filter(r=>r.url);if(services.search)observe({provider:'controlled-public-search',operation:'search',status:'succeeded',results:rows.length});return rows;});
  let fullJob;
  async function priorFullTask(kind,value){
@@ -292,12 +292,9 @@ export async function runWebsiteContactJobs(env,{jobId,now=Date.now(),windowMs=4
      const urls=deeper.slice(0,Math.min(3,Math.max(0,8-(state.managementDetailReads||0))));
      if(urls.length){await readBatch(urls);state.managementDetailReads=(state.managementDetailReads||0)+urls.length;acquire(state,input);}
      else{
-      const index=async query=>{
-       if(state.managementIndexUnavailable)return undefined;
-       const hits=await optional(()=>managementIndex(query));
-       if(!hits)state.managementIndexUnavailable=true;
-       return hits;
-      };
+      // Each query has its own bounded receipt. An unavailable company roster
+      // must not suppress a later person's contact or profile searches.
+      const index=query=>optional(()=>managementIndex(query));
       const readResult=url=>optional(()=>read(url));
       if(!state.managementDirectoryDone){
        if(services.apollo||(await apolloCapabilities(env,row.workspace_id)).discovery&&(await resolveWorkspaceServiceCredential(env,row.workspace_id,'apollo')).configured){

@@ -10,7 +10,7 @@ import {sha256} from './security.js';
 import {researchWorkspaceDossier} from './company-dossier.js';
 import {findPublicBuyerContactPages,searchManagementIndex} from './website-management.js';
 import {createBuyerSourceSearch,searchPublicPeople} from './buyer-source-search.js';
-import {unheldProfilePeople,publicPeopleQueries,publicPeopleCountry,isPublicProfileRow,collapseSameRecords} from './public-profile-people.js';
+import {unheldProfilePeople,unresolvedProfileUrls,publicPeopleQueries,publicPeopleCountry,isPublicProfileRow,collapseSameRecords} from './public-profile-people.js';
 import {PERPLEXITY_MAX_RESULTS} from './perplexity-request.js';
 import {buyerCreditWindowKey,buyerCreditLimitFor,createBuyerCreditMeter,readBuyerCredits} from './buyer-research-credits.js';
 import {fetchDirectPublicPage,readPublicBuyerPage,searchWorkspaceApolloPeople,requireWorkspaceServiceCredential} from './service-integrations.js';
@@ -321,7 +321,12 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
     const identityRows=await allRows();
     await resolveDirectoryNames(search,identityRows);
     const trace=D.tracePublicBuyers(identityRows,candidate.company,{...input.profile,companyDomain:candidate.domain});
-    const profiled=unheldProfilePeople(identityRows,candidate,{D});
+    const profileRows=[...identityRows];
+    for(const url of unresolvedProfileUrls(identityRows,candidate,D)){
+     try{const page=await read(url);if(page?.sourceRead)profileRows.push(page);}
+     catch(error){if(controller.signal.aborted||['TIME_BUDGET','RUN_WINDOW','LEASE_EXPIRED','CONTEXT_CHANGED','CANCELED','CREDIT_LIMIT'].includes(error.code))throw error;}
+    }
+    const profiled=unheldProfilePeople(profileRows,candidate,{D});
     // Profile people join the pool first, as the free index's identities do: the ten shown are ranked from everyone
     // found, and a person ranked below them stays in the pool instead of being dropped.
     if(profiled.length)candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),pool:D.mergeBuyerPool(candidate.buyerDiscovery?.pool||candidate.people||[],profiled,input.profile)};

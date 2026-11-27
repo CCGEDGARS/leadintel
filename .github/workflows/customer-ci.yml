@@ -262,7 +262,7 @@ jobs:
       - name: Verify company lists, reviewed AI tasks and read-only sidebar navigation
         env:
           LEADINTEL_REQUIRE_BROWSER: 'true'
-        run: node --import ./backend/test/register-wasm-loader.mjs --test backend/test/company-lists-journey.test.mjs backend/test/company-search-list-journey.test.mjs backend/test/navigation-save-journey.test.mjs backend/test/copilot-tasks-journey.test.mjs backend/test/storage-management-journey.test.mjs
+        run: node --import ./backend/test/register-wasm-loader.mjs --test backend/test/website-ranked-buyers.test.mjs backend/test/company-lists-journey.test.mjs backend/test/company-search-list-journey.test.mjs backend/test/navigation-save-journey.test.mjs backend/test/copilot-tasks-journey.test.mjs backend/test/storage-management-journey.test.mjs
       - name: Verify protected workflow save, copy and resume
         run: node scripts/verify-saved-workflows-local.mjs
       - name: Verify responsive navigation and bounded workflow refresh

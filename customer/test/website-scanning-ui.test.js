@@ -39,23 +39,24 @@ function contactJourney({verified=false,unresolved=false,stalled=false}={}){
   throw Error('Unexpected request '+url);
  };
  w.eval(fs.readFileSync(require.resolve('../website-contact-ui.js'),'utf8'));
+  w.LeadIntelDiscoveryUI={openWebsiteBuyers(rows,host,current){assert.ok(current());events.push(['ranked',rows.map(r=>r.crmId)]);host.textContent=rows[0].name;host.hidden=false;}};
  return {w,events,release:()=>release?.()};
 }
 async function settled(w){for(let i=0;i<100;i++){await wait();if(!w.document.querySelector('[data-scan-action="buyers"]').disabled)return;}assert.fail('Find contacts did not settle');}
 
-test('Find contacts verifies an unchecked company, saves provenance and opens its research; reopening reuses verification',async()=>{
+test('Find buyers verifies an unchecked company and hands the saved CRM identity to the inline ranked shortlist',async()=>{
  const {w,events}=contactJourney();try{
   await wait();w.document.querySelector('#website-scanning-open').click();w.document.querySelector('[data-scan-action="buyers"]').click();await settled(w);
-  assert.deepEqual(events.map(e=>e[0]),['verify','save','activity','get','research']);
-  assert.deepEqual(events.find(e=>e[0]==='research')[1],{action:'shortlist',companyId:'crm-liljas',managementLimit:10,buyerRoles:''});
+  assert.deepEqual(events.map(e=>e[0]),['verify','save','activity','ranked']);
+  assert.deepEqual(events.find(e=>e[0]==='ranked')[1],['crm-liljas']);
   assert.equal(events[2][2].metadata.identityUrl,'https://www.liljassvets.se/');
-  assert.equal(w.document.querySelector('#website-contact-results').hidden,false);
-  assert.match(w.document.querySelector('#website-contact-results').textContent,/Liljas Svets/);
+  assert.equal(w.document.querySelector('#website-buyer-results').hidden,false);
+  assert.match(w.document.querySelector('#website-buyer-results').textContent,/Liljas Svets/);
   const saved=JSON.parse(w.localStorage.getItem('leadintel_customer_v2_state')).websiteScans.items[0].rows[0];
   assert.equal(saved.identityStatus,'verified');assert.equal(saved.crmId,'crm-liljas');
   w.LeadIntelWebsiteContacts.close();w.LeadIntelWebsiteScanUI.refresh();events.length=0;
   w.document.querySelector('[data-scan-action="buyers"]').click();await settled(w);
-  assert.deepEqual(events.map(e=>e[0]),['save','activity','get','research']);
+  assert.deepEqual(events.map(e=>e[0]),['save','activity','ranked']);
  }finally{w.LeadIntelWebsiteContacts.close();w.close();}
 });
 test('Find contacts preserves unresolved companies and explains why no CRM or research request can start',async()=>{
@@ -102,6 +103,6 @@ test('a mixed selection retains completed checks and starts research after the u
   assert.deepEqual(Array.from(w.LeadIntelWebsiteScanUI.active().rows,r=>r.identityStatus),['verified','unresolved']);
   const checkbox=w.document.querySelector('[data-scan-selected="unresolved"]');checkbox.checked=false;checkbox.dispatchEvent(new w.Event('change',{bubbles:true}));events.length=0;
   w.document.querySelector('[data-scan-action="buyers"]').click();await settled(w);
-  assert.deepEqual(events.map(e=>e[0]),['save','activity','get','research']);assert.equal(events[0][1].company_name,'Liljas Svets & Mekaniska AB');
+  assert.deepEqual(events.map(e=>e[0]),['save','activity','ranked']);assert.equal(events[0][1].company_name,'Liljas Svets & Mekaniska AB');
  }finally{w.LeadIntelWebsiteContacts.close();w.close();}
 });
