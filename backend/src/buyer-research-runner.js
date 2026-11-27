@@ -307,7 +307,7 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
      const options={candidate,profile:input.profile,queries:plan.queries,pages:rows,signal:controller.signal};
      return (services.plan||planBuyerSearch)(env,row.workspace_id,options);
     }):null;
-    if(strategy&&!diagnostics.some(d=>d.code==='query_plan'))diagnostics.push({phase,code:'query_plan',reason:'Search plan · '+strategy.provider+' · '+strategy.queries.length+' targeted queries',at:new Date().toISOString()});
+    if(strategy&&!diagnostics.some(d=>d.code==='query_plan'))diagnostics.push({phase,code:'query_plan',reason:'Search plan · '+strategy.provider+' · '+strategy.queries.length+' targeted queries'+(strategy.unavailable?' · planning model: '+strategy.unavailable:''),at:new Date().toISOString()});
     for(const query of (strategy?strategy.queries:plan.queries.slice(0,6))){await guard();try{await search(query);}catch(error){if(error.code==='CANCELED'||controller.signal.aborted)throw error;}}
     if(!strategy||strategy.findMorePeople)await searchPeople();
     const identityRows=await allRows();
