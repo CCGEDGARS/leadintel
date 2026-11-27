@@ -48,7 +48,17 @@ export async function verifyApolloDiscoveryJourney({artifactDir='/tmp/leadintel-
   assert.equal(apiCalls,1,'free discovery uses the connected Apollo identity endpoint once');
   assert.equal(paidContactCalls,0,'standalone discovery never reveals email or phone');
   await page.waitForFunction(()=>discovery.selectedProspects[0].people.some(p=>p.id==='apollo-katja'&&p.name==='Katja Jensen'&&p.publicNameUrl==='https://www.linkedin.com/company/forge-industries'));
-  f.DB.raw.prepare("UPDATE workspace_research_settings SET full_research_policy='ask' WHERE workspace_id=?").run(workspaceId);
+  await page.waitForFunction(()=>discovery.selectedProspects[0].buyerResearchProgress?.freeOnly===true);
+  assert.equal(await research.textContent(),'Refresh buyers');
+  await page.locator('#topbar-account-btn').click();await page.locator('[data-topbar-action="settings"]').click();
+  await page.locator('.settings-tabs button[data-settings-tab="engines"]').click();
+  const policy=page.locator('#full-research-policy');
+  await page.waitForFunction(()=>document.querySelector('#full-research-policy')?.value==='free_only');
+  await policy.selectOption('ask');
+  const policySaved=page.waitForResponse(r=>r.url().includes('/research-settings')&&r.request().method()==='PUT'&&r.status()===200);
+  await page.locator('#save-dossier-settings').click();await policySaved;
+  await page.locator('#close-settings').click();
+  assert.equal(apiCalls,1,'saving policy must not repeat buyer discovery');
   await research.filter({hasText:'Expand web research'}).click();
   await page.waitForFunction(()=>['queued','running'].includes(discovery.selectedProspects[0].buyerResearchJob?.status));
   await f.runJobs(job.id);

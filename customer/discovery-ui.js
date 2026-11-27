@@ -4834,6 +4834,15 @@ function bindDiscovery(){
     if(event.target.closest("[data-company-review-strategy]"))openCompanySearchRecovery();
     else if(event.target.closest("#review-next-companies"))void reviewNextCompanyBatch();
   });
+  window.addEventListener('leadintel:research-policy-saved',event=>{
+    const {workspaceId,policy}=event.detail||{};
+    if(!discoveryMounted||!workspaceId||workspaceId!==bridge()?.workspace?.id||!['ask','free_only'].includes(policy))return;
+    for(const candidate of selectedProspects()){
+      const progress=candidate.buyerResearchProgress;
+      if(progress?.freeDiscovery&&progress.executionStatus==='needs_review')progress.freeOnly=policy==='free_only';
+    }
+    renderPipeline();
+  });
   window.addEventListener('leadintel:commercial-context-changed',()=>{if(discoveryMounted){syncStrategyFingerprint();renderAll();}});
   $("discovery-target-list")?.addEventListener("click",event=>{const button=event.target.closest("[data-select-target-buyers]");if(button)selectTargetForBuyers(button.dataset.selectTargetBuyers);});
   $("cancel-company-discovery")?.addEventListener("click",()=>{void cancelCompanyDiscovery();});
