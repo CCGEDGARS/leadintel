@@ -8406,6 +8406,20 @@
       ]
     },
     {
+      "id": "website-scan-ranked-buyer-handoff",
+      "type": "text",
+      "url": "/customer/website-scanning-ui.js",
+      "status": 200,
+      "contains": ["Find buyers", "openRankedBuyers(result.saved)", "restoreRankedBuyers"]
+    },
+    {
+      "id": "website-scan-shared-buyer-cards",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": ["openWebsiteBuyers", "renderWebsiteBuyerPanel", "pipelineClickHandler"]
+    },
+    {
       "id": "website-contact-identity-evidence",
       "type": "text",
       "url": "/customer/website-contact-ui.js",

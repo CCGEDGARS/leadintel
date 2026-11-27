@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../../customer/discovery-engine.js';
-import {readPublicProfilePeople,unheldProfilePeople,publicPeopleQueries,publicPeopleCountry,isPublicProfileRow,collapseSameRecords,PUBLIC_PEOPLE_MAX_QUERIES} from '../src/public-profile-people.js';
+import {unresolvedProfileUrls,readPublicProfilePeople,unheldProfilePeople,publicPeopleQueries,publicPeopleCountry,isPublicProfileRow,collapseSameRecords,PUBLIC_PEOPLE_MAX_QUERIES} from '../src/public-profile-people.js';
 
 // Owner gate, 26 Nov 2026: LeadIntel itself must find the current people that a manual Perplexity search found. Three
 // of them were only in public profile excerpts ("**Role**" / "**Employer**" / "March 2023 - Present"), which no reader
@@ -150,4 +150,18 @@ test('only personal profile and directory person pages are kept from the people 
  assert.equal(isPublicProfileRow({url:'https://www.linkedin.com/company/fjord-staal'}),false);
  assert.equal(isPublicProfileRow({url:'https://theorg.com/org/fjord-staal'}),false);
  assert.equal(isPublicProfileRow({url:'https://fjord-staal.example/om-os/'}),false);
+});
+
+
+test('a retrieved public employment history binds a dated role to the named employer',()=>{
+ const url='https://dk.linkedin.com/in/ida-larsen-1';
+ const hit={url,title:'Ida Larsen | LinkedIn',description:'Projektleder · Erfaring: Fjord-Staal'};
+ const other={...hit,url:url+'b',title:'Signe Holm',description:'Previously at Fjord Steelworks'};
+ const page={url,sourceRead:true,markdown:'# Ida Larsen\n\n## Employment History\n\n### [Fjord-Staal](https://www.linkedin.com/company/fjord-staal)\n\n- 2023-02-01 - now: Projektleder\n\n### [Supplier Ltd](https://www.linkedin.com/company/supplier)\n\n- 2021-02-01 - 2023-01-30: Designer'};
+ const D=globalThis.LeadIntelDiscovery;
+ assert.deepEqual(unresolvedProfileUrls([hit,hit,other],target,D),[url]);
+ assert.deepEqual(readPublicProfilePeople([page],target).people.map(p=>[p.name,p.title]),[['Ida Larsen','Projektleder']]);
+ assert.deepEqual(unresolvedProfileUrls([hit,page],target,D),[]);
+ const ended={...page,markdown:page.markdown.replace('now:','2024-05-01:')};
+ assert.deepEqual(readPublicProfilePeople([ended],target).people,[]);assert.deepEqual(unresolvedProfileUrls([hit,ended],target,D),[]);
 });

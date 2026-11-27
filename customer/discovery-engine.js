@@ -491,6 +491,10 @@
         return {...person,roleReview:{version:1,status:'recruitment_contact',reason:'Published as a hiring contact; actual buying role and purchasing authority require confirmation',checkedAt:new Date().toISOString(),sources:[{url,date:evidenceDate(row),quote:clean(quote)}]}};
       }
       if(!official)continue;
+      if(row.sourceRead&&isExecutiveBuyer(person)){
+        const statement=officialLeadershipInProse(body,url,candidate).find(leader=>leader.name.toLowerCase()===name.toLowerCase()&&aliases.includes(leader.title.toLowerCase()));
+        if(statement){sources.push({url,date:evidenceDate(row),quote:statement.roleSourceQuote});continue;}
+      }
       const words=title.toLowerCase().split(/[^\p{L}]+/u).filter(word=>word.length>=4&&!ROLE_GENERIC_WORDS.has(word));
       if(aliases.some(alias=>lower.includes(alias))||words.length&&words.every(word=>lower.includes(word)))sources.push({url,date:evidenceDate(row),quote:clean(quote)});
     }
@@ -3019,7 +3023,7 @@
     for(const clause of owners.split(/\s+(?:og|samt|and)\s+|,\s*/iu)){
      const entry=clause.trim().match(/^(CEO|CFO|COO|CTO|(?:Production|Managing|Finance|Operations) Director|(?:produktions|økonomi|administrerende\s+)?direktør)\s+(.+)$/iu);
      if(!entry||!/^\p{Lu}[\p{L}’'-]+(?:\s+\p{Lu}[\p{L}’'-]+){1,4}$/u.test(entry[2])||!hasFullBuyerName(entry[2])||isNonPersonBuyerHeading(entry[2])||/\b(?:ApS|Ltd|LLC|Inc|GmbH|Holding)\b/i.test(entry[2]))continue;
-     people.push({name:entry[2],publicName:entry[2],title:entry[1],id:'public-'+slug(url+'|'+entry[2].toLowerCase()),organization:candidate.company,publicNameUrl:url,identitySource:'public',identityStatus:'confirmed',nameVerification:'confirmed',companyContactSource:'official_staff'});
+     people.push({name:entry[2],publicName:entry[2],title:entry[1],roleSourceQuote:clean(sentence),id:'public-'+slug(url+'|'+entry[2].toLowerCase()),organization:candidate.company,publicNameUrl:url,identitySource:'public',identityStatus:'confirmed',nameVerification:'confirmed',companyContactSource:'official_staff'});
     }
    }
    return people;

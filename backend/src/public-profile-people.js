@@ -45,7 +45,40 @@ function sameEmployer(employer,candidate){
 function profileName(row,text){
   const title=clean(String(row.title||'').split('|')[0].split(/\s+[-–—]\s+/)[0]);
   if(title&&!/linkedin/i.test(title))return title;
-  return clean((text.match(/^\s*\*\*([^*\n]{3,80})\*\*/)||[])[1]);
+  return clean((text.match(/^# (.{3,80})$/m)||text.match(/^\s*\*\*([^*\n]{3,80})\*\*/)||[])[1]);
+}
+
+// Public Firecrawl profiles group dated roles under the employer's heading.
+function employmentHistory(text){
+  const history=text.split(/^## Employment History[ \t]*$/m)[1]?.split(/^## /m)[0]||'';
+  const entries=[];
+  for(const section of history.split(/^### /m).slice(1)){
+    const employer=section.match(/^\[([^\]\n]+)\]\(https?:\/\/[^\n)]+\)[ \t]*\n/)?.[1];
+    if(!employer)continue;
+    for(const row of section.matchAll(/^- (\d{4}(?:-\d{2}){0,2}) [-–—] (now|present|current|\d{4}(?:-\d{2}){0,2}): ([^\n]{2,120})$/gmi)){
+      entries.push({employer,role:clean(row[3]),since:row[1],until:row[2],quote:employer+' '+row[0]});
+    }
+  }
+  return entries;
+}
+
+export function unresolvedProfileUrls(rows,candidate,D){
+ const result=readPublicProfilePeople(rows,candidate,{D}),known=new Set([
+   ...result.people.map(p=>profileKey(p.publicNameUrl)),...result.former.map(p=>profileKey(p.url)),
+   ...(candidate.people||[]).map(p=>profileKey(p.publicLinkedinUrl||p.linkedin_url))
+ ]);
+ const company=employerKey(candidate.company);
+ if(!company)return [];
+ const urls=[];
+ for(const row of rows){
+   const key=profileKey(row.url);
+   if(!key||known.has(key)||!D.hasFullBuyerName(profileName(row,String(row.markdown||''))))continue;
+   const excerpt=' '+employerKey([row.title,row.description].join(' '))+' ';
+   if(!excerpt.includes(' '+company+' '))continue;
+   known.add(key);urls.push(row.url);
+   if(urls.length===4)break;
+ }
+ return urls;
 }
 
 export function readPublicProfilePeople(rows=[],candidate={},{D=globalThis.LeadIntelDiscovery,now=new Date().toISOString()}={}){
@@ -70,6 +103,7 @@ export function readPublicProfilePeople(rows=[],candidate={},{D=globalThis.LeadI
     const name=profileName(row,text);
     if(!fullName(name)||names.has(name.toLowerCase()))continue;
     const entries=[...text.matchAll(ENTRY)].map(match=>({role:clean(match[1]),employer:clean(match[2]),since:clean(match[3]),until:clean(match[4]),quote:match[0].replace(/^\n/,'').trim()}));
+    entries.push(...employmentHistory(text));
     const atTarget=entries.filter(entry=>sameEmployer(entry.employer,candidate));
     const current=atTarget.find(entry=>ONGOING.test(entry.until));
     if(current){

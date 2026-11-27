@@ -53,3 +53,13 @@ for(const body of ['### Chief Financial Officer\nAnna Buyer\n\n### Head of Procu
 });
 for(const body of ['### Anna Buyer\n\n---\nHead of Procurement\nBob Smith','### Anna Buyer\n\n**Head of Procurement**\nBob Smith','**Anna Buyer**\n\n**Head of Procurement**\nBob Smith'])test('blank role bridge rejects separators and following formatted cards: '+body.slice(0,32),()=>{const p={name:'Anna Buyer',title:'Head of Procurement'};assert.notEqual(D.matchBuyerRoleEvidence(p,[{url:'https://example.com/team',markdown:body,sourceRead:true}],{company:'Example',domain:'example.com'}).roleReview?.status,'supported');});
 for(const [role,tail] of [['Chief Executive Officer','anna.buyer@example.com'],['Head of Procurement','Example']])test('ordinary adjacent-line staff cards retain supported '+role,()=>{const p={name:'Anna Buyer',title:role},body='### Anna Buyer\n'+role+'\n'+tail;assert.equal(D.matchBuyerRoleEvidence(p,[{url:'https://example.com/team',markdown:body,sourceRead:true}],{company:'Example',domain:'example.com'},{complete:true}).roleReview?.status,'supported');});
+
+
+test('a current company ownership statement confirms only the exact named executive and role',()=>{
+ const c={company:'Example Fabrication',domain:'example.test'},p={name:'Anna Olsen',title:'CEO',organization:c.company};
+ const url='https://example.test/about/',markdown='Today, Example Fabrication is owned by Holdings Ltd and Production Director Erik Larsen and CEO Anna Olsen.';
+ const assess=(body,sourceRead=true)=>D.matchBuyerRoleEvidence(p,[{url,markdown:body,sourceRead}],c,{complete:true}).roleReview;
+ assert.equal(assess(markdown).status,'supported');assert.match(assess(markdown).sources[0].quote,/CEO Anna Olsen/);
+ assert.equal(assess(markdown.replace('Example Fabrication','Client Corporation')).status,'unconfirmed');
+ assert.equal(assess(markdown.replace('CEO Anna Olsen','CFO Anna Olsen')).status,'unconfirmed');
+});

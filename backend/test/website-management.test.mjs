@@ -66,3 +66,18 @@ test('one index outage preserves official checks per channel and a legacy shortl
  assert.equal(state.tasks.filter(t=>t.kind==='read'&&t.status==='complete').length,before);
  assert.equal((await startWebsiteContacts(f.env,context,body)).status,'complete');
 });
+
+test('one failed public query leaves the next contact channel runnable',async t=>{
+ const f=await buyerJobsFixture(t),context={workspaceId,userId:f.users.owner.id,role:'owner',sessionHash:f.users.owner.sessionTokenHash};
+ const detail=await upsertCrmCompany(f.DB,context,{company_name:'Forge Works',website:'https://forge.example/'});
+ const job=await startWebsiteContacts(f.env,context,{action:'shortlist',companyId:detail.company.id,managementLimit:10});
+ const queries=[];
+ const services={read:async url=>({url,markdown:'# Forge Works\nForge Works builds specialist equipment.\n## Team\n### Anna Jensen\nChief Executive Officer',links:[]}),publicIndex:async query=>{
+  queries.push(query);if(queries.length===1)throw Error('Single query timed out');
+  return [];
+ }};
+ await runWebsiteContactJobs(f.env,{jobId:job.id,services});
+ const result=publicWebsiteContacts(await readWebsiteContacts(f.env,workspaceId,{id:job.id}));
+ assert.ok(queries.length>1);assert.ok(result.people[0].managementChecks.gmail.queryLog.some(row=>row.status==='complete'));
+ assert.equal(result.people[0].managementChecks.direct_email.status,'incomplete');
+});

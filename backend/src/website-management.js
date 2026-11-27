@@ -111,22 +111,19 @@ export async function findPublicBuyerContactPages(candidate,{index,read,refresh,
   }
   await refresh();
  }
- if(!indexUnavailable&&resolveDirectoryNames)await resolveDirectoryNames(async query=>{
-  if(indexUnavailable)throw Error('Public index unavailable');
-  const hits=await searchIndex(query);
-  if(indexUnavailable)throw Error('Public index unavailable');
+ if(resolveDirectoryNames)await resolveDirectoryNames(async query=>{
+  const before=checked,hits=await searchIndex(query);
+  if(checked===before)throw Error('Public index unavailable');
   return hits.map(hit=>({...hit,evidenceKind:'search_excerpt'}));
  });
  const missing=(candidate.people||[]).filter(person=>D.sourcedBuyerIdentity(person,candidate)&&!D.confirmedBuyerContactData(candidate,person).email).slice(0,4);
  for(const person of missing){
-  if(indexUnavailable)break;
   const name=person.publicName||person.name;
   await lookup('"'+name+'" "'+candidate.domain+'" email',name);
  }
  if(missing.length&&checked)await refresh();
  const colleagues=[...(candidate.people||[]),...(candidate.buyerDiscovery?.companyContacts||[])];
  for(const person of missing){
-  if(indexUnavailable)break;
   const current=candidate.people?.find(p=>p.id===person.id);
   if(!current||D.listedBuyerEmailSource(candidate,current)?.email||D.confirmedBuyerContactData(candidate,current).email)continue;
   const addresses=D.rankedEmailGuesses(current,candidate.domain,colleagues).slice(0,3).map(row=>row.email);
