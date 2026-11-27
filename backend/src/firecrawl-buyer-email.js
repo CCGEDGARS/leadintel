@@ -1,3 +1,4 @@
+import {readBuyerCheckpoint} from './buyer-checkpoint.js';
 import {resolveWorkspaceServiceCredential} from './service-integrations.js';
 import {requestFirecrawl} from './firecrawl-request.js';
 import {writeCrmRecord} from './crm.js';
@@ -122,7 +123,7 @@ export async function importEmailEvidence(env,context,body){
  const company=await env.DB.prepare("SELECT id,company_name,normalized_domain FROM crm_companies WHERE workspace_id=? AND id=? AND normalized_domain=? AND deleted_at IS NULL AND lifecycle_status NOT IN ('archived','suppressed')").bind(context.workspaceId,body.companyId||'',domain).first();
  if(!company)throw invalid('This evidence must match the selected CRM company.');
  const saved=await env.DB.prepare("SELECT result_json FROM buyer_research_jobs WHERE workspace_id=? AND domain=? AND json_extract(input_json,'$.candidate.company')=? AND COALESCE(NULLIF(json_extract(input_json,'$.candidate.crmId'),''),?)=? AND COALESCE(json_extract(input_json,'$.scope'),'all_buyers')='all_buyers' ORDER BY rowid DESC LIMIT 1").bind(context.workspaceId,domain,company.company_name,company.id,company.id).first();
- const roster=JSON.parse(saved?.result_json||'{}').people||[],rows=[],ids=new Set();
+ const roster=readBuyerCheckpoint(saved?.result_json).people||[],rows=[],ids=new Set();
  for(const row of bundle.records){
   if(!row||typeof row.name!=='string'||!row.name.trim())throw invalid('Each record needs a buyer name.');
   if(row.listedName){const parts=key(row.name).split(' '),alias=key(row.listedName).split(' ');if(alias.length<2||alias[0]!==parts[0]||alias.at(-1)!==parts.at(-1))throw invalid('The listed name must match this buyer.');}

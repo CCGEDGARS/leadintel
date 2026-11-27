@@ -27,7 +27,7 @@
   host.className='workspace-storage-card'+(red?' is-error':issues.length?' is-warning':'');
   const title=`<div class="storage-card-head"><div><span class="eyebrow">Your workspace</span><h3>Storage</h3></div><span class="storage-plan">${esc(status?.plan?.name||'Included')}</span></div>`;
   if(!signedIn()){host.innerHTML=title+'<p>Sign in to view your private storage usage.</p><p class="storage-note">Included per workspace: 100 MB of CRM/workspace data and 1 GB of files. Shared by its members.</p>';return;}
-  host.innerHTML=title+`<p class="storage-note">One allowance for this workspace, shared by its members.</p>${status?meter('CRM & workspace data',status.records)+meter('Files',status.files):'<p role="status">Checking storage usage…</p>'}
+  host.innerHTML=title+`<p class="storage-note">CRM records and research use the data allowance. Uploaded files use the separate file allowance.</p>${status?meter('CRM & workspace data',status.records)+meter('Files',status.files):'<p role="status">Checking storage usage…</p>'}
    ${status?.billing?.payment_issue?'<p class="storage-alert" role="alert">Storage payment needs attention. Update your payment method. Saved data is preserved.</p>':''}
    ${status&&(status.records.state==='full'||status.files.state==='full'||blockedContext===context())?'<p class="storage-alert" role="alert">The storage allowance blocks new growth. Upgrade or reduce stored content. Existing data remains readable.</p>':''}
    <p data-storage-connection class="${error?'is-warning':''}" role="status">${error?'Storage check could not connect. Retry; saved data is preserved.':''}</p>

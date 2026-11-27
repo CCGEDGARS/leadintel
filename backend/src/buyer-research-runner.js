@@ -1,3 +1,4 @@
+import {readBuyerCheckpoint,compactBuyerCheckpoint,buyerRecordLimitMessage} from './buyer-checkpoint.js';
 import {checkFreeEmails} from './firecrawl-buyer-email.js';
 import {websiteStaffCards} from './website-contact-staff.js';
 import {savedFastResearch} from './fast-research-evidence.js';
@@ -43,7 +44,7 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
   let row=await claim();
   if(!row&&await recoverInterruptedContactJob(env,{jobId}))row=await claim();
   if(!row)break;
-  const input=parse(row.input_json),originalCandidate=parse(row.result_json,input.candidate),reconciledCandidate=D.reconcileBuyerEvidence(originalCandidate,{trustedAgentSources:true});
+  const input=parse(row.input_json),originalCandidate=readBuyerCheckpoint(row.result_json,input.candidate),reconciledCandidate=D.reconcileBuyerEvidence(originalCandidate,{trustedAgentSources:true});
   const adoptLegacyJob=input.peopleFirst==null&&!input.paidResearch&&standaloneBuyerDiscovery(input);
   if(adoptLegacyJob){input.peopleFirst=true;input.freeDiscovery=true;}
   if(input.fullResearch){input.freeDiscovery=false;input.meteredPublicResearchApproved=true;}
@@ -137,6 +138,7 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
    if(invocationBudget&&!invocationBudget.admit(64)){invocationExhausted=true;throw Object.assign(Error('Shared invocation query budget reached; saved work will continue'),{code:'TIME_BUDGET'});}
    activeTaskReservations++;
    try{return await operation();}
+   catch(error){if(storageFailure(error)&&!controller.signal.aborted)controller.abort(error);throw error;}
    finally{activeTaskReservations--;invocationBudget?.release(64);}
   };
   const task=(kind,value,operation,options)=>{const key=kind+'|'+value;if(inflightTasks.has(key))return inflightTasks.get(key);const pending=withTaskBudget(()=>executeTaskBody(kind,value,operation,options));inflightTasks.set(key,pending);pending.finally(()=>{if(inflightTasks.get(key)===pending)inflightTasks.delete(key);}).catch(()=>{});return pending;};
@@ -407,7 +409,10 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
   }catch(error){
    const phaseAdvanced=phase!==row.phase;
    if(phaseAdvanced){phaseMs=0;phaseRuns=0;}
-   if(error.code==='RUN_WINDOW'||controller.signal.reason?.code==='RUN_WINDOW'){status='needs_review';report.status=report.status==='complete'?'complete':'partial';report.stopReason='run_window';diagnostics.push({phase,code:'run_window',reason:BUYER_RUN_WINDOW_REASON,at:new Date().toISOString()});}
+   if(storageFailure(error)||storageFailure(controller.signal.reason)){
+    phase=row.phase;status='needs_review';report.stopReason='workspace_records_full';
+    diagnostics.push({phase,code:'workspace_records_full',reason:buyerRecordLimitMessage,at:new Date().toISOString()});
+   }else if(error.code==='RUN_WINDOW'||controller.signal.reason?.code==='RUN_WINDOW'){status='needs_review';report.status=report.status==='complete'?'complete':'partial';report.stopReason='run_window';diagnostics.push({phase,code:'run_window',reason:BUYER_RUN_WINDOW_REASON,at:new Date().toISOString()});}
    else if(error.code==='CREDIT_LIMIT'||controller.signal.reason?.code==='CREDIT_LIMIT'){
     // The pause keeps the phase the slice started in: an engine step that swallowed the refusal may have moved on.
     phase=row.phase;status='needs_review';report.status=report.status==='complete'?'complete':'partial';report.stopReason='credit_limit';diagnostics.push({phase,code:'credit_limit',reason:(error.code==='CREDIT_LIMIT'?error:controller.signal.reason).message,at:new Date().toISOString()});}
@@ -451,11 +456,24 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
    // The user may have requested contact checks after this worker loaded the
    // identity-only plan. Compare the saved flags at commit under the same lease.
    const finishedFreePass=siteOnly&&status==='needs_review'&&diagnostics.at(-1)?.code==='free_discovery_finished';
-   let updated;
-   try{updated=await scopedWrite(args=>stmt(env,`UPDATE buyer_research_jobs SET input_json=json_set(input_json,'$.freeDiscovery',json(?),'$.peopleFirst',json(?),'$.dossierPassFinished',?,'$.executionContinuationVersion',?,'$.contactSchedulingVersion',?,'$.apolloIdentityVersion',?,'$.apolloIdentityReceipts',json(?),'$.paidResearch',json(?)),status=CASE WHEN ? AND (json_extract(input_json,'$.fullResearch')=1 OR (? AND json_extract(input_json,'$.publicContactChecks')=1)) THEN 'queued' ELSE ? END,phase=?,phase_ms=?,phase_runs=?,result_json=?,diagnostic_json=?,last_error='',lease_token=NULL,lease_until=0,next_at=?,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND lease_token=? AND lease_until>? AND status='running' AND ${authoritySql} AND COALESCE((SELECT version FROM customer_workspace_state WHERE workspace_id=buyer_research_jobs.workspace_id),0)=?${paidContinuation?' AND EXISTS(SELECT 1 FROM crm_intelligence WHERE workspace_id=? AND company_id=? AND research_snapshot_json=? AND evidence_json=?)':''}`,JSON.stringify(Boolean(input.freeDiscovery)),JSON.stringify(input.peopleFirst??null),input.dossierPassFinished?1:0,deferSemanticStamp?Number(input.executionContinuationVersion||0):4,scheduledContactWork?1:Number(input.contactSchedulingVersion||0),apolloIdentityChecked?1:0,JSON.stringify(input.apolloIdentityReceipts),JSON.stringify(input.paidResearch||null),Number(finishedFreePass),Number(!freeContactChecks),status,phase,phaseMs,phaseRuns,JSON.stringify(candidate),JSON.stringify(diagnostics.slice(-20)),clock()+(fastEvidence?.active&&input.fullResearch?15000:0),...args,...(paidContinuation?[row.workspace_id,input.paidResearch.companyId,paidContinuation.row.research_snapshot_json,paidContinuation.row.evidence_json]:[])),true);}
+   let updated,checkpointBytes=0;
+   const saveCheckpoint=encoded=>scopedWrite(args=>stmt(env,`UPDATE buyer_research_jobs SET input_json=json_set(input_json,'$.freeDiscovery',json(?),'$.peopleFirst',json(?),'$.dossierPassFinished',?,'$.executionContinuationVersion',?,'$.contactSchedulingVersion',?,'$.apolloIdentityVersion',?,'$.apolloIdentityReceipts',json(?),'$.paidResearch',json(?)),status=CASE WHEN ? AND (json_extract(input_json,'$.fullResearch')=1 OR (? AND json_extract(input_json,'$.publicContactChecks')=1)) THEN 'queued' ELSE ? END,phase=?,phase_ms=?,phase_runs=?,result_json=?,diagnostic_json=?,last_error='',lease_token=NULL,lease_until=0,next_at=?,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND lease_token=? AND lease_until>? AND status='running' AND ${authoritySql} AND COALESCE((SELECT version FROM customer_workspace_state WHERE workspace_id=buyer_research_jobs.workspace_id),0)=?${paidContinuation?' AND EXISTS(SELECT 1 FROM crm_intelligence WHERE workspace_id=? AND company_id=? AND research_snapshot_json=? AND evidence_json=?)':''}`,JSON.stringify(Boolean(input.freeDiscovery)),JSON.stringify(input.peopleFirst??null),input.dossierPassFinished?1:0,deferSemanticStamp?Number(input.executionContinuationVersion||0):4,scheduledContactWork?1:Number(input.contactSchedulingVersion||0),apolloIdentityChecked?1:0,JSON.stringify(input.apolloIdentityReceipts),JSON.stringify(input.paidResearch||null),Number(finishedFreePass),Number(!freeContactChecks),status,phase,phaseMs,phaseRuns,encoded,JSON.stringify(diagnostics.slice(-20)),clock()+(fastEvidence?.active&&input.fullResearch?15000:0),...args,...(paidContinuation?[row.workspace_id,input.paidResearch.companyId,paidContinuation.row.research_snapshot_json,paidContinuation.row.evidence_json]:[])),true);
+   try{
+    const raw=JSON.stringify(candidate);
+    const encoded=row.result_json.startsWith('{"format":"buyer-checkpoint-v1"')?compactBuyerCheckpoint(raw):raw;
+    checkpointBytes=new TextEncoder().encode(encoded).length;
+    try{updated=await saveCheckpoint(encoded);}
+    catch(error){
+     if(!storageFailure(error)||encoded!==raw)throw error;
+     const compact=compactBuyerCheckpoint(raw);
+     if(compact===raw)throw error;
+     checkpointBytes=new TextEncoder().encode(compact).length;
+     updated=await saveCheckpoint(compact);
+    }
+   }
    catch(error){
     updated={meta:{changes:0}};
-    if(storageFailure(error)){status='needs_review';updated=await stmt(env,`UPDATE buyer_research_jobs SET status='needs_review',last_error='Workspace storage is full. Completed evidence is preserved; free space and resume.',lease_token=NULL,lease_until=0,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND lease_token=? AND status='running'`,row.id,lease).run();}
+    if(storageFailure(error)){status='needs_review';updated=await stmt(env,`UPDATE buyer_research_jobs SET status='needs_review',last_error=?,lease_token=NULL,lease_until=0,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND lease_token=? AND status='running'`,'workspace_records_full:'+checkpointBytes,row.id,lease).run();}
     else if(['CANCELED','CONTEXT_CHANGED'].includes(error.code))status='canceled';
    }
    // Revocation cannot authorize a result write; only settle the stale job metadata.

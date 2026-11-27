@@ -1,10 +1,11 @@
+import {readBuyerCheckpoint} from './buyer-checkpoint.js';
 import '../../customer/discovery-engine.js';
 const D=globalThis.LeadIntelDiscovery;
 const parse=value=>{try{return JSON.parse(value);}catch{return {};}};
 // Only server-owned, same-context and same-identity receipts can save work.
 export function prepareBuyerRecheck(input,history=[]){
  if(input.scope!=='selected_buyers')return;
- const entries=history.filter(row=>parse(row.input_json).workspaceContext===input.workspaceContext).map(row=>({input:parse(row.input_json),candidate:parse(row.result_json)})),previous=entries.map(row=>row.candidate);
+ const entries=history.filter(row=>parse(row.input_json).workspaceContext===input.workspaceContext).map(row=>({input:parse(row.input_json),candidate:readBuyerCheckpoint(row.result_json)})),previous=entries.map(row=>row.candidate);
  const plans={};
  for(const person of input.candidate.people){
   const identity=D.buyerResearchIdentityKey(input.candidate,person),matches=previous.flatMap(candidate=>(candidate.people||[]).filter(p=>String(p.id)===String(person.id)&&D.buyerResearchIdentityKey(candidate,p)===identity));

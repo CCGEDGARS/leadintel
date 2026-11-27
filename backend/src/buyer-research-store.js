@@ -1,3 +1,4 @@
+import {readBuyerCheckpoint,compactBuyerCheckpoint,buyerRecordLimit,buyerRecordLimitMessage} from './buyer-checkpoint.js';
 import {recoverOfficialBuyers} from './fast-research-evidence.js';
 import {applySavedEmails} from './firecrawl-buyer-email.js';
 import {allowFullResearch,meteredBuyerResearchAllowed} from './research-strategy.js';
@@ -79,10 +80,10 @@ export async function recoverInterruptedContactJob(env,{jobId}={}){
  const rows=await stmt(env,`SELECT * FROM buyer_research_jobs WHERE status IN ('needs_review','complete') AND phase='done' AND COALESCE(json_extract(diagnostic_json,'$[#-1].code'),'') NOT IN ('run_window','credit_limit') AND COALESCE(json_extract(input_json,'$.recheck.version'),0)=0 AND updated_at>datetime('now','-30 days') AND ((COALESCE(json_extract(input_json,'$.contactSourceScope'),'')<>? AND json_extract(result_json,'$.buyerDiscovery.officialContactInventory.research.status') IN ('partial','error') AND COALESCE(json_extract(result_json,'$.buyerDiscovery.officialContactInventory.research.discoveryScope'),'')<>?) OR (json_extract(result_json,'$.publicResearch.accountability.stopReason')='time_budget' AND COALESCE(json_extract(input_json,'$.contactContinuationVersion'),0)<1) OR (COALESCE(json_extract(input_json,'$.contactSchedulingVersion'),0)<1 AND COALESCE(json_extract(input_json,'$.contactSchedulingRecoveryVersion'),0)<1 AND json_extract(result_json,'$.publicResearch.accountability.status')='partial' AND json_extract(result_json,'$.publicResearch.accountability.stopReason')='time_budget') OR (COALESCE(json_extract(input_json,'$.executionContinuationVersion'),0)<4 AND (json_extract(result_json,'$.publicResearch.buyerAgent.status')='needs_review' OR json_extract(result_json,'$.publicResearch.aiReview.status')='complete' OR EXISTS(SELECT 1 FROM buyer_research_tasks t WHERE t.job_id=buyer_research_jobs.id AND t.status='running')))) AND NOT EXISTS(SELECT 1 FROM buyer_research_jobs newer WHERE newer.workspace_id=buyer_research_jobs.workspace_id AND newer.domain=buyer_research_jobs.domain AND newer.rowid>buyer_research_jobs.rowid) AND ${authoritySql} ${jobId?'AND id=?':''} ORDER BY updated_at LIMIT 3`,D.OFFICIAL_CONTACT_RESEARCH_POLICY.scopeVersion,D.OFFICIAL_CONTACT_RESEARCH_POLICY.scopeVersion,...(jobId?[jobId]:[])).all();
  for(const row of rows.results||[]){
   const input=parse(row.input_json),context=await workspaceBuyerContext(env,row.workspace_id,input.taskId),matches=input.workspaceContext===context.hash,diagnostics=parse(row.diagnostic_json,[]),executionRepair=Number(input.contactContinuationVersion||0)>=1;
-  const candidate=parse(row.result_json,input.candidate),{contactOptions}=await loadBuyerContactContext(env,{workspaceId:row.workspace_id},candidate),phase=resumePhase(candidate,input,contactOptions);
+  const candidate=readBuyerCheckpoint(row.result_json,input.candidate),{contactOptions}=await loadBuyerContactContext(env,{workspaceId:row.workspace_id},candidate),phase=resumePhase(candidate,input,contactOptions);
   let paidScope=null,continuationScopeHash='';
   if(matches&&input.paidResearch?.companyId){
-   const value=await stmt(env,'SELECT research_snapshot_json,evidence_json FROM crm_intelligence WHERE workspace_id=? AND company_id=?',row.workspace_id,input.paidResearch.companyId).first(),snapshot=parse(value?.research_snapshot_json),candidate=parse(row.result_json,input.candidate);
+   const value=await stmt(env,'SELECT research_snapshot_json,evidence_json FROM crm_intelligence WHERE workspace_id=? AND company_id=?',row.workspace_id,input.paidResearch.companyId).first(),snapshot=parse(value?.research_snapshot_json),candidate=readBuyerCheckpoint(row.result_json,input.candidate);
    const detail={intelligence:{research_snapshot:snapshot,evidence:parse(value?.evidence_json,[])}};
    if(snapshot.buyerResearch?.jobId===row.id&&paidBuyerScope(paidSnapshotCandidate(candidate,detail))===paidBuyerScope(candidate)){paidScope=value;continuationScopeHash=await paidContinuationScopeHash(value);}
   }
@@ -107,7 +108,7 @@ async function retainedJobCandidate(env,row,input,current){
  const history=await stmt(env,"SELECT input_json,result_json FROM buyer_research_jobs WHERE workspace_id=? AND domain=? AND rowid<(SELECT rowid FROM buyer_research_jobs WHERE id=?) AND updated_at>datetime('now','-30 days') ORDER BY rowid DESC LIMIT 3",row.workspace_id,row.domain,row.id).all();
  let candidate=current;
  for(const old of history.results||[]){const prior=parse(old.input_json);if(!input.workspaceContext||prior.workspaceContext!==input.workspaceContext)continue;
-  candidate=D.mergeRetainedBuyerResearch(parse(old.result_json,{}),candidate);
+  candidate=D.mergeRetainedBuyerResearch(readBuyerCheckpoint(old.result_json,{}),candidate);
  }
  return candidate;
 }
@@ -124,11 +125,11 @@ export async function savedBuyerRoster(env,row){
  AND json_array_length(result_json,'$.people')>0 ORDER BY rowid DESC LIMIT 12`,row.workspace_id,row.domain,input.workspaceContext,JSON.stringify(input.roles||[])).all();
  let pool=[];
  for(const old of (history.results||[]).slice().reverse()){
-  const candidate=D.reconcileBuyerEvidence(parse(old.result_json,{}),{trustedAgentSources:true});
+  const candidate=D.reconcileBuyerEvidence(readBuyerCheckpoint(old.result_json,{}),{trustedAgentSources:true});
   if(D.canonicalDomain(candidate.domain)!==row.domain)continue;
   pool=D.mergeBuyerPool(pool,candidate.people||[],input.profile);
  }
- const latest=parse(row.result_json,{});
+ const latest=readBuyerCheckpoint(row.result_json,{});
  return D.retainBuyerIdentities(pool,input.profile||{},latest).slice(0,10);
 }
 export async function savedBuyerResearchReceipts(env,row){
@@ -136,8 +137,8 @@ export async function savedBuyerResearchReceipts(env,row){
  const input=parse(row.input_json);if(!input.workspaceContext)return [];
  // Read the latest receipt per research identity, rather than the last few
  // jobs: repeated one-person rechecks must not hide another person's results.
- const history=await stmt(env,`SELECT person_json FROM (
- SELECT p.value person_json,ROW_NUMBER() OVER (
+ const history=await stmt(env,`SELECT person_json,compact_job,revision FROM (
+ SELECT j.revision,p.value person_json,CASE WHEN json_extract(j.result_json,'$.format')='buyer-checkpoint-v1' THEN j.id END compact_job,ROW_NUMBER() OVER (
  PARTITION BY json_extract(p.value,'$.contactResearch.identityKey') ORDER BY j.rowid DESC) rank
  FROM buyer_research_jobs j,json_each(j.result_json,'$.people') p
  WHERE j.workspace_id=? AND j.domain=? AND j.updated_at>datetime('now','-30 days')
@@ -145,13 +146,22 @@ export async function savedBuyerResearchReceipts(env,row){
  AND json_extract(p.value,'$.contactResearch.policyVersion')=?
  AND json_extract(p.value,'$.contactResearch.identityKey') IS NOT NULL
  ) WHERE rank=1 LIMIT 40`,row.workspace_id,row.domain,input.workspaceContext,D.BUYER_CONTACT_RESEARCH_POLICY.version).all();
- return (history.results||[]).map(r=>{
-  const p=parse(r.person_json),safe=D.mergeBuyerPool([],[p])[0];if(!safe)return null;
+ const receipts=history.results||[],compactJobs=new Set(receipts.map(row=>row.compact_job).filter(Boolean));
+ for(const id of compactJobs){
+  const saved=await stmt(env,'SELECT result_json,revision FROM buyer_research_jobs WHERE workspace_id=? AND id=?',row.workspace_id,id).first();
+  const roster=saved?readBuyerCheckpoint(saved.result_json).people:[];
+  for(const entry of receipts.filter(item=>item.compact_job===id)){
+   const expected=parse(entry.person_json);
+   entry.person=saved?.revision===entry.revision&&roster.find(person=>person.id===expected.id&&person.contactResearch?.identityKey===expected.contactResearch?.identityKey);
+  }
+ }
+ return receipts.map(r=>{
+  const p=r.compact_job?r.person:parse(r.person_json),safe=p&&D.mergeBuyerPool([],[p])[0];if(!safe)return null;
   return Object.fromEntries(['id','name','publicName','title','organization','publicLinkedinUrl','linkedin_url','contactResearch','emailResearch','gmailMatches','gmailCandidates'].filter(k=>safe[k]!==undefined).map(k=>[k,safe[k]]));
  }).filter(Boolean);
 }
 export async function publicBuyerJob(env,row,{recoverRetained=false}={}){
- if(!row)return null;const input=parse(row.input_json);let candidate=parse(row.result_json,input.candidate||{});
+ if(!row)return null;const input=parse(row.input_json);let candidate=readBuyerCheckpoint(row.result_json,input.candidate||{});
  if(recoverRetained)candidate=await retainedJobCandidate(env,row,input,candidate);
  await recoverOfficialBuyers(env,row,input,candidate);
  candidate=D.reconcileBuyerEvidence(candidate,{trustedAgentSources:true});
@@ -200,7 +210,7 @@ export async function publicBuyerJob(env,row,{recoverRetained=false}={}){
  const finishedFree=input.freeDiscovery&&!input.fullResearch&&row.status==='needs_review'&&diagnostics.at(-1)?.code==='free_discovery_finished';
  const freeOnly=finishedFree&&!await meteredBuyerResearchAllowed(env,row.workspace_id);
  const labels={official:'Reading official company sources',dossier:'Researching the company',identities:'Finding decision-makers',contacts:'Checking contact evidence',review:'Reviewing buyer evidence',paid:'Researching approved paid channels',done:'Research saved'};
- return {id:row.id,domain:row.domain,retainedEvidenceRecovered:recoverRetained,contextKey:row.context_key,crm,input:{...(freeOnly?{freeOnly:true}:{}),freeDiscovery:Boolean(input.freeDiscovery&&!input.fullResearch),publicContactChecks:input.publicContactChecks===true,fullResearch:Boolean(input.fullResearch||input.meteredPublicResearchApproved),peopleFirst:Boolean(input.peopleFirst),paidResearch:Boolean(input.paidResearch),company:input.candidate?.company,domain:row.domain,profile:input.profile,roles:input.roles,personIds:input.scope==='selected_buyers'?input.personIds:[],scope:input.scope},status:row.status,phase:row.phase,resumePhase:resumePhase(candidate,input,contactOptions),revision:row.revision,createdAt,updatedAt,candidate,quality,diagnostics:[...diagnostics,...(row.last_error?[{phase:row.phase,reason:row.last_error}]:[])],progress:{timing,stages,credits,windowPaused:Boolean(paused),executionStatus:row.status,completed:Number(completed),total,inProgress:row.status==='running'?Number((totals.results||[]).find(r=>r.status==='running')?.n)||0:0,lastActivityAt,label:input.freeDiscovery&&diagnostics.at(-1)?.code==='free_discovery_finished'?diagnostics.at(-1).reason:paused?paused.reason:activity|| (row.status==='needs_review'?'Research saved · '+(quality.gaps[0]||'review remaining gaps'):input.recheck&&row.phase==='contacts'?Object.values(input.recheck.plans).some(plan=>plan.queries.length)?'Checking missing contact details · alternative public sources':'Rechecking saved sources · no untried alternative queries':labels[row.phase]||row.phase.replaceAll('_',' '))}};
+ return {id:row.id,domain:row.domain,retainedEvidenceRecovered:recoverRetained,contextKey:row.context_key,crm,input:{...(freeOnly?{freeOnly:true}:{}),freeDiscovery:Boolean(input.freeDiscovery&&!input.fullResearch),publicContactChecks:input.publicContactChecks===true,fullResearch:Boolean(input.fullResearch||input.meteredPublicResearchApproved),peopleFirst:Boolean(input.peopleFirst),paidResearch:Boolean(input.paidResearch),company:input.candidate?.company,domain:row.domain,profile:input.profile,roles:input.roles,personIds:input.scope==='selected_buyers'?input.personIds:[],scope:input.scope},status:row.status,phase:row.phase,resumePhase:resumePhase(candidate,input,contactOptions),revision:row.revision,createdAt,updatedAt,candidate,quality,diagnostics:[...diagnostics,...(row.last_error?[{phase:row.phase,...(buyerRecordLimit(row.last_error)?{code:'workspace_records_full',reason:buyerRecordLimitMessage}:{reason:row.last_error})}]:[])],progress:{timing,stages,credits,windowPaused:Boolean(paused),executionStatus:row.status,completed:Number(completed),total,inProgress:row.status==='running'?Number((totals.results||[]).find(r=>r.status==='running')?.n)||0:0,lastActivityAt,label:buyerRecordLimit(row.last_error)?buyerRecordLimitMessage:input.freeDiscovery&&diagnostics.at(-1)?.code==='free_discovery_finished'?diagnostics.at(-1).reason:paused?paused.reason:activity|| (row.status==='needs_review'?'Research saved · '+(quality.gaps[0]||'review remaining gaps'):input.recheck&&row.phase==='contacts'?Object.values(input.recheck.plans).some(plan=>plan.queries.length)?'Checking missing contact details · alternative public sources':'Rechecking saved sources · no untried alternative queries':labels[row.phase]||row.phase.replaceAll('_',' '))}};
 }
 // A second Full click reopens its run, including a partial or budget-paused result.
 // Only a separate resume command authorizes another execution window.
@@ -225,7 +235,7 @@ async function reuseFullResearch(env,workspaceId,user,current,input){
   if(saved.meta.changes)return readBuyerJob(env,workspaceId,{id:current.id});
   throw Object.assign(Error('Research or your access changed. Reopen the saved run.'),{status:409});
  }
- const candidate=parse(current.result_json),{contactOptions}=await loadBuyerContactContext(env,{workspaceId},candidate);
+ const candidate=readBuyerCheckpoint(current.result_json),{contactOptions}=await loadBuyerContactContext(env,{workspaceId},candidate);
  const missing=resumePhase(candidate,{...previous,freeDiscovery:false},contactOptions);
  const phase=['contacts','dossier'].includes(missing)?'identities':missing;
  if(phase==='done')return current;
@@ -323,13 +333,13 @@ export async function startBuyerJob(env,workspaceId,user,body,trusted=null){
  if((body.resumeIncomplete===true||input.fullResearch)&&input.scope==='all_buyers'){
   const prior=await stmt(env,`SELECT result_json FROM buyer_research_jobs WHERE workspace_id=? AND domain=? AND updated_at>datetime('now','-30 days') AND json_extract(input_json,'$.workspaceContext')=? AND COALESCE(json_extract(input_json,'$.scope'),'all_buyers')!='selected_buyers' AND COALESCE(json_extract(input_json,'$.roles'),'[]')=? ORDER BY rowid DESC LIMIT 1`,workspaceId,input.candidate.domain,stored.hash,JSON.stringify(input.roles||[])).first();
   if(prior){
-   input.candidate=D.reconcileBuyerEvidence(D.mergeRetainedBuyerResearch(parse(prior.result_json,{}),input.candidate,{retainPeople:!input.candidate.people.length}),{trustedAgentSources:true});
+   input.candidate=D.reconcileBuyerEvidence(D.mergeRetainedBuyerResearch(readBuyerCheckpoint(prior.result_json,{}),input.candidate,{retainPeople:!input.candidate.people.length}),{trustedAgentSources:true});
    const {contactOptions}=await loadBuyerContactContext(env,{workspaceId},input.candidate);initialPhase=input.freeDiscovery?'official':resumePhase(input.candidate,input,contactOptions);
   }
  }
 
  if(current&&input.paidResearch&&parse(current.input_json).workspaceContext===stored.hash){
-  const prior=parse(current.result_json,{}),priorInput=parse(current.input_json),identity=p=>JSON.stringify([p.id,p.publicName||p.name,p.title,p.organization]);
+  const prior=readBuyerCheckpoint(current.result_json,{}),priorInput=parse(current.input_json),identity=p=>JSON.stringify([p.id,p.publicName||p.name,p.title,p.organization]);
   const {contactOptions}=await loadBuyerContactContext(env,{workspaceId},prior);
   if(JSON.stringify(priorInput.profile)===JSON.stringify(input.profile)&&JSON.stringify((prior.people||[]).map(identity).sort())===JSON.stringify(input.candidate.people.map(identity).sort())&&D.buyerResearchCoveragePassed(prior,{contactOptions})&&D.safeBuyerAiReview(prior.publicResearch?.aiReview)?.inputSignature===D.buyerReviewSignature(prior)){
    input.candidate=prior;delete input.candidate.publicResearch.paidResearch;initialPhase='paid';
@@ -378,10 +388,30 @@ export async function commandBuyerJob(env,workspaceId,user,body){
    input.freeDiscovery=false;
    input.meteredPublicResearchApproved=true;input.fullResearch=true;input.emailWaterfallVersion=1;
   }
-  const candidate=parse(row.result_json,input.candidate),{contactOptions}=await loadBuyerContactContext(env,{workspaceId},candidate),diagnostics=parse(row.diagnostic_json,[]),paused=currentWindowPause(row,input,diagnostics),phase=expanding?'identities':input.freeDiscovery?(row.phase==='identities'?'identities':'official'):paused&&row.phase!=='done'?row.phase:resumePhase(candidate,input,contactOptions);
+  const storagePaused=buyerRecordLimit(row.last_error)||parse(row.diagnostic_json,[]).at(-1)?.code==='workspace_records_full';
+  if(storagePaused){
+   // Only an authorized Resume reclaims space. A CAS protects each immutable
+   // observation of a saved result, including a concurrently resumed job.
+   const saved=await stmt(env,`SELECT id,revision FROM buyer_research_jobs WHERE workspace_id=? AND status IN ('complete','needs_review','canceled','failed') AND length(result_json)>=65536 AND json_extract(result_json,'$.format') IS NULL ORDER BY length(result_json) DESC LIMIT 12`,workspaceId).all();
+   for(const item of saved.results){
+    const previous=await stmt(env,'SELECT result_json FROM buyer_research_jobs WHERE workspace_id=? AND id=? AND revision=?',workspaceId,item.id,item.revision).first();
+    if(!previous)continue;
+    const compact=compactBuyerCheckpoint(previous.result_json);
+    if(compact!==previous.result_json)await stmt(env,`UPDATE buyer_research_jobs SET result_json=? WHERE workspace_id=? AND id=? AND revision=? AND status IN ('complete','needs_review','canceled','failed') AND ${callerSql}`,compact,workspaceId,item.id,item.revision,...callerArgs(workspaceId,user)).run();
+   }
+   const requiredBytes=Number(/^workspace_records_full:(\d+)$/.exec(row.last_error)?.[1]);
+   if(requiredBytes>0){
+    const space=await stmt(env,`SELECT (CASE WHEN a.plan_key='plus' AND a.paid_until>unixepoch() THEN a.plus_records_limit ELSE a.included_records_limit END)-a.records_bytes+length(CAST(j.result_json AS BLOB)) AS available FROM workspace_storage_accounts a JOIN buyer_research_jobs j ON j.workspace_id=a.workspace_id WHERE j.id=? AND a.workspace_id=?`,row.id,workspaceId).first();
+    if(space&&space.available<requiredBytes){
+     const missing=Math.ceil((requiredBytes-space.available)/1000);
+     throw Object.assign(Error('Buyer research needs at least '+missing+' KB more CRM & workspace data space. The saved job is paused. No research provider was contacted.'),{status:507});
+    }
+   }
+  }
+  const candidate=readBuyerCheckpoint(row.result_json,input.candidate),{contactOptions}=await loadBuyerContactContext(env,{workspaceId},candidate),diagnostics=parse(row.diagnostic_json,[]),paused=currentWindowPause(row,input,diagnostics),phase=expanding?'identities':storagePaused&&row.phase!=='done'?row.phase:input.freeDiscovery?(row.phase==='identities'?'identities':'official'):paused&&row.phase!=='done'?row.phase:resumePhase(candidate,input,contactOptions);
   if(phase==='done')return row;
   const startedAt=new Date().toISOString();
-  if(paused)diagnostics.push({phase,code:'resumed',reason:'Resumed unfinished research',at:startedAt});
+  if(paused||storagePaused)diagnostics.push({phase,code:'resumed',reason:'Resumed unfinished research',at:startedAt});
   const updated=await stmt(env,`UPDATE buyer_research_jobs SET phase=?,diagnostic_json=?,input_json=?,last_error='',status='queued',requested_by=?,session_hash=?,lease_token=NULL,lease_until=0,next_at=0,phase_ms=0,phase_runs=0,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND revision=? AND ${callerSql}`,phase,JSON.stringify(diagnostics.slice(-20)),JSON.stringify({...input,executionWindowStartedAt:startedAt}),user.id,user.sessionTokenHash,row.id,row.revision,...callerArgs(workspaceId,user)).run();
   if(!updated.meta.changes)throw Object.assign(Error('Buyer research changed; reload its saved progress'),{status:409});
   await stmt(env,`UPDATE buyer_research_tasks SET attempts=0,status='failed' WHERE job_id=? AND status<>'complete' AND (status<>'running' OR ?=0) AND EXISTS(SELECT 1 FROM buyer_research_jobs WHERE id=? AND status='queued' AND revision=? AND requested_by=? AND session_hash=?) AND ${callerSql}`,row.id,input.fullResearch?1:0,row.id,row.revision+1,user.id,user.sessionTokenHash,...callerArgs(workspaceId,user)).run();
