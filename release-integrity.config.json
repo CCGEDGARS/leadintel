@@ -2348,7 +2348,8 @@
       "url": "/customer/workspace-storage-ui.js",
       "status": 200,
       "contains": [
-        "One allowance for this workspace",
+        "CRM records and research use the data allowance.",
+        "Uploaded files use the separate file allowance.",
         "100 MB",
         "1 GB",
         "500000000",

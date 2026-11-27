@@ -57,6 +57,10 @@ test('reopening a running official-source job shows saved names without completi
   assert.match(await page.locator('.company-dossier').textContent(),/Company research pending/);
   assert.doesNotMatch(await page.locator('.selected-prospect-row').textContent(),/Refresh to assess the saved contacts/);
  }
+ f.DB.raw.prepare("UPDATE buyer_research_jobs SET status='needs_review',last_error='Workspace storage is full. Completed evidence is preserved; free space and resume.',revision=revision+1 WHERE id=?").run(job.id);
+ await page.reload();await ready(page);await page.evaluate(()=>showDiscoveryStep('buyers'));
+ await page.getByText('Buyer research paused · CRM & workspace data limit',{exact:true}).waitFor();
+ assert.match(await page.locator('.buyer-research-progress').innerText(),/Resume to compact saved research/);
  assert.equal(f.DB.raw.prepare('SELECT count(*) n FROM buyer_research_jobs').get().n,1);
  assert.equal(f.DB.raw.prepare('SELECT count(*) n FROM buyer_research_tasks').get().n,42);
  assert.equal(f.DB.raw.prepare('SELECT count(*) n FROM crm_enrichment_requests').get().n,0);
