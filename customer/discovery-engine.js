@@ -1558,6 +1558,9 @@
   function isNonPersonBuyerHeading(value){
     // A contact-page label can appear in the same heading level as staff names.
     if(/^(?:kontakt(?:a)?|contact(?:s)?|contactez)(?=$|[\s:|–—-])/iu.test(clean(value)))return true;
+    // A product or department heading ("SORTING SYSTEM", "Conveyor Solutions") sits where staff names do; these words
+    // are not personal names.
+    if(/(?:^|\s)(?:systems?|sorting|solutions?|services?|products?|technolog(?:y|ies)|engineering|industries|department|equipment|automation|conveyors?|machinery)(?=\s|$)/iu.test(clean(value)))return true;
     if(/^(?:investor relations(?: contacts?)?|corporate governance|capital markets day|about us|for suppliers|head office)$/i.test(clean(value)))return true;if(/^(?:chief of [\p{L} &,-]+|(?:executive|group) management team|board of directors|verkställande direktör|chief (?:executive|operating|financial|technology|technical|information|commercial|marketing|people|strategy|human resources)(?: [\p{L}&,-]+)? officer|(?:head|director) of [\p{L} &,-]+|(?:senior |executive )?vice president|(?:managing|executive|procurement|operations|engineering|technical|financial|production|project|sales|marketing|human resources) (?:director|manager)|board member)$/iu.test(clean(value)))return true;return /^(?:(?:cookie|privacy|consent|preference) (?:consent|policy|notice|settings|preferences|manager|center|centre)|(?:district|regional|territory|area|global|national|group|inside|outside) (?:sales|marketing|operations|support|service)(?: (?:team|department|office|manager|director))?)$/i.test(clean(value));}
   function hasFullBuyerName(value){
     const name=clean(value);if(/\*{2,}/.test(name)||/^Meet\s/i.test(name)||isNonPersonBuyerHeading(name)||/^(?:new on site|read more|latest news|contact us|investor relations|job (?:description|title|summary|details)|(?:key|main|your) responsibilities|(?:warehouse|production|retail|sales) associate|product owner)$/i.test(name))return false;
