@@ -89,6 +89,8 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
   let fastEvidence=null;
   const inflightTasks=new Map(),contactTasks=new Set();
   const readProjection=(value,requested)=>D.buyerSourceReadLocation(candidate,requested,value)?{...value,sourceRead:true}:{url:value.url,metadata:{sourceURL:value.metadata?.sourceURL,url:value.metadata?.url,statusCode:value.metadata?.statusCode},sourceRead:false};
+  // Full research keeps a metered dispatch whose outcome is unknown and never sends it again.
+  const retainsDispatch=value=>Boolean(input.fullResearch)&&!value.startsWith('Apollo people search')&&!value.startsWith('Free public index');
   const executeTaskBody=async(kind,value,operation,{phase:taskPhase=phase}={})=>{
    await guard();const key=await sha256(kind+'|'+value),prior=await stmt(env,'SELECT * FROM buyer_research_tasks WHERE job_id=? AND task_key=?',row.id,key).first();
    if(taskPhase==='contacts')contactTasks.add(key);
@@ -97,7 +99,7 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
    if(kind==='search'&&fastEvidence?.index.has(value))return fastEvidence.index.get(value);
    // A worker that lost its lease after a metered dispatch cannot establish
    // whether the provider billed it. Keep that receipt for review.
-   const potentiallyMetered=input.fullResearch&&!value.startsWith('Apollo people search')&&!value.startsWith('Free public index');
+   const potentiallyMetered=retainsDispatch(value);
    if(potentiallyMetered&&prior?.status==='running'){
     throw Object.assign(Error('A prior provider request has no confirmed outcome. Its dispatch was retained.'),{code:'UNCERTAIN_DISPATCH'});
    }
@@ -328,7 +330,8 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
     if(candidate.people?.length){
      scheduledContactWork=true;report=await D.runMandatoryBuyerResearch(candidate,{search,readPage:read,rows,guard,signal:controller.signal,contactOptions,rankedPriorities:input.fullResearch===true||freeContactChecks,recheckPlans:input.recheck?.plans,maxDurationMs:Math.min(remaining,input.recheck?Math.max(1,input.recheck.maxActiveMs-phaseMs):180000),observeTools:false,buyerAgentContext:D.buyerAgentContext(candidate,input.profile),accountability:report,crossCheck:freeContactChecks?undefined:async person=>task('independent',JSON.stringify([person.id,person.name,person.title,...(services.independent?[]:['grounded-low-v1'])]),async()=>{let result;try{result=await (services.independent?services.independent(person,controller.signal):searchWorkspaceBuyerContact(env,row.workspace_id,{company:candidate.company,domain:row.domain,person,signal:controller.signal}));}catch(error){observe({provider:'gemini',operation:'search',status:'failed',reason:'Independent research unavailable'});throw error;}if(result.status==='not_configured'||result.status==='unavailable'&&/not configured/i.test(result.reason||'')){observe({provider:'gemini',operation:'search',status:'skipped',reason:'Independent provider not configured'});return {...result,status:'not_configured'};}if(result.status!=='complete'||result.web_search===false){observe({provider:'gemini',operation:'search',status:'failed',reason:'Independent research unavailable'});throw Error('Independent research unavailable');}observe({provider:result.provider||'gemini',operation:'search',status:'succeeded',results:result.results?.length||0});return result;})});
      confirmNamed();
-     const retryable=report.status!=='complete'&&!changed&&report.stopReason!=='time_budget'?(await stmt(env,"SELECT task_key FROM buyer_research_tasks WHERE job_id=? AND phase='contacts' AND status<>'complete' AND (status='running' OR attempts<2)",row.id).all()).results.filter(task=>contactTasks.has(task.task_key)).length:0;
+     // A retained dispatch is not sent again, so it is not work this phase can still retry.
+     const retryable=report.status!=='complete'&&!changed&&report.stopReason!=='time_budget'?(await stmt(env,"SELECT task_key,status,request_value FROM buyer_research_tasks WHERE job_id=? AND phase='contacts' AND status<>'complete' AND (status='running' OR attempts<2)",row.id).all()).results.filter(task=>contactTasks.has(task.task_key)&&!(task.status==='running'&&retainsDispatch(task.request_value))).length:0;
      if(report.status==='complete'||!changed&&report.stopReason!=='time_budget'&&!retryable)phase=nextPhase[phase];
     }else{diagnostics.push({phase,reason:'No complete buyer identities were supported by the available sources',at:new Date().toISOString()});phase=nextPhase[phase];}
    }else if(phase==='review'){
