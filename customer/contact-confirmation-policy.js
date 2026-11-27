@@ -21,7 +21,7 @@
     // Owner policy, 16 November: a named published work address is usable.
     // This records a listing, never a mailbox/deliverability verification.
     if(contact.email_status==='public_listed')return contact.source==='public_listing'&&listedSource(email,contact.name,contact.public_email_url,companyDomain);
-    if(String(contact.email_status).toLowerCase()==='verified')return [contact.verification_provider,contact.source].some(value=>['apollo','hunter','treg'].includes(String(value||'').toLowerCase()));
+    if(String(contact.email_status).toLowerCase()==='verified')return (contact.verification_provider==='Firecrawl'&&contact.email_type==='work'&&Boolean(contact.external_person_id)&&Boolean(contact.verified_at))||[contact.verification_provider,contact.source].some(value=>['apollo','hunter','treg'].includes(String(value||'').toLowerCase()));
     const stamp=String(contact.verified_at||''),age=now-Date.parse(/^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d$/.test(stamp)?stamp.replace(' ','T')+'Z':stamp);
     return ['public_confirmed','provider_verified'].includes(confirmationLevel)&&contact.email_status==='public_confirmed'&&contact.verification_provider==='Public source'&&publicSource(email,contact.name,contact.public_email_url,companyDomain)&&age>=0&&age<30*86400000;
   }

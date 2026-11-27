@@ -1,3 +1,4 @@
+import {lookupFirecrawlEmails,saveLiveEmail,importEmailEvidence} from './firecrawl-buyer-email.js';
 import {startBuyerPhone,phoneIdentity} from './buyer-phone-lookup.js';
 import {findTregWorkEmail,mergeTregContactData,tregLookupAccounting} from './treg-contact-research.js';
 import {findHunterWorkEmail} from './hunter-contact-research.js';
@@ -18,7 +19,7 @@ const json=(value,status=200,cors={})=>new Response(JSON.stringify(value),{statu
 const fail=(message,status=409,code='ADDITIONAL_CONTACT_HOLD')=>Object.assign(new Error(message),{status,code});
 // Interrupted Treg phases may already be billed. Keep their reservation until
 // the same idempotent lookup settles; only proven pre-dispatch holds release it.
-const budgetAttempt="(status!='retryable' OR (provider='treg' AND COALESCE(json_extract(result_json,'$.provider_started'),1)!=0))";
+const budgetAttempt="(status!='retryable' OR (provider IN ('treg','firecrawl') AND COALESCE(json_extract(result_json,'$.provider_started'),1)!=0))";
 export async function readAdditionalContactPolicy(env,workspaceId){
   const row=await env.DB.prepare('SELECT * FROM additional_contact_policies WHERE workspace_id=?').bind(workspaceId).first();
   return {enabled:row?.enabled===1,phoneEnabled:row?.phone_enabled===1,dailyLimit:row?.daily_limit??3,monthlyLimit:row?.monthly_limit??30,maxPerCompany:row?.max_per_company??2,automaticBuyerLimit:P.automaticLimit(row?.automatic_buyer_limit),provider:row?.provider||'treg',updatedAt:row?.updated_at||null};
@@ -28,8 +29,9 @@ export async function saveAdditionalContactPolicy(env,context,input){
   if(input?.phoneEnabled!==undefined&&typeof input.phoneEnabled!=='boolean')throw fail('Choose a valid phone permission',400);
   if(typeof input?.enabled!=='boolean'||!Number.isInteger(input.dailyLimit)||input.dailyLimit<1||input.dailyLimit>50||!Number.isInteger(input.monthlyLimit)||input.monthlyLimit<input.dailyLimit||input.monthlyLimit>1000||(!Number.isInteger(input.maxPerCompany)||input.maxPerCompany<1||input.maxPerCompany>10))throw fail('Choose valid daily/monthly limits and one to ten buyers per company',400);
   if(input.automaticBuyerLimit!==undefined&&(!Number.isInteger(input.automaticBuyerLimit)||input.automaticBuyerLimit<1||input.automaticBuyerLimit>4))throw fail('Choose one to four automatic paid contacts',400);
-  const provider=input.provider||'apollo';if(!['apollo','treg'].includes(provider))throw fail('Unsupported paid research provider',400);
+  const provider=input.provider||'apollo';if(!['apollo','treg','firecrawl'].includes(provider))throw fail('Unsupported paid research provider',400);
   const previous=await readAdditionalContactPolicy(env,context.workspaceId),phoneEnabled=input.phoneEnabled??(previous.provider===provider&&previous.phoneEnabled);
+  if(provider==='firecrawl'&&(phoneEnabled||input.enabled&&!(await resolveWorkspaceServiceCredential(env,context.workspaceId,'firecrawl')).configured))throw fail('Connect Firecrawl for manual work email lookups.',409,'ADDITIONAL_CONTACT_PROVIDER_REQUIRED');
   if(provider==='treg'&&(input.enabled||phoneEnabled)&&!(await resolveWorkspaceServiceCredential(env,context.workspaceId,'treg')).configured)throw fail('Connect your Treg team token in Settings before activation.',409,'ADDITIONAL_CONTACT_PROVIDER_REQUIRED');
   await env.DB.prepare(`INSERT INTO additional_contact_policies(workspace_id,enabled,daily_limit,monthly_limit,max_per_company,approved_by,provider,phone_enabled,automatic_buyer_limit) VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(workspace_id) DO UPDATE SET enabled=excluded.enabled,daily_limit=excluded.daily_limit,monthly_limit=excluded.monthly_limit,max_per_company=excluded.max_per_company,approved_by=excluded.approved_by,provider=excluded.provider,phone_enabled=excluded.phone_enabled,automatic_buyer_limit=excluded.automatic_buyer_limit,updated_at=CURRENT_TIMESTAMP`).bind(context.workspaceId,Number(input.enabled),input.dailyLimit,input.monthlyLimit,input.maxPerCompany,context.userId,provider,Number(phoneEnabled),input.automaticBuyerLimit??previous.automaticBuyerLimit).run();
   return readAdditionalContactPolicy(env,context.workspaceId);
@@ -84,11 +86,13 @@ export async function lookupAdditionalEmail(env,context,companyId,input={},deps=
   checkCancelled();
   if(!['owner','researcher','sales'].includes(context.role))throw fail('Workspace role is not permitted',403);
   const providerName=input.provider||'apollo';
-  if(!['apollo','hunter','treg'].includes(providerName))throw fail('Unknown email provider',400);
+  if(providerName==='firecrawl'&&(input.approved!==true||input.automatic===true||input.max_credits!==10||input.phone_approved||input.data_lookup||input.email_lookup===false))throw fail('Approve up to 10 Firecrawl credits for this buyer’s work email.',403);
+  if(!['apollo','hunter','treg','firecrawl'].includes(providerName))throw fail('Unknown email provider',400);
   if(providerName==='hunter'&&(input.hunter_approved!==true||input.automatic===true))throw fail('Hunter requires its own manual approval for finding and verification',403,'ADDITIONAL_CONTACT_APPROVAL_REQUIRED');
   const dataLookup=input.data_lookup===true,includePhone=input.phone_approved===true,includeEmail=input.email_lookup!==false;
   if((dataLookup||includePhone)&&(providerName!=='treg'||includePhone&&!dataLookup||input.automatic!==true&&input.approved!==true))throw fail('Data research requires explicit approval',403,'ADDITIONAL_CONTACT_APPROVAL_REQUIRED');
   const policy=await readAdditionalContactPolicy(env,context.workspaceId);
+  if(providerName==='firecrawl'&&!policy.enabled)throw fail('Activate paid email lookups before approving Firecrawl.',403);
   if(providerName==='treg'&&!(input.phone_sequence===true&&policy.provider==='apollo')&&(policy.provider!=='treg'||includeEmail&&!policy.enabled||includePhone&&!policy.phoneEnabled||!includeEmail&&!includePhone))throw fail('The requested paid email or phone search is off. Activate it in Setup.',403,'ADDITIONAL_CONTACT_APPROVAL_REQUIRED');
   if(input.automatic===true?(providerName!=='treg'&&(!policy.enabled||policy.provider!==providerName)):input.approved!==true)throw fail('Paid contact research requires explicit approval',403,'ADDITIONAL_CONTACT_APPROVAL_REQUIRED');
   const detail=await (deps.getCompany||getCrmCompany)(env.DB,context,companyId),candidate=deps.researchScope?await deps.researchScope.candidate(detail):fromSnapshot(detail);
@@ -139,7 +143,7 @@ export async function lookupAdditionalEmail(env,context,companyId,input={},deps=
   }
   const provider=await env.DB.prepare('SELECT metadata_json FROM workspace_service_integrations WHERE workspace_id=? AND provider=?').bind(context.workspaceId,providerName).first();
   let capabilities={};try{capabilities=JSON.parse(provider?.metadata_json||'{}');}catch{}
-  if(providerName==='treg'?!(await (deps.credential||resolveWorkspaceServiceCredential)(env,context.workspaceId,'treg')).configured:providerName==='apollo'?(!env.APOLLO_API_KEY||capabilities.email_enrichment_enabled!==true):capabilities.additional_verification_enabled!==true)throw fail('Connect and enable the selected email provider in Settings',409,'ADDITIONAL_CONTACT_PROVIDER_REQUIRED');
+  if(['treg','firecrawl'].includes(providerName)?!(await (deps.credential||resolveWorkspaceServiceCredential)(env,context.workspaceId,providerName)).configured:providerName==='apollo'?(!env.APOLLO_API_KEY||capabilities.email_enrichment_enabled!==true):capabilities.additional_verification_enabled!==true)throw fail('Connect and enable the selected email provider in Settings',409,'ADDITIONAL_CONTACT_PROVIDER_REQUIRED');
   const month=new Date().toISOString().slice(0,7),args=[context.workspaceId,companyId,String(person.id),month,providerName];
   const identityInput=(company,buyer)=>JSON.stringify([company.company,company.domain,String(buyer.id),buyer.publicName||buyer.name,buyer.title,buyer.organization,D.normalizeLinkedInUrl(buyer.publicLinkedinUrl||buyer.linkedin_url)]);
   const originalIdentity=identityInput(candidate,person),lookupIdentity=await sha256(originalIdentity);
@@ -148,7 +152,7 @@ export async function lookupAdditionalEmail(env,context,companyId,input={},deps=
     const retained=JSON.parse(cached.result_json||'{}');
     const unspent=cached.status==='retryable'&&retained.provider_started===false;
     if(!unspent&&retained.lookup_identity!==lookupIdentity)throw fail('The saved lookup belongs to an earlier or unbound buyer identity. Review its retained receipt before further paid research.',409,'ADDITIONAL_CONTACT_IDENTITY_CHANGED');
-    if(cached.status==='retryable'&&(providerName==='treg'?JSON.parse(cached.result_json||'{}').provider_started===false:input.automatic!==true&&input.approved===true)){
+    if(cached.status==='retryable'&&(['treg','firecrawl'].includes(providerName)?unspent:input.automatic!==true&&input.approved===true)){
       await env.DB.prepare("DELETE FROM additional_contact_attempts WHERE workspace_id=? AND company_id=? AND person_id=? AND month=? AND provider=? AND status='retryable' AND (?!='treg' OR json_extract(result_json,'$.provider_started')=0)").bind(...args,providerName).run();
       cached=null;
     }
@@ -180,6 +184,7 @@ export async function lookupAdditionalEmail(env,context,companyId,input={},deps=
       const current=await readAdditionalContactPolicy(env,context.workspaceId);
       if(!current.enabled||current.provider!==providerName)throw fail('Paid contact research requires explicit approval',403,'ADDITIONAL_CONTACT_APPROVAL_REQUIRED');
     }
+    if(providerName==='firecrawl'&&!(await readAdditionalContactPolicy(env,context.workspaceId)).enabled)throw fail('Paid email lookup permission changed.',403);
     if(providerName==='hunter'){
       const row=await env.DB.prepare("SELECT metadata_json FROM workspace_service_integrations WHERE workspace_id=? AND provider='hunter'").bind(context.workspaceId).first();let metadata={};try{metadata=JSON.parse(row?.metadata_json||'{}');}catch{}
       if(metadata.additional_verification_enabled!==true)throw fail('Hunter verification permission changed. Review the saved attempt before retrying.',403,'ADDITIONAL_CONTACT_APPROVAL_REQUIRED');
@@ -196,6 +201,7 @@ export async function lookupAdditionalEmail(env,context,companyId,input={},deps=
     predicates.push("EXISTS(SELECT 1 FROM crm_companies WHERE id=? AND workspace_id=? AND normalized_domain=? AND company_name=? AND lifecycle_status NOT IN ('suppressed','archived'))");values.push(companyId,context.workspaceId,candidate.domain,candidate.company);
     if(!deps.researchScope){predicates.push("EXISTS(SELECT 1 FROM crm_intelligence i,json_each(i.research_snapshot_json,'$.buyerResearch.buyers') p WHERE i.company_id=? AND i.workspace_id=? AND (SELECT COUNT(*) FROM json_each(i.research_snapshot_json,'$.buyerResearch.buyers') p2 WHERE CAST(json_extract(p2.value,'$.id') AS TEXT)=?)=1 AND CAST(json_extract(p.value,'$.id') AS TEXT)=? AND COALESCE(NULLIF(json_extract(p.value,'$.publicName'),''),json_extract(p.value,'$.name'),'')=? AND COALESCE(json_extract(p.value,'$.title'),'')=? AND COALESCE(json_extract(p.value,'$.organization'),'')=? AND COALESCE(NULLIF(json_extract(p.value,'$.publicLinkedinUrl'),''),json_extract(p.value,'$.linkedin_url'),'')=?)");values.push(companyId,context.workspaceId,String(person.id),String(person.id),person.publicName||person.name||'',person.title||'',typeof person.organization==='object'?JSON.stringify(person.organization):person.organization||'',person.publicLinkedinUrl||person.linkedin_url||'');}
     if(providerName==='treg'||input.automatic===true){predicates.push('EXISTS(SELECT 1 FROM additional_contact_policies WHERE workspace_id=? AND provider=? AND (?=0 OR enabled=1) AND (?=0 OR phone_enabled=1))');values.push(context.workspaceId,providerName,Number(providerName!=='treg'||includeEmail),Number(providerName==='treg'&&includePhone));}
+    if(providerName==='firecrawl'){predicates.push('EXISTS(SELECT 1 FROM additional_contact_policies WHERE workspace_id=? AND enabled=1)');values.push(context.workspaceId);}
     if(providerName==='hunter'){predicates.push("EXISTS(SELECT 1 FROM workspace_service_integrations WHERE workspace_id=? AND provider='hunter' AND json_extract(metadata_json,'$.additional_verification_enabled')=1)");values.push(context.workspaceId);}
     return {sql:predicates.map(s=>'('+s+')').join(' AND '),args:values};
   }:undefined;
@@ -234,6 +240,16 @@ export async function lookupAdditionalEmail(env,context,companyId,input={},deps=
       const retained=await retainTregAttempt({result,status:result.contact&&C.accepted(result.contact,candidate.domain,confirmationLevel)?'verified':result.request?.status==='processing'?'processing':'not_found'});
       return {...result,...(retained.contact?{contact:retained.contact}:{}),...(retained.contactData?{contactData:retained.contactData}:{}),research:retained.research};
     }
+    if(providerName==='firecrawl'){
+      await guard();
+      const requestId=crypto.randomUUID();
+      const [found]=await (deps.lookupFirecrawl||lookupFirecrawlEmails)(env,context.workspaceId,candidate.domain,[person.publicName||person.name],{maxCredits:10,signal:deps.signal,guard:async()=>{await guard();await onDispatch();},requestId});
+      await guard();
+      const result=await saveLiveEmail(env,context,candidate,person,companyId,{...found,checkedAt:found.checkedAt||new Date().toISOString()});
+      const status=result.contact?'verified':found.status;
+      await env.DB.prepare('UPDATE additional_contact_attempts SET status=?,result_json=?,updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND company_id=? AND person_id=? AND month=? AND provider=?').bind(status,JSON.stringify({...result,lookup_identity:lookupIdentity,provider_started:providerStarted}),...args).run();
+      return result;
+    }
     if(providerName==='hunter'){
       await guard();
       const result=await (deps.findHunter||findHunterWorkEmail)(env,context,candidate,person,companyId,{guard,onDispatch});
@@ -270,6 +286,10 @@ export async function handleAdditionalContactRoute(request,env,cors={}){
     if(url.pathname.endsWith('/policy')){
       if(request.method==='GET')return json({policy:await readAdditionalContactPolicy(env,workspaceId),role:member.role},200,cors);
       if(request.method==='PUT')return json({policy:await saveAdditionalContactPolicy(env,context,await request.json())},200,cors);
+    }
+    if(url.pathname.endsWith('/email-evidence')&&request.method==='POST'){
+      const guard=await contactRequestGuard(request,env,context);
+      return json({records:await importEmailEvidence(env,{...context,guard,writeAuthority:guard.writeAuthority},await request.json())},200,cors);
     }
     if(url.pathname.endsWith('/email')&&request.method==='POST'){
       const guard=await contactRequestGuard(request,env,context);

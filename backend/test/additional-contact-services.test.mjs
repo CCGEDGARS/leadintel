@@ -452,3 +452,24 @@ test('automatic buyer selector defaults to one, validates 1–4 and survives unr
  for(const count of [0,5,1.5,'4',null])await assert.rejects(saveAdditionalContactPolicy(f.env,f.context,{...base,automaticBuyerLimit:count}),/one to four/);
  assert.equal((await readAdditionalContactPolicy(f.env,'w')).automaticBuyerLimit,4);assert.equal(f.calls.length,0);
 });
+
+test('Firecrawl requires per-buyer email approval, keeps a valid-only result and reuses the paid reservation',async()=>{
+ const f=fixture();
+ f.raw.exec(fs.readFileSync(new URL('../migrations/0088_buyer_email_evidence.sql',import.meta.url),'utf8'));
+ await saveAdditionalContactPolicy(f.env,f.context,{enabled:true,dailyLimit:3,monthlyLimit:30,maxPerCompany:2});
+ const input={person_id:'p0',provider:'firecrawl',approved:true,max_credits:10};
+ let dispatched=0;
+ const deps={...f.deps,credential:async()=>({configured:true}),lookupFirecrawl:async(_env,_workspace,domain,names,options)=>{
+  assert.deepEqual(names,[f.people[0].name]);assert.equal(domain,'example.com');assert.equal(options.maxCredits,10);
+  await options.guard();dispatched++;
+  return [{status:'found',finder:'enrow',qualification:'valid',mailbox:'unverified',email:'anna@example.com'}];
+ }};
+ for(const invalid of [{approved:false},{automatic:true},{max_credits:100},{phone_approved:true}]){
+  await assert.rejects(lookupAdditionalEmail(f.env,f.context,'c',{...input,...invalid},deps),/approve/i);
+ }
+ assert.equal(dispatched,0);
+ const result=await lookupAdditionalEmail(f.env,f.context,'c',input,deps);
+ assert.equal(result.emailEvidence.mailbox,'unverified');assert.equal(result.contact,undefined);
+ assert.equal((await lookupAdditionalEmail(f.env,f.context,'c',input,deps)).cached,true);
+ assert.equal(dispatched,1);
+});

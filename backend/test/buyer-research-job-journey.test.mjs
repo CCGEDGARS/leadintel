@@ -133,7 +133,7 @@ for(const state of ['queued','needs_review'])test('legacy contact phase stays fr
  }
  let metered=0;
  const unexpected=async()=>{metered++;throw Error('Unexpected metered call');};
- const {row}=await terminal(f,job,{read:s.services.read,registry:async()=>({status:'not_found'}),search:unexpected,review:unexpected,independent:unexpected,dossier:unexpected,paidLookup:unexpected});
+ const {row}=await terminal(f,job,{read:s.services.read,publicIndex:async()=>[],registry:async()=>({status:'not_found'}),search:unexpected,review:unexpected,independent:unexpected,dossier:unexpected,paidLookup:unexpected});
  assert.equal(metered,0);assert.equal(row.id,job.id);
  assert.equal(JSON.parse(row.diagnostic_json).at(-1).code,'free_discovery_finished');
  assert.equal(JSON.parse(row.result_json).people.length,4);

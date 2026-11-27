@@ -4616,7 +4616,7 @@
         "\u20ac0.30/contact",
         "\u20ac0.20 extra",
         "\u20ac0.50/contact",
-        "provider:'treg'"
+        "firecrawlOnly?'firecrawl':'treg'"
       ]
     },
     {
@@ -6370,6 +6370,13 @@
         "reviewEvidence",
         "function buyerReviewSignature("
       ]
+    },
+    {
+      "id": "buyers-email-waterfall",
+      "type": "text",
+      "url": "/customer/additional-contact-services.js",
+      "status": 200,
+      "contains": ["Use Firecrawl · up to 10 credits", "Apply saved email evidence"]
     },
     {
       "id": "buyers-paid-exact-authority",
