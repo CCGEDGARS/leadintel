@@ -13,7 +13,7 @@ export async function startBuyerPhone(env,context,companyId,person,apolloId,{gua
  await db.prepare('INSERT OR IGNORE INTO buyer_phone_aliases(workspace_id,company_id,person_id,identity_json,apollo_id) VALUES(?,?,?,?,?)').bind(context.workspaceId,companyId,String(person.id),identity,apolloId).run();
  const alias=await db.prepare('SELECT apollo_id FROM buyer_phone_aliases WHERE workspace_id=? AND company_id=? AND person_id=? AND identity_json=?').bind(context.workspaceId,companyId,String(person.id),identity).first();
  if(alias?.apollo_id!==apolloId)throw Error('Conflicting Apollo identities for this buyer');
- const saved=await db.prepare("SELECT * FROM crm_contacts WHERE workspace_id=? AND company_id=? AND external_person_id=? AND archived_at IS NULL AND phone_number IS NOT NULL AND lower(phone_status) IN ('verified','provider_listed')").bind(...ids).first();
+ const saved=await db.prepare("SELECT * FROM crm_contacts WHERE workspace_id=? AND company_id=? AND (external_person_id=? OR id IN (SELECT r.contact_id FROM buyer_phone_lookups f JOIN crm_enrichment_requests r ON r.id=f.request_id WHERE f.workspace_id=? AND f.company_id=? AND f.apollo_id=?)) AND archived_at IS NULL AND phone_number IS NOT NULL AND lower(phone_status) IN ('verified','provider_listed')").bind(...ids,...ids).first();
  if(saved&&String(saved.name).trim().toLowerCase()===String(person.publicName||person.name).trim().toLowerCase())return {contact:{...saved,phone_identity_aliases:[{id:String(person.id),identity}]},cached:true,request:{status:'already_confirmed',credits_used:0}};
  await db.prepare('INSERT OR IGNORE INTO buyer_phone_lookups(workspace_id,company_id,apollo_id,person_id,identity_json,website_job,user_id,session_hash,role) VALUES(?,?,?,?,?,?,?,?,?)').bind(...ids,String(person.id),phoneIdentity(person),websiteJob||null,context.userId,context.sessionHash,context.role).run();
  const row=await db.prepare('SELECT * FROM buyer_phone_lookups WHERE '+where).bind(...ids).first();
@@ -26,7 +26,9 @@ export async function startBuyerPhone(env,context,companyId,person,apolloId,{gua
  const bindRequest=id=>db.prepare('UPDATE buyer_phone_lookups SET request_id=? WHERE '+where+' AND request_id IS NULL').bind(id,...ids).run();
  const history=await db.prepare("SELECT id,status FROM crm_enrichment_requests WHERE workspace_id=? AND company_id=? AND person_provider_id=? AND provider='apollo' AND phone_requested=1 AND (status!='failed' OR credits_used>0) ORDER BY rowid DESC LIMIT 1").bind(...ids).first();
  if(history){await bindRequest(history.id);return {cached:true,request:{status:history.status==='not_found'?'processing':history.status,id:history.id}};}
- const req=new Request('https://leadintel.internal/enrich',{method:'POST',signal,body:JSON.stringify({person_id:apolloId,name:person.publicName||person.name,title:person.title,phone_lookup:true})});
+ const matches=(await db.prepare("SELECT id FROM crm_contacts WHERE workspace_id=? AND company_id=? AND archived_at IS NULL AND external_person_id IN (?,?) AND lower(trim(name))=lower(trim(?)) LIMIT 2").bind(context.workspaceId,companyId,String(person.id),apolloId,person.publicName||person.name).all()).results;
+ if(matches.length>1)throw Error('Multiple saved contacts match this buyer. Resolve the duplicate before a paid lookup.');
+ const req=new Request('https://leadintel.internal/enrich',{method:'POST',signal,body:JSON.stringify({person_id:apolloId,contact_id:matches[0]?.id,name:person.publicName||person.name,title:person.title,phone_lookup:true})});
  const response=await enrich(req,env,{},{context,guard},companyId),result=await response.json();
  if(!response.ok)throw Object.assign(Error(result.error),{status:response.status,code:result.code});
  if(result.request?.id)await bindRequest(result.request.id);
@@ -66,7 +68,7 @@ export async function runBuyerPhoneFallbacks(env,{lookup=lookupAdditionalEmail}=
    await guard();
    // Persist the source-attributed number on the same CRM contact used by Apollo.
    const number=result.contactData?.phone?.number;
-   if(number)await env.DB.prepare("UPDATE crm_contacts SET phone_number=?,phone_status='provider_listed' WHERE workspace_id=? AND company_id=? AND id=? AND external_person_id=? AND archived_at IS NULL AND COALESCE(phone_number,'')=''").bind(number,row.workspace_id,row.company_id,row.contact_id,row.apollo_id).run();
+   if(number)await env.DB.prepare("UPDATE crm_contacts SET phone_number=?,phone_status='provider_listed' WHERE workspace_id=? AND company_id=? AND id=? AND archived_at IS NULL AND COALESCE(phone_number,'')=''").bind(number,row.workspace_id,row.company_id,row.contact_id).run();
    await env.DB.prepare("UPDATE buyer_phone_lookups SET state='complete',result_json=? WHERE "+where+" AND lease_until=?").bind(JSON.stringify({status:result.request?.status,phone:result.contactData?.phone?.status}),...ids,lease).run();
   }catch(error){
    // Stop on revoked authority, changed evidence, provider or budget holds.

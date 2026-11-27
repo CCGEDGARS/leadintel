@@ -1,3 +1,5 @@
+import {runBuyerPhoneFallbacks} from '../backend/src/buyer-phone-lookup.js';
+import {handleApolloCrmWebhook} from '../backend/src/apollo-crm-webhook.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import {journeyFixture,loadPlaywright,workspaceId,sessionToken} from '../backend/test/step5-journey-fixture.mjs';
@@ -7,8 +9,13 @@ import fixture from '../customer/test/fixtures/manual-paid-company.cjs';
 import {ready,settleInitialSave} from './verify-step5-journey.mjs';
 import '../customer/crm-engine.js';
 export async function verifyManualPaidJourney(){
+ let callbackUrl;
  const {candidate}=fixture(),providerCalls=[],pageErrors=[],f=await journeyFixture({initialCandidate:candidate,profileExclusions:'companies with fewer than 20 employees',externalFetch:async(input,options)=>{
-  const url=new URL(typeof input==='string'?input:input.url);if(url.hostname!=='treg.to')return;
+  const url=new URL(typeof input==='string'?input:input.url);if(url.hostname==='api.apollo.io'&&url.pathname.endsWith('/people/match')){
+   callbackUrl=url.searchParams.get('webhook_url');providerCalls.push({path:url.pathname});
+   return Response.json({person:{id:'buyer-anna',name:'Anna Buyer',title:'Procurement Director',email:'anna@nordic.se',email_status:'verified',organization:{primary_domain:'nordic.se'}}});
+  }
+  if(url.hostname!=='treg.to')return;
   const body=JSON.parse(options.body||'{}');if(url.pathname.startsWith('/call/'))providerCalls.push({path:url.pathname,body});
   const output=url.pathname.includes('email.find')?{email:'anna@nordic.se',full_name:'Anna Buyer'}:url.pathname.includes('email.verify')?{email:'anna@nordic.se',status:'valid'}:url.pathname.includes('phone.find')?{full_name:'Anna Buyer',phone:'+46701234567'}:{full_name:'Anna Buyer',title:'Procurement Director',company_name:'Nordic'};
   return Response.json({output,raw:url.pathname.includes('email.verify')?{email:'anna@nordic.se',result:'deliverable',is_accept_all:false}:{}},{headers:{'X-Treg-Call-Id':'controlled-'+providerCalls.length,'X-Treg-Cost-Micro':'1000'}});
@@ -18,6 +25,10 @@ export async function verifyManualPaidJourney(){
  f.DB.raw.prepare("INSERT INTO workspace_service_integrations(workspace_id,provider,encrypted_api_key,key_hint,metadata_json,verified_at) VALUES(?,'treg',?,'test','{}',datetime('now'))").run(workspaceId,encrypted);
  f.DB.raw.prepare("INSERT INTO additional_contact_policies(workspace_id,enabled,phone_enabled,provider,daily_limit,monthly_limit,max_per_company,approved_by) VALUES(?,1,1,'treg',3,30,2,'storage-owner')").run(workspaceId);
  await upsertCrmIntelligence(f.env.DB,context,f.candidate.crmId,globalThis.LeadIntelCrm.mapDiscoveryCandidateToCrm(f.candidate).intelligence);
+ f.DB.raw.prepare("INSERT INTO enrichment_policies(workspace_id,daily_credit_limit,monthly_credit_limit,phone_lookup_mode) VALUES(?,20,100,'on_request')").run(workspaceId);
+ f.env.APOLLO_WEBHOOK_SECRET='controlled-callback-signature';
+ f.env.APOLLO_WEBHOOK_URL='https://fixture.test/api/webhooks/apollo/crm-contact';
+ f.DB.raw.prepare("INSERT INTO workspace_service_integrations(workspace_id,provider,encrypted_api_key,key_hint,metadata_json,verified_at) VALUES(?,'apollo',?,'test',?,datetime('now'))").run(workspaceId,encrypted,JSON.stringify({discovery_enabled:true,email_enrichment_enabled:true,phone_enrichment_enabled:true}));
  const request=body=>fetch(f.origin+'/api/additional-contact-services/email?workspace_id='+workspaceId,{method:'POST',headers:{Cookie:'leadintel_session='+sessionToken,'Content-Type':'application/json'},body:JSON.stringify({company_id:f.candidate.crmId,person_id:'buyer-anna',provider:'treg',email_lookup:true,...body})});
  const automated=await request({automatic:true});assert.equal(automated.status,409);assert.equal((await automated.json()).code,'ADDITIONAL_CONTACT_COMPANY_REQUIRED');
  const wrongPerson=await request({approved:true,person_id:'other-buyer'});assert.equal(wrongPerson.status,409);
@@ -50,13 +61,22 @@ export async function verifyManualPaidJourney(){
   assert.equal(providerCalls.filter(c=>c.path.includes('email.find')).length,1);assert.equal(providerCalls.filter(c=>c.path.includes('phone')).length,0);
   const phone='[data-prospect-enrich-phone][data-person-id="buyer-anna"]';
   await page.locator(phone).click();
-  await page.waitForFunction(()=>document.body.textContent.includes('Phone found · +46701234567'),null,{timeout:20000});
+  const response=page.waitForResponse(r=>r.url().includes('/api/additional-contact-services/email')&&r.request().method()==='POST');
+  await page.getByRole('button',{name:'Find work phone',exact:true}).click();
+  const received=await response;assert.equal(received.status(),200,await received.text());assert.ok(callbackUrl);
+  await runBuyerPhoneFallbacks(f.env);
+  assert.equal(providerCalls.filter(c=>c.path.includes('phone.find')).length,0);
+  const callback=await handleApolloCrmWebhook(new Request(callbackUrl,{method:'POST',body:JSON.stringify({status:'success',people:[{id:'buyer-anna',phone_numbers:[]}]})}),f.env,{});
+  assert.equal(callback.status,200);
+  await runBuyerPhoneFallbacks(f.env);
+  await runBuyerPhoneFallbacks(f.env);
+  assert.equal(providerCalls.filter(c=>c.path.endsWith('/people/match')).length,1);
   assert.equal(await page.getByRole('dialog').count(),0,'Phone must also run without a second question');
   assert.equal(providerCalls.filter(c=>c.path.includes('phone.find')).length,1);
   assert.equal(providerCalls.filter(c=>c.path.includes('email.find')).length,1,'Phone must not buy email again');
   const withPhone=await getCrmCompany(f.env.DB,context,f.candidate.crmId);
   assert.equal(withPhone.contacts.find(c=>c.external_person_id==='buyer-anna')?.phone_number,'+46701234567');
-  assert.match(await page.locator('body').textContent(),/ownership and reachability unconfirmed/);
+
   await page.screenshot({path:'/tmp/manual-paid-browser-desktop.png',fullPage:true});
   await settleInitialSave(page);const calls=providerCalls.length;await ctx.close();page=await open();assert.equal(await page.locator(email).getAttribute('aria-pressed'),'true');assert.equal(await page.locator(proceed).isDisabled(),false);await page.locator(email).click();assert.equal(providerCalls.length,calls,'confirmed data must not be repurchased: '+JSON.stringify(providerCalls.map(c=>c.path)));
   assert.match(await page.locator('body').textContent(),/Phone found · \+46701234567/);

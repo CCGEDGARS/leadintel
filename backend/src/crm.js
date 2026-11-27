@@ -202,8 +202,8 @@ export async function getCrmCompany(db,context,companyId){
   // A public-source identity can have a different ID from its exact Apollo match.
   if(contacts.some(c=>c.phone_number||String(c.phone_status).toLowerCase()==='pending')){
     let aliases=[];
-    try{aliases=(await db.prepare('SELECT person_id,identity_json,apollo_id FROM buyer_phone_aliases WHERE workspace_id=? AND company_id=?').bind(workspaceId,companyId).all()).results||[];}catch(error){if(!/no such table/i.test(String(error.message)))throw error;}
-    for(const c of contacts)c.phone_identity_aliases=aliases.filter(a=>a.apollo_id===c.external_person_id).map(a=>({id:a.person_id,identity:a.identity_json}));
+    try{aliases=(await db.prepare('SELECT a.person_id,a.identity_json,a.apollo_id,r.contact_id FROM buyer_phone_aliases a LEFT JOIN buyer_phone_lookups f ON f.workspace_id=a.workspace_id AND f.company_id=a.company_id AND f.apollo_id=a.apollo_id LEFT JOIN crm_enrichment_requests r ON r.id=f.request_id AND r.workspace_id=a.workspace_id AND r.company_id=a.company_id WHERE a.workspace_id=? AND a.company_id=?').bind(workspaceId,companyId).all()).results||[];}catch(error){if(!/no such table/i.test(String(error.message)))throw error;}
+    for(const c of contacts)c.phone_identity_aliases=aliases.filter(a=>a.contact_id===c.id||a.apollo_id===c.external_person_id).map(a=>({id:a.person_id,identity:a.identity_json}));
   }
   let phoneRequests=[];
   try{phoneRequests=(await db.prepare("SELECT id,contact_id,person_provider_id,status,credits_used,created_at,updated_at FROM crm_enrichment_requests WHERE workspace_id=? AND company_id=? AND provider='apollo' AND phone_requested=1 ORDER BY created_at DESC,rowid DESC LIMIT 50").bind(workspaceId,companyId).all()).results||[];}catch(error){if(!/no such table/i.test(String(error.message)))throw error;}

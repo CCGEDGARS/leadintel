@@ -224,7 +224,7 @@
           if(!includeEmail&&!includePhone)return true;
           const lookupData=automatic?includePhone:dataLookup||includePhone;
           if(phoneOnly&&!automatic){
-            const approved=await root.LeadIntelDialogs?.confirm('Find a work phone for '+(person.publicName||person.name)+'? Apollo can use up to 9 credits. If it finds no direct number, Treg can use up to $0.25 within your saved limits.',{action:'Find work phone'});
+            const approved=await root.LeadIntelDialogs?.confirm('Find a work phone for '+(person.publicName||person.name)+'? Apollo can use up to 9 credits. If it finds no direct number, Treg can use up to $0.25 within your saved limits.',{action:'Find work phone',isCurrent:current});
             if(!approved||!current())return false;
           }else if(dataLookup&&!automatic&&!paidOnly){
             if(service!=='treg')throw Error('Data confirmation requires Treg.');
