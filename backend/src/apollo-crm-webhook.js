@@ -30,7 +30,8 @@ function validPhoneFromCallback(body,personId){
   const people=Array.isArray(body?.people)?body.people:[];
   const person=people.find(item=>clean(item?.id||item?.person_id,180)===clean(personId,180))||null;
   const phones=Array.isArray(person?.phone_numbers)?person.phone_numbers:[];
-  const valid=phones.filter(item=>['work_direct','direct','mobile'].includes(clean(item?.type_cd||item?.type).toLowerCase())&&String(item?.status_cd||item?.status||'').toLowerCase()==='valid_number'&&clean(item?.sanitized_number||item?.raw_number,80));
+  // Apollo also returns validated numbers on the matched person without a type.
+  const valid=phones.filter(item=>['work_direct','direct','mobile',''].includes(clean(item?.type_cd||item?.type).toLowerCase())&&String(item?.status_cd||item?.status||'').toLowerCase()==='valid_number'&&clean(item?.sanitized_number||item?.raw_number,80));
   valid.sort((left,right)=>{
     const rank=value=>String(value?.type_cd||value?.type||'').toLowerCase()==='work_direct'?0:String(value?.type_cd||value?.type||'').toLowerCase()==='mobile'?1:2;
     return rank(left)-rank(right);
