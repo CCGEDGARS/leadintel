@@ -155,7 +155,8 @@ function productionFetch({ customerHtml, discoveryUi, diagnosticsStatus=401, ses
     if (parsed.pathname === '/customer/topbar.js') return response({ text: fs.readFileSync(path.join(root, 'customer/topbar.js'), 'utf8') });
     // The admin page (2026-10-25) is proven from the real files, like the production root.
     if (parsed.pathname === '/admin/') return response({ text: fs.readFileSync(path.join(root, 'admin/index.html'), 'utf8') });
-    if (parsed.pathname === '/admin/admin.js') return response({ text: fs.readFileSync(path.join(root, 'admin/admin.js'), 'utf8') });
+    if (['/admin/admin.js','/admin/storage-plans.js'].includes(parsed.pathname)) return response({ text: fs.readFileSync(path.join(root, parsed.pathname.slice(1)), 'utf8') });
+    if (parsed.pathname === '/api/access/storage-plans') return response({status:401,json:{error:'Authentication required'}});
     if (parsed.pathname === '/customer/') {
       return response({ text: customerHtml });
     }
