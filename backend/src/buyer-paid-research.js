@@ -37,7 +37,7 @@ export function workEmailSearchComplete(candidate,intent,contactOptions){
 export async function buyerPaidIntent(env,workspaceId,requested,candidate){
  if(!requested)return null;
  const policy=await readAdditionalContactPolicy(env,workspaceId),company=await findCrmCompanyByDomain(env.DB,workspaceId,candidate.domain);
- if(!policy.enabled&&!policy.phoneEnabled)return null;
+ if(policy.provider==='firecrawl'||!policy.enabled&&!policy.phoneEnabled)return null;
  const row=company?await env.DB.prepare('SELECT research_snapshot_json FROM crm_intelligence WHERE workspace_id=? AND company_id=?').bind(workspaceId,company.id).first():null;
  return {provider:policy.provider,email:policy.enabled,phone:policy.provider==='treg'&&policy.phoneEnabled,automaticBuyerLimit:policy.automaticBuyerLimit,policyUpdatedAt:policy.updatedAt,companyId:company?.id||'',snapshotHash:await sha256(row?.research_snapshot_json||'{}')};
 }

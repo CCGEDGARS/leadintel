@@ -1,3 +1,4 @@
+import {applySavedEmails} from './firecrawl-buyer-email.js';
 import {allowFullResearch} from './research-strategy.js';
 import '../../customer/strategy-integrity.js';
 import {buyerRunWindow} from './buyer-research-window.js';
@@ -57,7 +58,7 @@ export function normalizeBuyerInput(body,stored={}){
  // Client snapshots are input claims, never server execution receipts. Source pages
  // are read by the job before any new contact evidence can be accepted.
  normalized.people=(normalized.people||[]).filter(p=>!selected.length||selected.includes(String(p.id))).slice(0,10).map(p=>{
-  const copy={...p};for(const key of ['contactResearch','emailResearch','publicEmailEvidence','publicPhoneEvidence','publicEmailSourceCheck','publicPhoneSourceCheck','patternFindings','gmailMatches','contactVerification'])delete copy[key];return copy;
+  const copy={...p};for(const key of ['contactResearch','emailResearch','publicEmailEvidence','publicPhoneEvidence','publicEmailSourceCheck','publicPhoneSourceCheck','patternFindings','gmailMatches','contactVerification','waterfallEmail'])delete copy[key];return copy;
  });
  normalized.publicResearch={};normalized.publicContacts=[];
  normalized.buyerDiscovery={opportunityRoles:roles,companyContacts:[]};
@@ -159,6 +160,7 @@ export async function publicBuyerJob(env,row,{recoverRetained=false}={}){
  const activity=activeTask?.kind==='read'?'Reading public contact evidence':activeTask?.kind==='independent'?'Cross-checking contact evidence':activeTask?.kind==='search'?(/gmail|googlemail/i.test(activeTask.request_value)?'Searching public Gmail business-contact listings':/linkedin/i.test(activeTask.request_value)?'Checking LinkedIn identity':'Searching public contact sources'):'';
 
  const {detail,contactOptions}=await loadBuyerContactContext(env,{workspaceId:row.workspace_id},candidate);
+ await applySavedEmails(env,row.workspace_id,detail?.company?.id,candidate);
  const crm=detail?{company:detail.company,contacts:detail.contacts,contactData:detail.contactData,phoneRequests:detail.phoneRequests}:null;
  const quality=D.buyerQualityAssessment(candidate,{contactOptions});
  const completed=(totals.results||[]).find(r=>r.status==='complete')?.n||0,total=(totals.results||[]).reduce((n,r)=>n+Number(r.n),0);
@@ -242,6 +244,7 @@ export async function startBuyerJob(env,workspaceId,user,body,trusted=null){
    input.freeDiscovery=true;input.publicContactChecks=true;
   }
  }
+ input.emailWaterfallVersion=1;
  input.executionWindowStartedAt=new Date().toISOString();
  input.contactContinuationVersion=1;
  input.executionContinuationVersion=4;
@@ -262,6 +265,14 @@ export async function startBuyerJob(env,workspaceId,user,body,trusted=null){
  }
  const current=await readBuyerJob(env,workspaceId,{domain:input.candidate.domain});
  if(body.jobId&&current?.id!==body.jobId||body.expectedRevision!==undefined&&Number(body.expectedRevision)!==current?.revision)throw Object.assign(Error('Buyer research changed; reload the latest saved job'),{status:409});
+ if(current&&!body.force&&!activeBuyerJob(current.status)&&['needs_review','complete'].includes(current.status)&&input.scope==='all_buyers'&&(input.fullResearch||input.publicContactChecks)){
+  const previous=parse(current.input_json);
+  if(!previous.emailWaterfallVersion&&sameFullScope(previous,input)&&previous.workspaceContext===stored.hash&&(previous.fullResearch||previous.publicContactChecks)){
+   const updated=await stmt(env,`UPDATE buyer_research_jobs SET status='queued',phase='contacts',phase_runs=0,phase_ms=0,next_at=0,last_error='',revision=revision+1,requested_by=?,session_hash=?,input_json=json_set(input_json,'$.emailWaterfallVersion',1,'$.executionWindowStartedAt',?) WHERE id=? AND revision=? AND ${callerSql}`,user.id,user.sessionTokenHash,input.executionWindowStartedAt,current.id,current.revision,...callerArgs(workspaceId,user)).run();
+   if(updated.meta.changes)return readBuyerJob(env,workspaceId,{id:current.id});
+   throw Object.assign(Error('Buyer research changed. Reopen the saved run.'),{status:409});
+  }
+ }
  if(input.freeDiscovery&&current&&parse(current.input_json).fullResearch&&parse(current.input_json).workspaceContext===stored.hash){
   // Opening the free action cannot replace or restart a metered job.
   return current;

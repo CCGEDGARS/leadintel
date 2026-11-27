@@ -1,3 +1,4 @@
+import {checkFreeEmails} from './firecrawl-buyer-email.js';
 import {savedFastResearch} from './fast-research-evidence.js';
 import {planBuyerSearch} from './buyer-search-plan.js';
 import {buyerRunWindow,BUYER_RUN_WINDOW_REASON} from './buyer-research-window.js';
@@ -333,11 +334,18 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
     candidate.people=D.retainBuyerIdentities(D.mergeBuyerPool(candidate.people||[],[...trace.people,...profiled],input.profile),input.profile,candidate).slice(0,10);acquirePeople();phase=nextPhase[phase];}
    }else if(phase==='contacts'){
     if(candidate.people?.length){
+     if(input.emailWaterfallVersion&&(input.fullResearch||freeContactChecks||input.recheck)){
+      const selected=D.mandatoryBuyerResearchPriorities(candidate.people,candidate,{contactOptions}).filter(person=>D.sourcedBuyerIdentity(person,candidate)&&D.qualifyBuyer(person,{decisionMakers:person.matchedBuyerRole||person.title},candidate).eligible).slice(0,4);
+      const context={workspaceId:row.workspace_id,userId:row.requested_by,guard,writeAuthority:()=>({sql:writeGuard,args:[row.id,lease,clock(),contextVersion]})};
+      await checkFreeEmails(env,context,candidate,contactOptions.companyId,selected,{confirmedEmail:contactOptions.confirmedEmail,lookup:services.emailWaterfall,signal:controller.signal,refresh:!!input.recheck,jobId:row.id});
+     }
      scheduledContactWork=true;report=await D.runMandatoryBuyerResearch(candidate,{search,readPage:read,rows,guard,signal:controller.signal,contactOptions,rankedPriorities:input.fullResearch===true||freeContactChecks,recheckPlans:input.recheck?.plans,maxDurationMs:Math.min(remaining,input.recheck?Math.max(1,input.recheck.maxActiveMs-phaseMs):180000),observeTools:false,buyerAgentContext:D.buyerAgentContext(candidate,input.profile),accountability:report,crossCheck:freeContactChecks?undefined:async person=>task('independent',JSON.stringify([person.id,person.name,person.title,...(services.independent?[]:['grounded-low-v1'])]),async()=>{let result;try{result=await (services.independent?services.independent(person,controller.signal):searchWorkspaceBuyerContact(env,row.workspace_id,{company:candidate.company,domain:row.domain,person,signal:controller.signal}));}catch(error){observe({provider:'gemini',operation:'search',status:'failed',reason:'Independent research unavailable'});throw error;}if(result.status==='not_configured'||result.status==='unavailable'&&/not configured/i.test(result.reason||'')){observe({provider:'gemini',operation:'search',status:'skipped',reason:'Independent provider not configured'});return {...result,status:'not_configured'};}if(result.status!=='complete'||result.web_search===false){observe({provider:'gemini',operation:'search',status:'failed',reason:'Independent research unavailable'});throw Error('Independent research unavailable');}observe({provider:result.provider||'gemini',operation:'search',status:'succeeded',results:result.results?.length||0});return result;})});
      confirmNamed();
      // A retained dispatch is not sent again, so it is not work this phase can still retry.
      const retryable=report.status!=='complete'&&!changed&&report.stopReason!=='time_budget'?(await stmt(env,"SELECT task_key,status,request_value FROM buyer_research_tasks WHERE job_id=? AND phase='contacts' AND status<>'complete' AND (status='running' OR attempts<2)",row.id).all()).results.filter(task=>contactTasks.has(task.task_key)&&!(task.status==='running'&&retainsDispatch(task.request_value))).length:0;
-     if(report.status==='complete'||!changed&&report.stopReason!=='time_budget'&&!retryable)phase=nextPhase[phase];
+     if(report.status==='complete'||!changed&&report.stopReason!=='time_budget'&&!retryable){
+      phase=nextPhase[phase];
+     }
     }else{diagnostics.push({phase,reason:'No complete buyer identities were supported by the available sources',at:new Date().toISOString()});phase=nextPhase[phase];}
    }else if(phase==='review'){
     // The HTTP wake owns 18s; the configured reviewer and its fallback own 45s.
