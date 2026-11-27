@@ -155,3 +155,40 @@ test('a free-only Find buyers click received during identity discovery reaches p
  assert.equal(saved.phase,'contacts');assert.equal(JSON.parse(saved.input_json).publicContactChecks,true);
  assert.equal(JSON.parse(saved.input_json).freeDiscovery,true);assert.ok(!JSON.parse(saved.input_json).paidResearch);
 });
+
+test('Find buyers ranks the company before checking missing emails, even when other managers already have contacts',async t=>{
+ const f=await buyerJobsFixture(t),domain=f.candidate.domain,company=f.candidate.company;
+ const crm=await upsertCrmCompany(f.DB,{workspaceId,userId:f.users.owner.id,role:'owner'},{company,domain});
+ const names=['Alex Smith','Blair Jones','Cameron West','Drew North','Evan Green','Frank White','Grace Hall','Harper South'];
+ const people=names.map((name,i)=>({id:'p'+i,name,publicName:name,title:'Head of Procurement',organization:company,publicNameUrl:'https://'+domain+'/team'}));
+ const candidate={...f.candidate,crmId:crm.company.id,people};
+ const started=await call(f,'/api/buyers/research',{action:'start',candidate,peopleFirst:true,fullResearch:true});
+ assert.equal(started.status,200);
+ const job=(await started.json()).job;
+ // The worker resumes at the persisted handoff from company research to the contact stage.
+ f.DB.raw.prepare("UPDATE buyer_research_jobs SET phase='contacts',input_json=json_set(input_json,'$.apolloIdentityVersion',1) WHERE id=?").run(job.id);
+ const insert=f.DB.raw.prepare("INSERT INTO crm_contacts(id,workspace_id,company_id,external_person_id,name,title,source,verification_provider,email_status,work_email,normalized_email,created_at,updated_at) VALUES(?,?,?,?,?,?,'treg','treg','verified',?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)");
+ for(const p of [people[0],...people.slice(4)]){
+  const email=p.name.split(' ')[0].toLowerCase()+'@'+domain;
+  insert.run(p.id,workspaceId,crm.company.id,p.id,p.name,p.title,email,email);
+ }
+ const team='https://'+domain+'/team/blair',batches=[],services={
+  registry:async()=>({status:'unsupported'}),
+  search:async query=>query==='site:'+domain+' "Blair Jones"'?[{url:team,title:'Blair Jones · Head of Procurement'}]:[],
+  read:async url=>({url,markdown:url===team?'### Blair Jones\nHead of Procurement\nblair@'+domain+'\n'+company:company}),
+  independent:async()=>({status:'not_configured'}),emailWaterfall:async(_env,_workspace,_domain,names,{maxCredits})=>{
+   batches.push({names,maxCredits});return names.map(()=>({status:'not_found'}));
+  }
+ };
+ const waits=[];
+ await app.scheduled({cron:'* * * * *',scheduledTime:Date.now()},f.env,{waitUntil:p=>waits.push(p)},{
+  runBuyerResearchJobs:env=>runBuyerResearchJobs(env,{jobId:job.id,maxJobs:1,services}),runWebsiteContactJobs:async()=>[]
+ });
+ await Promise.all(waits);
+ const result=JSON.parse((await readBuyerJob(f.env,workspaceId,{id:job.id})).result_json);
+ const blair=result.people.find(p=>p.name==='Blair Jones');
+ assert.equal(blair.publicEmail,'blair@'+domain);
+ assert.equal(blair.publicEmailUrl,team);
+ assert.deepEqual(batches,[{names:names.slice(2,4),maxCredits:0}]);
+ assert.equal(f.DB.raw.prepare('SELECT count(*) n FROM additional_contact_attempts').get().n,0);
+});
