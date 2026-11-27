@@ -34,6 +34,14 @@ The user agreements recorded in `docs/project-state/2026-09-30-leadintel-checkpo
 
 ## Recurring-failure reset and product acceptance
 
+**Project command: “Learn from this case.”** Apply the following steps when the owner uses this phrase, when a previously fixed outcome fails again, or when new evidence contradicts a completion claim. On the next related task, read the latest case entry before choosing a fix. This is an instruction for contributors working in this repository.
+
+1. Identify the exact user action and expected result. Search the relevant project-state note, commits and tests by that action and symptom. Cite the closest previous case and say precisely what its fix and test established.
+2. Compare the earlier evidence with the new report or working benchmark. Identify the first point where results diverge, label any suspected cause, and run the cheapest check that distinguishes the explanations. For a reference implementation, compare its inputs, operations, outputs and cost using evidence available for that run.
+3. Explain how the earlier test could pass while the user still saw the failure. For an authorized repair, exercise the missed condition through the normal entry point. Preserve a regression test when it can catch a repeat. A retrospective alone authorizes analysis and project notes. Existing permissions govern live research, spending and customer data.
+4. Update the existing note for that workflow in `docs/project-state/`. Record the prior case, new evidence, corrected conclusion, regression protection, and any outcome still open with the evidence needed to close it. Link the test or diagnostic without copying private records. Amend the entry when later evidence changes the conclusion. Add a shared instruction only when the lesson applies beyond that case.
+5. Tell the owner what changes on the next attempt. Name whether the result was observed with fixtures, on a deployed build, or in the actual customer run. Carry unresolved outcomes forward until the missing observation is obtained.
+
 Owner instruction, 2 November 2026: learning from the repeated Buyers failures must change execution, not only produce another explanation. Use `docs/project-state/2026-11-02-buyers-recovery-contract.md` for the recorded evidence and recovery acceptance criteria. Apply this proportionally to recurring defects and multi-stage product workflows.
 
 - Start with an observable user outcome, the authoritative data owner, and the acceptance evidence needed. Inspect relevant upstream inputs and downstream save/reload/handoff behavior before choosing the implementation boundary.
