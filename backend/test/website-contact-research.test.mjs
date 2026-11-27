@@ -161,3 +161,37 @@ test('unreadable homepage and misleading directory results cannot authorize cont
  assert.ok(fetches.length<=4);assert.ok(fetches.every(url=>new URL(url).hostname==='finance.example'));
  assert.match(view.label,/official contact page/);
 });
+
+test('two explicit Apollo phone approvals while pending issue exactly one simulated provider purchase',async t=>{
+ const f=await fixture(t),context=f.context;
+ const job=await startWebsiteContacts(f.env,context,{companyId:f.company.id});
+ const name='Anna Andersson',domain='finance.example',source='# Finance Group\nFinance Group provides financial services.\n### '+name+'\nChief Executive Officer\nContact the company.';
+ const person={id:'apollo-confirmed',name,title:'Chief Executive Officer',organization:{name:'Finance Group',primary_domain:domain}};
+ const services={read:async url=>({url,markdown:source,links:[],metadata:{sourceURL:url,statusCode:200}}),search:async()=>[],apollo:async()=>({people:[person]}),independent:async()=>({status:'not_configured'})};
+ for(let i=0;i<25;i++){
+  const row=await readWebsiteContacts(f.env,workspaceId,{id:job.id});
+  if(!['queued','running'].includes(row.status))break;
+  await runWebsiteContactJobs(f.env,{jobId:job.id,windowMs:5000,services});
+ }
+ const row=await readWebsiteContacts(f.env,workspaceId,{id:job.id}),chosen=JSON.parse(row.state_json).people[0];
+ const approval={channel:'phone',provider:'apollo',approved:true,jobId:job.id,revision:row.revision,personId:chosen.id};
+ const request=new Request('https://app.fixture.test/api/websites/contacts?workspace_id='+workspaceId,{headers:{Cookie:'leadintel_session='+f.users.owner.token}});
+ f.env.OAUTH_TOKEN_ENCRYPTION_KEY=Buffer.alloc(32,4).toString('base64');
+ f.env.APOLLO_WEBHOOK_URL='https://app.fixture.test/api/webhooks/apollo/crm-contact';f.env.APOLLO_WEBHOOK_SECRET='fixture-signing';
+ const encrypted=await encryptSecret('controlled-apollo-key',await importAesKey(f.env.OAUTH_TOKEN_ENCRYPTION_KEY));
+ f.DB.raw.prepare("INSERT INTO workspace_service_integrations(workspace_id,provider,encrypted_api_key,key_hint,metadata_json) VALUES(?,'apollo',?,'test',?)").run(workspaceId,encrypted,JSON.stringify({phone_enrichment_enabled:true}));
+ f.DB.raw.prepare('INSERT OR IGNORE INTO enrichment_policies(workspace_id) VALUES(?)').run(workspaceId);
+ f.DB.raw.prepare('UPDATE enrichment_policies SET daily_credit_limit=20,monthly_credit_limit=100 WHERE workspace_id=?').run(workspaceId);
+ let charged=0;const original=globalThis.fetch;t.after(()=>{globalThis.fetch=original;});
+ globalThis.fetch=async(input,options)=>{
+  const url=new URL(String(input));assert.equal(url.hostname,'api.apollo.io');
+  if(url.pathname.endsWith('/api_search'))return Response.json({people:[person]});
+  assert.equal(url.pathname,'/api/v1/people/match');assert.equal(url.searchParams.get('reveal_phone_number'),'true');charged++;
+  return Response.json({person,request_id:'fixture-request'});
+ };
+ const first=await lookupWebsiteContact(request,f.env,context,approval);assert.equal(first.request.status,'pending_phone');
+ const saved=await readWebsiteContacts(f.env,workspaceId,{id:job.id});
+ const second=await lookupWebsiteContact(request,f.env,context,{...approval,revision:saved.revision});assert.equal(second.request.status,'pending_phone');
+ assert.equal(charged,1);assert.equal(f.DB.raw.prepare('SELECT count(*) n FROM crm_enrichment_requests').get().n,1);
+ assert.equal((await websiteContactView(f.env,saved)).people[0].savedContact.phone_status,'pending');
+});

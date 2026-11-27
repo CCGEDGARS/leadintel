@@ -21,6 +21,11 @@ test('Full research reuses an active free job and repeat starts reopen partial r
  for(const response of responses){assert.equal(response.status,200);assert.equal((await response.json()).job.id,initial.id);}
  const run=await readBuyerJob(f.env,workspaceId,{id:initial.id});assert.ok(JSON.parse(run.input_json).fullResearch);
  f.DB.raw.prepare("UPDATE buyer_research_jobs SET status='needs_review',last_error='Budget pause' WHERE id=?").run(run.id);
+ const raw=await readBuyerJob(f.env,workspaceId,{id:run.id});
+ const selected={...JSON.parse(raw.input_json),scope:'selected_buyers',personIds:['one'],fullResearch:false};
+ f.DB.raw.prepare("INSERT INTO buyer_research_jobs(id,workspace_id,requested_by,session_hash,domain,context_key,input_json,result_json,phase,status) VALUES('one-buyer',?,?,?,?,?,?,?,'contacts','needs_review')").run(workspaceId,raw.requested_by,raw.session_hash,raw.domain,'other-scope',JSON.stringify(selected),raw.result_json);
+ assert.equal((await (await call(f,'/api/buyers/research',full)).json()).job.id,run.id);
+ f.DB.raw.prepare("DELETE FROM buyer_research_jobs WHERE id='one-buyer'").run();
  const freeClick=await call(f,'/api/buyers/research/free',{...fast,action:'start',force:true});
  assert.equal((await freeClick.json()).job.status,'needs_review');
  const implicitResume=await call(f,'/api/buyers/research',{action:'resume',jobId:run.id});

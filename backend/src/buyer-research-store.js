@@ -198,12 +198,15 @@ export async function publicBuyerJob(env,row,{recoverRetained=false}={}){
 }
 // A second Full click reopens its run, including a partial or budget-paused result.
 // Only a separate resume command authorizes another execution window.
+function sameFullScope(previous,input){
+ const roles=value=>JSON.stringify([...(value.roles||[])].sort());
+ return !previous.taskId&&!previous.paidResearch&&previous.scope==='all_buyers'
+  &&previous.candidate?.company===input.candidate.company&&previous.workspaceContext===input.workspaceContext&&roles(previous)===roles(input);
+}
 async function reuseFullResearch(env,workspaceId,user,current,input){
  if(!current)return null;
  const previous=parse(current.input_json);
- const sameCompany=previous.candidate?.company===input.candidate.company&&previous.workspaceContext===input.workspaceContext;
- const sameRoles=JSON.stringify([...(previous.roles||[])].sort())===JSON.stringify([...input.roles].sort());
- if(!sameCompany||!sameRoles||previous.taskId||previous.paidResearch||previous.scope!=='all_buyers'){
+ if(!sameFullScope(previous,input)){
   if(activeBuyerJob(current.status))throw Object.assign(Error('Another research scope is active for this company. Open its progress before starting Full research.'),{status:409});
   return null;
  }
@@ -259,6 +262,18 @@ export async function startBuyerJob(env,workspaceId,user,body,trusted=null){
   return current;
  }
  if(input.fullResearch){
+  // A newer one-person check may be the latest job without replacing this
+  // company's Full run or its provider receipts.
+  const currentInput=current&&parse(current.input_json);
+  if(current&&!activeBuyerJob(current.status)&&!(currentInput.fullResearch&&sameFullScope(currentInput,input))){
+   const retained=await stmt(env,`SELECT * FROM buyer_research_jobs WHERE workspace_id=? AND domain=?
+    AND json_extract(input_json,'$.candidate.company')=? AND json_extract(input_json,'$.workspaceContext')=?
+    AND json_extract(input_json,'$.fullResearch')=1 AND updated_at>=datetime('now','-30 days')
+    AND id<>? ORDER BY rowid DESC LIMIT 8`,workspaceId,input.candidate.domain,input.candidate.company,stored.hash,current.id).all();
+   for(const previous of retained.results){
+    if(sameFullScope(parse(previous.input_json),input))return previous;
+   }
+  }
   const existing=await reuseFullResearch(env,workspaceId,user,current,input);
   if(existing)return existing;
  }
