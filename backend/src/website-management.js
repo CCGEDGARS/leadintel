@@ -1,3 +1,4 @@
+import {websiteLinkedInMatchRows} from './website-linkedin-review.js';
 import {websiteContactIdentity,websiteNameKey} from './website-contact-evidence.js';
 
 export function managementLimit(value){
@@ -138,4 +139,78 @@ export async function findPublicBuyerContactPages(candidate,{index,read,refresh,
  if(indexUnavailable)notes.push('Free public index unavailable.');
  if(readFailures)notes.push(readFailures+' linked source checks unavailable.');
  return notes.join(' ')||'Free website and register checks finished.';
+}
+
+export const MANAGEMENT_RESEARCH_VERSION=1;
+const employerRoster=url=>/^https:\/\/(?:[a-z]{2,3}\.)?linkedin\.com\/company\/[\w%-]+\/?(?:[?#].*)?$/i.test(url);
+
+// A directory hint is never a name. Only the shared employer/role resolver
+// can turn it into a person, after reading evidence and checking ambiguity.
+export async function managementDirectoryPeople(input,rows,{index,read,sourceRows}){
+ const D=globalThis.LeadIntelDiscovery,profile={companyDomain:input.domain,collectAllCompanyContacts:true};
+ const directory=D.traceIdentityBuyers({people:rows},input,profile).people;
+ const pending=directory.filter(p=>p.identityStatus==='pending'&&p.surnameMask&&roleScore(p,[])).slice(0,10);
+ const complete=directory.filter(p=>p.identityStatus==='confirmed');
+ if(!pending.length)return complete;
+ const hits=await index('site:linkedin.com/company/ "'+input.domain+'"');
+ for(const hit of (hits||[]).filter(hit=>employerRoster(hit.url)).slice(0,2))await read(hit.url);
+ let interruption;
+ const resolved=await D.resolvePendingBuyerIdentities(pending,sourceRows(),input,profile,async query=>{
+  let rows;try{rows=await index(query);}catch(error){interruption=error;throw error;}
+  if(!rows)throw Error('Public index unavailable');
+  return rows;
+ });
+ if(interruption)throw interruption;
+ for(const p of resolved.people.filter(p=>p.identityStatus==='confirmed')){
+  complete.push({...p,...(employerRoster(p.publicNameUrl)?{directoryRosterUrl:p.publicNameUrl}:{})});
+ }
+ return complete;
+}
+
+// Source receipts belong to the person and channel. An unrelated failed page
+// must not erase a completed check or turn an unread search hit into a contact.
+export async function managementChannels(input,person,pages,{index,read}){
+ const D=globalThis.LeadIntelDiscovery,plan=D.buyerResearchQueryPlan(input,person);
+ const checked=new Map(pages.map(page=>[page.url,page])),checks={};
+ const apply=rows=>{
+  Object.assign(person,D.matchPublicBuyerDetails([person],rows,input.domain,input.company)[0]);
+  const gmail=D.gmailResearchMatches(person,input,rows);
+  person.gmailMatches=[...new Map([...(person.gmailMatches||[]),...gmail].map(m=>[m.email,m])).values()];
+ };
+ apply(pages);
+ const card=person.publishedStaffCard||{},name=websiteNameKey(person.publicName||person.name);
+ const channels=[
+  ['direct_email',()=>card.email||person.publicEmail,plan.direct_email.slice(0,2)],
+  ['phone',()=>card.phone||person.publicPhone,plan.phone],
+  ['gmail',()=>person.gmailMatches.length,plan.gmail],
+  ['linkedin',()=>person.publicLinkedinUrl||person.linkedin_url,plan.linkedin]
+ ];
+ for(const [key,found,queries] of channels){
+  const queryLog=[];let incomplete=false;
+  for(const query of queries){
+   if(found())break;
+   const hits=await index(query);
+   if(!hits){
+    incomplete=true;
+    queryLog.push({query,status:hits===undefined?'skipped':'incomplete',reason:hits===undefined?'Skipped after the public index became unavailable':'Public index unavailable'});
+    break;
+   }
+   const receipt={query,status:'complete',sourceReads:[]};queryLog.push(receipt);
+   if(key==='linkedin'){
+    const matched=D.matchPublicLinkedInProfiles([person],websiteLinkedInMatchRows(person,hits,input),input.company)[0];
+    if(matched.linkedinIdentityEvidence?.url)Object.assign(person,matched);
+    continue;
+   }
+   const targets=hits.filter(hit=>D.canonicalDomain(hit.url)===input.domain||websiteNameKey(hit.title+' '+hit.description).includes(name))
+    .sort((a,b)=>Number(websiteNameKey(b.title+' '+b.description).includes(name))-Number(websiteNameKey(a.title+' '+a.description).includes(name)));
+   for(const hit of targets.slice(0,2)){
+    const page=checked.get(hit.url)||await read(hit.url);
+    receipt.sourceReads.push({url:hit.url,status:page?'complete':'failed'});
+    if(page){checked.set(hit.url,page);apply([page]);}else incomplete=true;
+    if(found())break;
+   }
+  }
+  checks[key]={status:found()||!incomplete?'complete':'incomplete',reason:found()?'Public evidence found':incomplete?'Company pages checked. Additional public sources were unavailable.':'No match in the checked public sources',queryLog};
+ }
+ return checks;
 }

@@ -21,7 +21,7 @@ export function websiteContactIdentity(person={}){
  const source=person.publicNameUrl||'';
  if(!source)return person.identityOrigin==='apollo';
  try{const url=new URL(source);
-  if(/(^|\.)linkedin\.com$/i.test(url.hostname))return Boolean(D.normalizeProfessionalLinkedInUrl(source));
+  if(/(^|\.)linkedin\.com$/i.test(url.hostname))return Boolean(D.normalizeProfessionalLinkedInUrl(source))||person.identityOrigin==='apollo'&&person.identityStatus==='confirmed'&&person.directoryRosterUrl===source&&/^\/company\/[\w%-]+\/?$/i.test(url.pathname);
   // Portfolio, product and event pages routinely mention roles belonging to
   // clients or speakers. A role word in a caption cannot establish employment.
   // Accept an explicitly published staff card from that page, or let a separate
