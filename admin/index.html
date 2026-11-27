@@ -26,6 +26,8 @@
     .admin input:focus-visible{outline:2px solid var(--accent2,#0d5d4f);outline-offset:1px}
     .admin-invite .primary-btn{padding:12px 18px;border-radius:10px}
     .admin-status{min-height:22px;margin:12px 0 0;font-size:14px;color:var(--ink,#13201c)}
+    #storage-editor fieldset{border:0;padding:0;margin:14px 0;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr));gap:12px}
+    #storage-price[hidden]{display:none} #storage-scope{width:100%;padding:10px;font:inherit}
     .admin-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
     .admin table{width:100%;border-collapse:collapse;font-size:14px}
     .admin th{text-align:left;font-weight:600;color:var(--muted,#6c7772);font-size:12px;letter-spacing:.04em;text-transform:uppercase;padding:0 10px 10px;border-bottom:1px solid var(--line,#dde2dd)}
@@ -49,7 +51,10 @@
     .top-actions .ghost-btn{text-decoration:none}
     @media (max-width:720px){.admin-invite{grid-template-columns:1fr}.admin-card{padding:18px}.admin table{min-width:640px}}
   </style>
+  <link rel="stylesheet" href="../customer/confirmation-dialog.css">
+  <script defer src="../customer/confirmation-dialog.js"></script>
   <script defer src="admin.js?v=20261026-v2"></script>
+  <script defer src="storage-plans.js"></script>
 </head>
 <body>
   <div class="page-shell">
@@ -73,6 +78,24 @@
     <main class="content admin">
       <p id="admin-gate" class="admin-gate" role="status" aria-live="polite">Checking your access…</p>
       <div id="admin-app" class="admin" hidden>
+        <section class="admin-card" id="storage">
+          <h2>Storage plans and workspace limits</h2>
+          <label>Apply changes to<select id="storage-scope" disabled><option value="">Standard plans · all workspaces using defaults</option></select></label>
+          <p id="storage-context"></p>
+          <form id="storage-editor">
+            <fieldset disabled>
+              <label>Included CRM data (MB)<input name="included_records_limit" type="number" min="0.000001" step="0.000001" required></label>
+              <label>Included files (GB)<input name="included_files_limit" type="number" min="0.000000001" step="0.000000001" required></label>
+              <label>Plus CRM data (MB)<input name="plus_records_limit" type="number" min="0.000001" step="0.000001" required></label>
+              <label>Plus files (GB)<input name="plus_files_limit" type="number" min="0.000000001" step="0.000000001" required></label>
+              <label id="storage-price">Plus monthly price (EUR)<input name="monthly_amount_minor" type="number" min="0.01" max="999999.99" step="0.01" placeholder="Use configured Stripe price"></label>
+            </fieldset>
+            <button id="storage-save" type="submit" class="primary-btn" disabled>Save limits</button>
+            <button id="storage-reset" type="button" class="admin-btn" hidden>Use standard limits</button>
+            <button id="storage-reload" type="button" class="admin-btn">Reload settings</button>
+          </form>
+          <p id="storage-status" class="admin-status" role="status"></p>
+        </section>
         <section class="admin-card">
           <h1>Invite a customer</h1>
           <p>Access starts the moment the address is saved. The person signs in with Google or Microsoft using exactly that address; no e-mail is sent from here.</p>
