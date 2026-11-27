@@ -87,3 +87,31 @@ test('billing outage preserves the scoped storage status and paid capacity witho
  f.DB.raw.exec("DELETE FROM workspace_members WHERE workspace_id='storage-w2'");
  assert.equal((await f.mod.handleStorageRoute(f.request('status','storage-w2'),f.env,{}, {stripe:f.stripe})).status,403);
 });
+
+test('new checkouts use the edited monthly price and previous subscription invoices still grant storage',async()=>{
+ const f=await fixture();
+ const route=action=>f.mod.handleStorageRoute(f.request(action),f.env,{}, {stripe:f.stripe});
+ const configure=amount=>f.DB.raw.prepare('UPDATE storage_plan_settings SET monthly_amount_minor=?').run(amount);
+ const retrieve=f.stripe.prices.retrieve;
+ f.stripe.prices.retrieve=async()=>{const base=await retrieve();base.product.id='prod_storage';return base;};
+ let created=0;
+ f.stripe.prices.create=async params=>{created++;assert.equal(params.product,'prod_storage');assert.equal(params.unit_amount,1200);return {id:'price_new'};};
+ assert.equal((await route('checkout')).status,200);
+ configure(1200);
+ assert.equal((await (await route('status')).json()).upgrade.price.amount_minor,1200);
+ assert.equal(created,0);
+ let expired=false;
+ f.stripe.checkout.sessions.retrieve=async()=>({id:'cs_fixture',status:'open'});
+ f.stripe.checkout.sessions.expire=async()=>{expired=true;};
+ assert.equal((await route('checkout')).status,200);
+ assert.equal(created,1);assert.equal(expired,true);
+ assert.equal(f.calls.filter(call=>call.mode==='subscription').at(-1).line_items[0].price,'price_new');
+ assert.equal((await route('checkout')).status,200);assert.equal(created,1);
+ configure(1500);
+ assert.equal((await f.deliver('invoice.paid','evt_old_price')).status,200);
+ const until=()=>f.DB.raw.prepare("SELECT paid_until FROM workspace_storage_accounts WHERE workspace_id='storage-w1'").get().paid_until;
+ const original=until();assert.ok(original>0);
+ f.subscription.items.data[0].price.id='price_new';
+ f.invoice.lines.data[0].pricing.price_details.price='price_new';f.invoice.lines.data[0].period.end+=1000;
+ assert.equal((await f.deliver('invoice.paid','evt_prior_override')).status,200);assert.equal(until(),original+1000);
+});

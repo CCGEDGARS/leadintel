@@ -2350,10 +2350,9 @@
       "contains": [
         "CRM records and research use the data allowance.",
         "Uploaded files use the separate file allowance.",
-        "100 MB",
-        "1 GB",
-        "500000000",
-        "10000000000",
+        "status.upgrade.records_limit_bytes",
+        "status.upgrade.files_limit_bytes",
+        "Edit storage plans and workspace limits",
         "Existing data remains readable",
         "Billing setup is in progress",
         "context()!==requested"
@@ -10281,6 +10280,20 @@
       "url": "/api/storage/files?workspace_id=release-proof",
       "status": 401,
       "contains": []
+    },
+    {
+      "id": "storage-admin-private",
+      "type": "text",
+      "url": "/api/access/storage-plans",
+      "status": 401,
+      "contains": []
+    },
+    {
+      "id": "storage-admin-editor",
+      "type": "text",
+      "url": "/admin/storage-plans.js",
+      "status": 200,
+      "contains": ["Save workspace limits", "Save standard plans", "/api/access/storage-plans"]
     },
     {
       "id": "storage-preferences-private",

@@ -2,6 +2,7 @@
 // Rule: an identity that already maps to a user signs in as before. A NEW identity is admitted only when
 // access_invitations holds an active (non-revoked) row for its e-mail address; otherwise the sign-in
 // bounces to the public sign-in page with ?access=invite-required and nothing is created.
+import {storagePlanAdmin} from './storage-plan-admin.js';
 import {sha256,cookieValue} from './security.js';
 
 export function normalizeInviteEmail(value){return String(value||'').trim().toLowerCase().slice(0,254);}
@@ -52,8 +53,9 @@ async function audit(env,{userId=null,type,entityId=null,metadata={}}){
 // DELETE /api/access/invitations?email=   → revoke (the person keeps any account already created)
 // GET    /api/access/users                → every account with sign-in providers, workspace count and the admin flag
 export async function handleAccessRoute(request,env,cors){
-  const url=new URL(request.url);if(url.pathname!=='/api/access/invitations'&&url.pathname!=='/api/access/users')return null;
+  const url=new URL(request.url);if(url.pathname!=='/api/access/invitations'&&url.pathname!=='/api/access/users'&&url.pathname!=='/api/access/storage-plans')return null;
   const user=await sessionUser(request,env);if(!user)return error('Authentication required',401,cors);
+  if(url.pathname==='/api/access/storage-plans')return isPlatformAdmin(env,user)?storagePlanAdmin(request,env,cors):error('Platform administrator access required',403,cors);
   if(!isPlatformAdmin(env,user))return error('Only platform administrators manage invitations',403,cors);
   if(url.pathname==='/api/access/users'){
     if(request.method!=='GET')return error('Method not allowed',405,cors);

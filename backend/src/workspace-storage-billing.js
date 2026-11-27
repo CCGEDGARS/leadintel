@@ -18,7 +18,18 @@ async function catalogue(env,stripe){
   const [settings,registrations]=await Promise.all([stripe.tax.settings.retrieve(),stripe.tax.registrations.list({status:'active',limit:1})]);
   if(settings.status!=='active'||!registrations.data?.some(r=>r.status==='active')||!id(price.product.tax_code))throw fail('Storage tax configuration requires verification');
  }
- return {amount_minor:price.unit_amount,currency:price.currency,interval:'month',tax_behavior:price.tax_behavior};
+ const settings=await env.DB.prepare('SELECT monthly_amount_minor FROM storage_plan_settings WHERE id=1').first();
+ return {base:price,quote:{amount_minor:settings.monthly_amount_minor??price.unit_amount,currency:price.currency,interval:'month',tax_behavior:price.tax_behavior}};
+}
+async function checkoutPrice(env,stripe,{base,quote}){
+ if(quote.amount_minor===base.unit_amount)return base.id;
+ const key=[env.STRIPE_ACCOUNT_ID,Number(base.livemode),base.id,quote.amount_minor];
+ const saved=await stmt(env,'SELECT price_id FROM storage_plan_stripe_prices WHERE merchant=? AND livemode=? AND base_price=? AND amount=?',...key).first();
+ if(saved)return saved.price_id;
+ const price=await stripe.prices.create({product:base.product.id,currency:'eur',unit_amount:quote.amount_minor,
+  recurring:{interval:'month'},tax_behavior:base.tax_behavior},{idempotencyKey:'leadintel-storage-price-'+key.join('-')});
+ await stmt(env,'INSERT OR IGNORE INTO storage_plan_stripe_prices(merchant,livemode,base_price,amount,price_id) VALUES(?,?,?,?,?)',...key,price.id).run();
+ return (await stmt(env,'SELECT price_id FROM storage_plan_stripe_prices WHERE merchant=? AND livemode=? AND base_price=? AND amount=?',...key).first()).price_id;
 }
 async function authorize(request,env,workspace,owner){
  const token=cookieValue(request,'leadintel_session');if(!token)throw fail('Authentication required',401);
@@ -52,13 +63,17 @@ export async function handleStorageRoute(request,env,cors={},options={}){
   const status=await getStorageStatus(env,workspace,{role:member.role});
   if(action==='status'){
    if(status.billing.checkout_ready){
-    try{status.upgrade.price=await catalogue(env,options.stripe||client(env));status.billing.available=true;}
+    try{status.upgrade.price=(await catalogue(env,options.stripe||client(env))).quote;status.billing.available=true;}
     catch{status.billing.available=false;status.billing.checkout_ready=false;status.billing.can_upgrade=false;status.billing.can_manage=false;status.billing.message='Storage billing is temporarily unavailable. Your storage usage and saved data remain available.';}
+   }
+   if(status.billing.setup_required){
+    const settings=await env.DB.prepare('SELECT monthly_amount_minor FROM storage_plan_settings WHERE id=1').first();
+    if(settings.monthly_amount_minor)status.upgrade.price={amount_minor:settings.monthly_amount_minor,currency:'eur',interval:'month'};
    }
    return json(status,200,cors);
   }
   if(!status.billing.checkout_ready)throw fail('Storage payments are not enabled yet. Your included storage and saved data remain available.');
-  const stripe=options.stripe||client(env);await catalogue(env,stripe);
+  const stripe=options.stripe||client(env);const offer=await catalogue(env,stripe);
   let row=await storageAccount(env,workspace);
   if(action==='portal'){
    if(!row.stripe_customer_id)throw fail('No storage billing account exists for this workspace',409);
@@ -67,10 +82,21 @@ export async function handleStorageRoute(request,env,cors={},options={}){
   }
   if(status.plan.key==='plus'||row.stripe_subscription_id&&!['canceled','incomplete_expired'].includes(row.billing_status))throw fail('This workspace already has a storage subscription. Use Manage billing.',409);
   const now=Math.floor(Date.now()/1000);
-  if(row.stripe_checkout_expires>now&&row.stripe_checkout_url)return json({url:row.stripe_checkout_url},200,cors);
   const token=crypto.randomUUID(),reserved=await stmt(env,'UPDATE workspace_storage_accounts SET checkout_token=?,checkout_lease=? WHERE workspace_id=? AND checkout_lease<?',token,now+90,workspace,now).run();
   if(!reserved.meta.changes)throw fail('A storage checkout is already being prepared. Retry shortly.',409);
   try{
+   row=await storageAccount(env,workspace);
+   if(row.stripe_subscription_id&&!['canceled','incomplete_expired'].includes(row.billing_status))throw fail('A storage subscription already exists.',409);
+   const priceId=await checkoutPrice(env,stripe,offer);
+   if(row.stripe_checkout_expires>now&&row.stripe_checkout_url){
+    if((row.stripe_checkout_price_id||env.STRIPE_STORAGE_PLUS_PRICE_ID)===priceId){
+     await stmt(env,'UPDATE workspace_storage_accounts SET checkout_token=NULL,checkout_lease=0 WHERE workspace_id=? AND checkout_token=?',workspace,token).run();
+     return json({url:row.stripe_checkout_url},200,cors);
+    }
+    const old=await stripe.checkout.sessions.retrieve(row.stripe_checkout_id);
+    if(old.status==='complete')throw fail('A previous checkout is processing. Refresh billing before starting another.',409);
+    if(old.status==='open')await stripe.checkout.sessions.expire(old.id);
+   }
    if(!row.stripe_customer_id){
     const customer=await stripe.customers.create({name:'LeadIntel workspace '+workspace},{idempotencyKey:'leadintel-storage-customer-'+workspace});
     await stmt(env,'UPDATE workspace_storage_accounts SET stripe_customer_id=? WHERE workspace_id=? AND checkout_token=?',customer.id,workspace,token).run();row={...row,stripe_customer_id:customer.id};
@@ -78,8 +104,8 @@ export async function handleStorageRoute(request,env,cors={},options={}){
    const success=returnUrl(env);success.searchParams.set('storage_checkout','returned');
    const cancel=returnUrl(env);cancel.searchParams.set('storage_checkout','canceled');
    const suffix=Array.from(crypto.getRandomValues(new Uint8Array(8)),v=>String.fromCharCode(97+v%26)).join('');
-   const session=await stripe.checkout.sessions.create({mode:'subscription',customer:row.stripe_customer_id,line_items:[{price:env.STRIPE_STORAGE_PLUS_PRICE_ID,quantity:1}],subscription_data:{billing_mode:{type:'flexible'}},...(env.STRIPE_STORAGE_AUTOMATIC_TAX==='true'?{automatic_tax:{enabled:true},tax_id_collection:{enabled:true},customer_update:{address:'auto'},billing_address_collection:'required'}:{}),integration_identifier:'leadintel_storage_'+suffix,success_url:success.toString(),cancel_url:cancel.toString()},{idempotencyKey:'leadintel-storage-checkout-'+workspace+'-'+token});
-   await stmt(env,'UPDATE workspace_storage_accounts SET stripe_checkout_id=?,stripe_checkout_url=?,stripe_checkout_expires=?,checkout_token=NULL,checkout_lease=0 WHERE workspace_id=? AND checkout_token=?',session.id,session.url,session.expires_at,workspace,token).run();
+   const session=await stripe.checkout.sessions.create({mode:'subscription',customer:row.stripe_customer_id,line_items:[{price:priceId,quantity:1}],subscription_data:{billing_mode:{type:'flexible'}},...(env.STRIPE_STORAGE_AUTOMATIC_TAX==='true'?{automatic_tax:{enabled:true},tax_id_collection:{enabled:true},customer_update:{address:'auto'},billing_address_collection:'required'}:{}),integration_identifier:'leadintel_storage_'+suffix,success_url:success.toString(),cancel_url:cancel.toString()},{idempotencyKey:'leadintel-storage-checkout-'+workspace+'-'+token});
+   await stmt(env,'UPDATE workspace_storage_accounts SET stripe_checkout_id=?,stripe_checkout_price_id=?,stripe_checkout_url=?,stripe_checkout_expires=?,checkout_token=NULL,checkout_lease=0 WHERE workspace_id=? AND checkout_token=?',session.id,priceId,session.url,session.expires_at,workspace,token).run();
    return json({url:session.url},200,cors);
   }catch(cause){await stmt(env,'UPDATE workspace_storage_accounts SET checkout_token=NULL,checkout_lease=0 WHERE workspace_id=? AND checkout_token=?',workspace,token).run();throw cause;}
  }catch(cause){return storageErrorResponse(cause,cors)||json({error:cause.status?cause.message:'Storage billing is temporarily unavailable. Retry from Settings; your saved data is preserved.'},cause.status||503,cors);}
@@ -97,11 +123,13 @@ async function applyEvent(env,event,stripe){
  if(!row)return {ignored:true};
  if(subscription.livemode!==event.livemode||id(object.customer)!==customer||row.stripe_subscription_id&&row.stripe_subscription_id!==subscriptionId&&!['canceled','incomplete_expired'].includes(row.billing_status))throw fail('Storage event ownership is invalid',400);
  const items=subscription.items?.data||[];
- if(items.length!==1||id(items[0].price)!==env.STRIPE_STORAGE_PLUS_PRICE_ID||items[0].quantity!==1)return {ignored:true};
+ if(items.length!==1||items[0].quantity!==1)return {ignored:true};
+ const priceId=id(items[0].price);
+ if(priceId!==env.STRIPE_STORAGE_PLUS_PRICE_ID&&!await stmt(env,'SELECT 1 FROM storage_plan_stripe_prices WHERE merchant=? AND livemode=? AND price_id=?',env.STRIPE_ACCOUNT_ID,Number(event.livemode),priceId).first())return {ignored:true};
  let invoice=subscription.latest_invoice;if(typeof invoice==='string')invoice=await stripe.invoices.retrieve(invoice);
  let paidUntil=0;
  if(invoice?.status==='paid'&&invoice.amount_remaining===0&&id(invoice.customer)===customer&&id(invoice.parent?.subscription_details?.subscription)===subscriptionId&&invoice.livemode===event.livemode){
-  const ends=(invoice.lines?.data||[]).filter(line=>id(line.pricing?.price_details?.price)===env.STRIPE_STORAGE_PLUS_PRICE_ID).map(line=>line.period?.end).filter(Number.isSafeInteger);
+  const ends=(invoice.lines?.data||[]).filter(line=>id(line.pricing?.price_details?.price)===priceId).map(line=>line.period?.end).filter(Number.isSafeInteger);
   if(ends.length)paidUntil=Math.max(...ends);
  }
  const unpaidLatest=invoice?.status!=='paid'&&id(invoice?.id)===id(object?.id);
