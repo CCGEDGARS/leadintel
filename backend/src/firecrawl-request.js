@@ -64,7 +64,7 @@ const unreportedRequestEstimate=(kind,payload)=>kind==='scrape'&&pdfAddress(payl
 // so an error answer (also 402 and 429) costs nothing unless it reports a cost; a request never sent costs nothing.
 export async function requestFirecrawl(env,workspaceId,kind,{credential,payload:requested={},signal,fetchImpl=fetch,purpose='interactive_research',waitBudgetMs=0,meter,requestId,beforeDispatch}={}){
   const endpoint=kind==='enrich'?'scrape':kind;
-  if(!['search','scrape'].includes(endpoint)||!workspaceId||!credential?.apiKey)throw Error('A workspace Firecrawl connection is required');
+  if((kind!=='enrich'&&!['search','scrape'].includes(kind))||!workspaceId||!credential?.apiKey)throw Error('A workspace Firecrawl connection is required');
   const payload=firecrawlFileLimits(kind,requested);
   const requestSignal=signal||AbortSignal.timeout(45000);requestSignal.throwIfAborted();
   // A job whose run window has reached its credit limit sends nothing more (throws with code CREDIT_LIMIT).
