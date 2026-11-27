@@ -33,3 +33,27 @@ test('index results keep the matching profile and snippet together',async()=>{
  const [first,second]=await searchManagementIndex('Anna Black',undefined,read);
  assert.match(first.url,/linkedin.com\/in\/anna-black/);assert.doesNotMatch(first.description,/Bert/);assert.match(second.description,/Director/);
 });
+
+test('one index outage preserves official checks per channel and a legacy shortlist upgrades in place',async t=>{
+ const f=await buyerJobsFixture(t),context={workspaceId,userId:f.users.owner.id,role:'owner',sessionHash:f.users.owner.sessionTokenHash};
+ const detail=await upsertCrmCompany(f.DB,context,{company_name:'Forge Works',website:'https://forge.example/'});
+ const body={action:'shortlist',companyId:detail.company.id,managementLimit:5};
+ const job=await startWebsiteContacts(f.env,context,body),services={
+  read:async url=>({url,markdown:'# Forge Works\nForge Works builds specialist equipment for industry.\n## Team\n### Anna Jensen\nChief Executive Officer\nEmail: anna@forge.example',links:[]}),
+  publicIndex:async()=>{throw Error('Public index unavailable');}
+ };
+ await runWebsiteContactJobs(f.env,{jobId:job.id,services});
+ let row=await readWebsiteContacts(f.env,workspaceId,{id:job.id}),state=JSON.parse(row.state_json);
+ const person=state.people.find(p=>p.name==='Anna Jensen');assert.ok(person);
+ assert.equal(person.managementChecks.direct_email.status,'complete');assert.equal(person.managementChecks.phone.status,'incomplete');
+ assert.equal(person.managementChecks.gmail.status,'incomplete');assert.equal(person.freeResearchStatus,'needs_review');
+ const before=state.tasks.filter(t=>t.kind==='read'&&t.status==='complete').length;
+ delete state.managementResearchVersion;delete person.managementChecks;
+ await f.DB.prepare('UPDATE website_contact_jobs SET state_json=? WHERE id=?').bind(JSON.stringify(state),job.id).run();
+ const upgraded=await startWebsiteContacts(f.env,context,body);assert.equal(upgraded.id,job.id);assert.equal(upgraded.status,'queued');
+ await runWebsiteContactJobs(f.env,{jobId:job.id,services:{...services,publicIndex:async()=>[]}});
+ row=await readWebsiteContacts(f.env,workspaceId,{id:job.id});state=JSON.parse(row.state_json);
+ assert.equal(row.status,'complete');assert.equal(state.people[0].managementChecks.phone.status,'complete');
+ assert.equal(state.tasks.filter(t=>t.kind==='read'&&t.status==='complete').length,before);
+ assert.equal((await startWebsiteContacts(f.env,context,body)).status,'complete');
+});

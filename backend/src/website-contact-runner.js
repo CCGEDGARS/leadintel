@@ -1,4 +1,4 @@
-import {managementShortlist,searchManagementIndex} from './website-management.js';
+import {managementShortlist,searchManagementIndex,managementDirectoryPeople,managementChannels,MANAGEMENT_RESEARCH_VERSION} from './website-management.js';
 import {websiteSourceChunks as sourceChunks,websiteStaffCards as localStaffCards} from './website-contact-staff.js';
 import {reviewWebsiteLinkedIn,websiteLinkedInMatchRows,websiteLinkedInQueries,websiteLinkedInReviewCurrent,WEBSITE_LINKEDIN_REVIEW_VERSION} from './website-linkedin-review.js';
 import {websiteFreeResearchComplete,websiteContactRole,websiteContactIdentity,websiteNameKey,websiteProfileKey,websiteIdentitySupport,websiteIdentityCheckKey} from './website-contact-evidence.js';
@@ -6,7 +6,7 @@ import {reconcileWebsiteContactIdentities} from './website-contact-identity.js';
 import {storageFailure} from './workspace-storage.js';
 import {contactSql as sql,contactParse as parse,contactAuthority as authority,contactError,contactActive} from './website-contact-store.js';
 import {createBuyerSourceSearch} from './buyer-source-search.js';
-import {fetchDirectPublicPage,readPublicBuyerPage,searchWorkspaceApolloPeople} from './service-integrations.js';
+import {apolloCapabilities,resolveWorkspaceServiceCredential,fetchDirectPublicPage,readPublicBuyerPage,searchWorkspaceApolloPeople} from './service-integrations.js';
 import {searchWorkspaceBuyerContact} from './ai-routes.js';
 import '../../customer/discovery-engine.js';
 import S from '../../customer/website-scanning.js';
@@ -31,13 +31,14 @@ function acquire(state,input){
   const name=clean(p.publicName||p.name),title=clean(p.title),profile=websiteProfileKey(p.publicLinkedinUrl||p.linkedin_url);if(!D.hasFullBuyerName(name))return;
   const matches=roster.filter(old=>websiteNameKey(old.publicName||old.name)===websiteNameKey(name)&&websiteContactRole(old.title)===websiteContactRole(title)&&(!profile||!websiteProfileKey(old.publicLinkedinUrl||old.linkedin_url)||websiteProfileKey(old.publicLinkedinUrl||old.linkedin_url)===profile));
   const prior=matches.length===1?matches[0]:null;
-  if(!prior){roster.push({...p,id:'web-'+crypto.randomUUID(),name,organization:input.company,identityOrigin:origin,...(origin==='apollo'?{identityStatus:'directory_listing'}:{})});return;}
+  if(!prior){roster.push({...p,id:'web-'+crypto.randomUUID(),name,organization:input.company,identityOrigin:origin,...(origin==='apollo'?{identityStatus:p.directoryRosterUrl?'confirmed':'directory_listing',identitySourceIds:[p.id].filter(Boolean)}:{})});return;}
+  if(origin==='apollo'&&profile&&profile===websiteProfileKey(prior.publicLinkedinUrl||prior.linkedin_url))prior.identitySourceIds=[...new Set([...(prior.identitySourceIds||[]),p.id].filter(Boolean))];
   if(origin!=='official'&&prior.identityOrigin==='official'){
    if(profile&&!websiteProfileKey(prior.publicLinkedinUrl||prior.linkedin_url)){prior.linkedin_url=p.publicLinkedinUrl||p.linkedin_url;delete prior.contactResearch;delete prior.emailResearch;delete prior.freeResearchStatus;}
    return;
   }
   const oldProfile=websiteProfileKey(prior.publicLinkedinUrl||prior.linkedin_url),receipt=prior.contactResearch,done=prior.freeResearchStatus;
-  Object.assign(prior,{...p,id:prior.id,name,organization:input.company,identityOrigin:origin==='official'?'official':prior.identityOrigin,identityStatus:origin==='apollo'&&prior.identityOrigin!=='official'?'directory_listing':p.identityStatus||prior.identityStatus});
+  Object.assign(prior,{...p,id:prior.id,name,organization:input.company,identityOrigin:origin==='official'?'official':prior.identityOrigin,identityStatus:origin==='apollo'&&prior.identityOrigin!=='official'&&!p.directoryRosterUrl?'directory_listing':p.identityStatus||prior.identityStatus});
   if(profile&&oldProfile!==profile){delete prior.contactResearch;delete prior.emailResearch;delete prior.freeResearchStatus;}else if(done){prior.contactResearch=receipt;prior.freeResearchStatus=done;}
  };
  const channels=new Map(),routes=new Map();
@@ -48,6 +49,7 @@ function acquire(state,input){
   for(const c of inventory.channels||[])channels.set(c.value,c);for(const r of inventory.routes||[])routes.set(r.kind+'|'+r.value,r);
  }
  for(const p of state.apolloPeople||[])for(const person of D.traceIdentityBuyers({people:[p]},candidate,{companyDomain:input.domain,collectAllCompanyContacts:true}).people)add(person,'apollo');
+ for(const person of state.managementDirectoryPeople||[])add(person,'apollo');
  const namedProfileQueries=new Set(roster.flatMap(p=>[...websiteLinkedInQueries(input,p),...(p.linkedinReview?.queries||[]).map(q=>q.query)]));
  for(const task of state.tasks.filter(t=>t.kind==='search'&&t.status==='complete'&&!t.archived&&!namedProfileQueries.has(t.value)))for(const person of D.tracePublicBuyers(task.result,input.company,{companyDomain:input.domain,collectAllCompanyContacts:true,includeIndexedCompanyContacts:true}).people)add(person,'public_listing');
  const nameCounts=new Map();for(const person of roster)nameCounts.set(person.name.toLocaleLowerCase(),(nameCounts.get(person.name.toLocaleLowerCase())||0)+1);
@@ -129,6 +131,7 @@ export async function runWebsiteContactJobs(env,{jobId,now=Date.now(),windowMs=4
   catch(error){saved.status='failed';saved.reason=error.code==='TIME_BUDGET'?'Processing slice ended':clean(error.message).slice(0,180);if(error.code==='TIME_BUDGET'||controller.signal.aborted)saved.attempts--;throw error;}
   finally{clearTimeout(operationTimer);controller.signal.removeEventListener('abort',canceled);operationController.abort();}
  }
+ const managementIndex=query=>task('public_index',query,signal=>(services.publicIndex||services.search||searchManagementIndex)(query,signal,fetchDirectPublicPage));
  const search=async query=>task('search',query,async signal=>{const raw=await searchSource(query,{signal});if(signal.aborted)throw signal.reason;const rows=(Array.isArray(raw)?raw:raw?.results||[]).slice(0,8).map(r=>({url:S.safeUrl(r.url),title:clean(r.title).slice(0,300),description:String(r.description||r.text||'').slice(0,1800),evidenceKind:'search_excerpt'})).filter(r=>r.url);if(services.search)observe({provider:'controlled-public-search',operation:'search',status:'succeeded',results:rows.length});return rows;});
  const establishes=(page,officialContactPage=false)=>page&&sameHost(page.url,input.domain)&&S.assessIdentity({name:input.company,website:input.website},{url:page.url,text:page.markdown,title:page.title},{officialContactPage}).verified;
  const read=async (url,{confirmCompany=false}={})=>task('read',S.safeUrl(url),async(signal,operationMs)=>{
@@ -188,10 +191,11 @@ export async function runWebsiteContactJobs(env,{jobId,now=Date.now(),windowMs=4
   const person=state.people.find(p=>String(p.id)===focused.personId);
   if(!person)throw contactError('The selected contact changed.');
   const candidate=candidateFor(input,[person]);state.label='Checking identity · '+(person.publicName||person.name);
-  const review=input.managementLimit?{matchStatus:'not_checked'}:await reviewWebsiteLinkedIn(candidate,person,{search,guard,receipt:query=>state.tasks.find(t=>t.kind==='search'&&t.value===query&&!t.archived)});
+  const officialOnly=input.managementLimit&&person.identityOrigin==='official'&&sameHost(person.publicNameUrl,input.domain);
+  const review=officialOnly?{matchStatus:'not_checked'}:await reviewWebsiteLinkedIn(candidate,person,{search:input.managementLimit?managementIndex:search,guard,receipt:query=>state.tasks.find(t=>t.kind===(input.managementLimit?'public_index':'search')&&t.value===query&&!t.archived)});
   // Fresh matching may clear an older derived profile hold; a namesake/role
   // conflict in the saved roster remains authoritative and is never overridden.
-  if(!input.managementLimit)applyProfile(candidate,person,review);
+  if(!officialOnly)applyProfile(candidate,person,review);
   const page=review.matchStatus!=='double_checked'&&person.identityOrigin==='official'&&sameHost(person.publicNameUrl,input.domain)?await optional(()=>read(person.publicNameUrl)):null;
   await guard();const confirmed=recordIdentity(candidate,person,review,page);
   state.freeRevision=(state.freeRevision||1)+1;delete state.personCheck;
@@ -244,7 +248,7 @@ export async function runWebsiteContactJobs(env,{jobId,now=Date.now(),windowMs=4
     let home=await optional(()=>read(input.website));
     if(!establishes(home,true)){
      const query='site:'+input.domain+' (contact OR team OR management OR kontakt)';
-     const found=await task('public_index',query,signal=>(services.publicIndex||services.search||searchManagementIndex)(query,signal,fetchDirectPublicPage));
+     const found=await managementIndex(query);
      for(const hit of found.filter(hit=>sameHost(hit.url,input.domain)).slice(0,2)){
       home=await optional(()=>read(hit.url,{confirmCompany:true}));if(establishes(home,true))break;
      }
@@ -270,31 +274,36 @@ export async function runWebsiteContactJobs(env,{jobId,now=Date.now(),windowMs=4
      const urls=deeper.slice(0,Math.min(3,Math.max(0,8-(state.managementDetailReads||0))));
      if(urls.length){await readBatch(urls);state.managementDetailReads=(state.managementDetailReads||0)+urls.length;acquire(state,input);}
      else{
-      for(const person of state.people){
-       const card=person.publishedStaffCard||{};
-       Object.assign(person,D.matchPublicBuyerDetails([person],pages,input.domain,input.company)[0]);
-       let indexed=[];
-       const officialGmail=D.gmailResearchMatches(person,input,pages);
-       if(!state.managementIndexUnavailable&&(!(card.email||person.publicEmail)||!(card.phone||person.publicPhone)||!person.publicLinkedinUrl||!officialGmail.length)){
-        const query='"'+person.name+'" "'+input.company+'"';
-        indexed=await optional(()=>task('public_index',query,signal=>(services.publicIndex||services.search||searchManagementIndex)(query,signal,fetchDirectPublicPage)));
-        if(!indexed){state.managementIndexUnavailable=true;indexed=[];}
-        if(!person.publicLinkedinUrl&&indexed.length){
-         const matched=D.matchPublicLinkedInProfiles([person],websiteLinkedInMatchRows(person,indexed,input),input.company)[0];
-         if(matched.linkedinIdentityEvidence?.url)Object.assign(person,matched);
-        }
+      const index=async query=>{
+       if(state.managementIndexUnavailable)return undefined;
+       const hits=await optional(()=>managementIndex(query));
+       if(!hits)state.managementIndexUnavailable=true;
+       return hits;
+      };
+      const readResult=url=>optional(()=>read(url));
+      if(!state.managementDirectoryDone&&state.people.length<input.managementLimit){
+       if(services.apollo||(await apolloCapabilities(env,row.workspace_id)).discovery&&(await resolveWorkspaceServiceCredential(env,row.workspace_id,'apollo')).configured){
+        const directory=await optional(()=>apollo('management-company-identities',{domain:input.domain,discovery_scope:'company',page:1}));
+        observe({provider:'apollo',operation:'identity_search',status:directory?'succeeded':'unavailable',results:directory?.people?.length||0,paidReveal:false});
+        if(directory)state.managementDirectoryPeople=await managementDirectoryPeople(input,directory.people||[],{index,read:readResult,sourceRows:()=>reads(state)});
+        await guard();acquire(state,input);
        }
-       const officialHit=indexed.find(hit=>sameHost(hit.url,input.domain)&&websiteNameKey(hit.title+' '+hit.description).includes(websiteNameKey(person.name)));
-       const extra=officialHit?await optional(()=>read(officialHit.url)):null;
-       if(extra)Object.assign(person,D.matchPublicBuyerDetails([person],[extra],input.domain,input.company)[0]);
-       const matches=[...officialGmail,...D.gmailResearchMatches(person,input,extra?[extra,...indexed]:indexed)];
-       person.gmailMatches=[...new Map([...(person.gmailMatches||[]),...matches].map(m=>[m.email,m])).values()];
-       person.publicSourcesChecked=true;person.freeCheckedAt=new Date().toISOString();
-       person.freeResearchStatus=state.gaps.length?'needs_review':'complete';
+       state.managementDirectoryDone=true;
+       await checkpoint();
+      }
+      for(const person of state.people){
+       if(person.managementChecks&&person.freeResearchStatus==='complete')continue;
+       person.managementChecks=await managementChannels(input,person,pages,{index,read:readResult});
+       person.publicSourcesChecked=pages.length>0;person.freeCheckedAt=new Date().toISOString();
+       person.freeResearchStatus=Object.values(person.managementChecks).every(c=>c.status==='complete')?'complete':'needs_review';
        const page=pages.find(p=>p.url===person.publicNameUrl);
        recordIdentity(input,person,{matchStatus:'not_checked'},page);
+       await checkpoint();
       }
-      delete state.personCheck;state.phase='contacts';status=state.gaps.length?'incomplete':'complete';state.stopReason='sources_checked';state.label='Published contact details checked for '+state.people.length+' decision-makers.';
+      state.managementResearchVersion=MANAGEMENT_RESEARCH_VERSION;
+      const unfinished=state.people.filter(person=>person.freeResearchStatus==='needs_review').length;
+      delete state.personCheck;state.phase='contacts';status=unfinished||state.gaps.length?'incomplete':'complete';state.stopReason='sources_checked';
+      state.label=unfinished?'Company pages checked. Additional public contact searches remain incomplete for '+unfinished+' of '+state.people.length+' people.':'Published contact details checked for '+state.people.length+' decision-makers.';
      }
     }
    }
