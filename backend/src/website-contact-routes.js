@@ -3,6 +3,7 @@ import {runWebsiteContactJobs} from './website-contact-runner.js';
 import {lookupWebsiteContact} from './website-contact-paid.js';
 import {apolloCapabilities} from './service-integrations.js';
 import {readAdditionalContactPolicy} from './additional-contact-services.js';
+import {scanWebsite} from './website-scan.js';
 import {storageErrorResponse} from './workspace-storage.js';
 
 export async function handleWebsiteContactRoute(request,env,cors={},ctx){
@@ -16,6 +17,11 @@ export async function handleWebsiteContactRoute(request,env,cors={},ctx){
   const text=await request.text();if(text.length>12000)throw contactError('Contact request is too large.',413);
   let body;try{body=JSON.parse(text);}catch{throw contactError('A contact research request is required.',400);}
   if(!body||typeof body!=='object'||Array.isArray(body))throw contactError('A contact research request is required.',400);
+  if(body.action==='scan-website'){
+   const {job,...scan}=await scanWebsite(request,env,context,body);
+   if(job&&ctx?.waitUntil&&['queued','running'].includes(job.status))ctx.waitUntil(runWebsiteContactJobs(env,{jobId:job.id,windowMs:18000}).catch(()=>{}));
+   return json({...scan,job:await websiteContactView(env,job)});
+  }
   if(body.action==='paid'){const result=await lookupWebsiteContact(request,env,context,body);return json({result,job:await websiteContactView(env,await readWebsiteContacts(env,workspaceId,{id:body.jobId}))});}
   if(!['start','shortlist','resume','cancel','wake','review-identities','check-linkedin','check-identity'].includes(body.action||'start'))throw contactError('Unknown research action.',400);
   const row=['start','shortlist'].includes(body.action||'start')?await startWebsiteContacts(env,context,body):await commandWebsiteContacts(env,context,body);

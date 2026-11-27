@@ -1,3 +1,4 @@
+import {allowFullResearch} from './research-strategy.js';
 import {requestFirecrawl,pdfAddress} from './firecrawl-request.js';
 import {apolloWebhookSigningSecret} from './apollo-crm-webhook.js';
 import {exposePublishedEmailHtml} from './published-email-html.js';
@@ -340,6 +341,15 @@ async function forwardFirecrawl(request,env,cors,workspaceId,kind,operationId){
     const location=typeof body.location==='string'?clean(body.location,100):'';
     const country=typeof body.country==='string'&&/^[a-z]{2}$/i.test(body.country)?body.country.toUpperCase():'';
     payload={query,limit,...(location?{location}:{}),...(country?{country}:{}),...(wantsMarkdown?{scrapeOptions:{formats:['markdown']}}:{})};
+  }
+  if(body.websiteScan===true){
+    try{await allowFullResearch(env,workspaceId);}
+    catch(cause){
+      if(cause.code!=='FULL_RESEARCH_DISABLED')throw cause;
+      if(kind!=='scrape')return error(cause.message,403,cors,cause.code);
+      try{return json(await fetchDirectPublicPage(researchUrl.href,{signal:providerSignal(request,10000)}),200,cors);}
+      catch{return error('Direct reading failed. Metered extraction is disabled in Search strategy.',422,cors);}
+    }
   }
   if(kind==='scrape'&&body.publicFirst===true){
     if(request.signal.aborted)return cancelledResponse(request.signal,cors);

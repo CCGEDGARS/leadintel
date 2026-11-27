@@ -52,8 +52,9 @@ test('Nordic company scans recover a saved blank website and reach native CRM/co
   assert.equal(await manager.getByRole('link',{name:/^Email source/}).getAttribute('href'),contactUrl);
   assert.equal(reads.filter(value=>value===contactUrl).length,1);assert.equal(f.DB.raw.prepare('SELECT count(*) n FROM additional_contact_attempts').get().n,0);
   const bounds=await page.locator('#website-contact-results').boundingBox();assert.ok(bounds.x>=0&&bounds.x+bounds.width<=391);await page.locator('#website-contact-results').screenshot({path:dir+'/nordic-reopened-mobile.png'});
-  await page.locator('[data-scan-action=scan]').click();await page.waitForFunction(()=>document.querySelector('[data-scan-website]')?.value==='https://bogestaal.example/'&&!document.querySelector('[data-scan-action=buyers]').disabled&&document.querySelector('.website-scan-table')?.textContent.includes('Website not checked'));
-  assert.equal(await page.locator('[data-scan-name]').inputValue(),name);assert.ok(providerCalls.some(c=>c.kind==='ai'));await page.locator('[data-scan-action=buyers]').click();await page.locator('.website-contact-person').first().waitFor();assert.equal(f.DB.raw.prepare('SELECT count(*) n FROM website_contact_jobs').get().n,1);assert.equal(providerCalls.filter(c=>c.kind.endsWith('/search')).length,0);
+  const callsBefore=providerCalls.length;
+  await page.locator('[data-scan-action=scan]').click();await page.waitForFunction(()=>document.querySelector('#website-scanning-status')?.textContent.includes('Contact research opened for'));
+  await page.locator('.website-contact-person').first().waitFor();assert.equal(providerCalls.length,callsBefore);assert.equal(f.DB.raw.prepare('SELECT count(*) n FROM website_contact_jobs').get().n,1);
   assert.equal(f.DB.raw.prepare('SELECT count(*) n FROM additional_contact_attempts').get().n,0);assert.deepEqual(errors,[]);
   await fs.writeFile(dir+'/nordic-identity.json',JSON.stringify({nativeHttp:true,realSql:true,legacyBlankRecovered:true,freshScanPreservedWebsite:true,registeredScheduler:true,freshMobileReopen:true,noRepeatedIdentityRead:true,identitySearchCalls:0,duplicateContactJobs:0,paidCalls:0,pageErrors:errors},null,2));
  }catch(error){await page?.screenshot({path:dir+'/nordic-failure.png',fullPage:true}).catch(()=>{});throw error;}finally{await context?.close();await browser.close();await f.close();}
@@ -158,7 +159,10 @@ test('Step 2 Fast research starts from a known website and reopens the same save
  let chromium;
  try{({chromium}=await loadPlaywright());await fs.access(process.env.LEADINTEL_CHROMIUM_PATH||'/usr/bin/chromium');}
  catch(error){if(process.env.LEADINTEL_REQUIRE_BROWSER==='true')throw error;t.skip('Chromium unavailable');return;}
- const f=await journeyFixture({durableWebsite:true});
+ const homepage='https://northmetal.example/en/',reads=[];
+ const f=await journeyFixture({durableWebsite:true,externalFetch:async input=>{
+  if(String(input)===homepage){reads.push(homepage);return new Response('<html><title>North Metal | Home</title><body><h1>North Metal</h1><p>North Metal manufactures equipment for industrial customers.</p></body></html>',{headers:{'Content-Type':'text/html'}});}
+ }});
  const browser=await chromium.launch({executablePath:process.env.LEADINTEL_CHROMIUM_PATH||'/usr/bin/chromium',args:['--no-sandbox']});
  t.after(async()=>{await browser.close();await f.close();});
  const metered=[];let observing=false;
@@ -176,18 +180,46 @@ test('Step 2 Fast research starts from a known website and reopens the same save
   return page;
  }
  const page=await open();
- await page.locator('#website-fast-company').fill('North Metal');
- await page.locator('#website-scanning-url').fill('https://northmetal.example/');
- observing=true;await page.locator('[data-scan-action="fast"]').click();
- await page.waitForFunction(()=>document.querySelector('#website-scanning-status')?.textContent.includes('Fast research opened'));
+ assert.equal(await page.getByRole('button',{name:'Scan website',exact:true}).count(),1);
+ assert.equal(await page.locator('[data-scan-action=fast]').count(),0);
+ await page.locator('#website-scanning-url').fill(homepage);
+ observing=true;await page.locator('[data-scan-action="scan"]').click();
+ await page.waitForFunction(()=>document.querySelector('#website-scanning-status')?.textContent.includes('Contact research opened for North Metal'));
  const initial=f.DB.raw.prepare('SELECT id,company_id,input_json FROM website_contact_jobs').get();
  assert.equal(JSON.parse(initial.input_json).company,'North Metal');
  await page.evaluate(()=>LeadIntelServerBridge.saveNow({saveIntent:true,explicitSave:true}));await page.context().close();
  observing=false;const reopened=await open();
- assert.equal(await reopened.locator('#website-fast-company').inputValue(),'North Metal');
- observing=true;await reopened.locator('[data-scan-action="fast"]').click();
- await reopened.waitForFunction(()=>document.querySelector('#website-scanning-status')?.textContent.includes('Fast research opened'));
+ assert.equal(await reopened.locator('#website-scanning-url').inputValue(),homepage);
+ observing=true;await reopened.locator('[data-scan-action="scan"]').click();
+ await reopened.waitForFunction(()=>document.querySelector('#website-scanning-status')?.textContent.includes('Contact research opened for North Metal'));
  assert.deepEqual(f.DB.raw.prepare('SELECT id,company_id,input_json FROM website_contact_jobs').all(),[initial]);
- assert.deepEqual(metered,[]);
+ assert.deepEqual(metered,[]);assert.deepEqual(reads,[homepage]);
+ const stored=JSON.parse(f.DB.raw.prepare('SELECT state_json FROM website_contact_jobs').get().state_json);assert.equal(stored.tasks[0].value,homepage);assert.equal(stored.tasks[0].result.sourceRead,true);
+ assert.equal(f.DB.raw.prepare('SELECT count(*) n FROM additional_contact_attempts').get().n,0);
+});
+
+test('concurrent directory scans share one extraction and preserve the workspace spending preference',async t=>{
+ const source='https://steel-directory.example/members',company='Example Mills',quote=company+' supplies finished steel products to manufacturers.';
+ let began,release,aiCalls=0,pageReads=0;
+ const working=new Promise(resolve=>began=resolve),hold=new Promise(resolve=>release=resolve);
+ const f=await journeyFixture({durableWebsite:true,externalFetch:async input=>{
+  const url=new URL(typeof input==='string'?input:input.url);
+  if(url.hostname==='steel-directory.example'){pageReads++;return new Response('<html><title>Steel directory</title><body><p>'+quote+'</p></body></html>',{headers:{'Content-Type':'text/html'}});}
+  if(url.hostname==='api.openai.com'){aiCalls++;began();await hold;return Response.json({output_text:JSON.stringify({pageType:'list',companies:[{name:company,quote}]}),usage:{}});}
+ }});
+ t.after(()=>f.close());f.env.OAUTH_TOKEN_ENCRYPTION_KEY=Buffer.alloc(32,31).toString('base64');
+ const key=await importAesKey(f.env.OAUTH_TOKEN_ENCRYPTION_KEY);
+ f.DB.raw.prepare("INSERT INTO workspace_ai_integrations(workspace_id,provider,encrypted_api_key,key_hint,model,active) VALUES(?,'openai',?,'fixture','gpt-6.1-sol',1)").run(workspaceId,await encryptSecret('controlled-scanner-ai',key));
+ const scan=url=>fetch(f.origin+'/api/websites/contacts?workspace_id='+workspaceId,{method:'POST',headers:{Cookie:'leadintel_session='+sessionToken,Origin:f.origin,'Content-Type':'application/json'},body:JSON.stringify({action:'scan-website',url})});
+ const first=scan(source);
+ try{await Promise.race([working,first.then(async response=>{throw Error('Directory did not reach extraction: '+response.status+' '+JSON.stringify(await response.clone().json()));})]);
+  assert.equal((await (await scan(source)).json()).pending,true);
+ }finally{release();}
+ const result=await (await first).json();
+ assert.deepEqual(result.rows.map(p=>p.name),[company]);assert.equal(result.job,null);
+ assert.deepEqual((await (await scan(source)).json()).rows,result.rows);assert.equal(aiCalls,1);assert.equal(pageReads,1);
+ f.DB.raw.prepare("INSERT INTO workspace_research_settings(workspace_id,full_research_policy) VALUES(?,'free_only')").run(workspaceId);
+ assert.equal((await scan(source+'?page=2')).status,403);assert.equal(aiCalls,1);assert.equal(pageReads,2);
+ assert.equal(f.DB.raw.prepare('SELECT count(*) n FROM website_contact_jobs').get().n,0);
  assert.equal(f.DB.raw.prepare('SELECT count(*) n FROM additional_contact_attempts').get().n,0);
 });

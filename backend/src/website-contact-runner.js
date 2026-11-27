@@ -299,7 +299,7 @@ export async function runWebsiteContactJobs(env,{jobId,now=Date.now(),windowMs=4
        return hits;
       };
       const readResult=url=>optional(()=>read(url));
-      if(!state.managementDirectoryDone&&state.people.length<input.managementLimit){
+      if(!state.managementDirectoryDone){
        if(services.apollo||(await apolloCapabilities(env,row.workspace_id)).discovery&&(await resolveWorkspaceServiceCredential(env,row.workspace_id,'apollo')).configured){
         const directory=await optional(()=>task('apollo','management-company-identities',async signal=>{
          for(const attempt of [1,2]){
@@ -312,7 +312,7 @@ export async function runWebsiteContactJobs(env,{jobId,now=Date.now(),windowMs=4
         observe({provider:'apollo',operation:'identity_search',status:directory?.reused?'reused':directory?'succeeded':'unavailable',results:directory?.people?.length||0,paidReveal:false});
         if(directory)state.managementDirectoryPeople=await managementDirectoryPeople(input,directory.people||[],{index,read:readResult,sourceRows:()=>reads(state)});
         await guard();acquire(state,input);
-       }
+       }else observe({provider:'apollo',operation:'identity_search',status:'skipped',reason:'Apollo Free discovery is unavailable for this workspace',results:0,paidReveal:false});
        state.managementDirectoryDone=true;
        await checkpoint();
       }
