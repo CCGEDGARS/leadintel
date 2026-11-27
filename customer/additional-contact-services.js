@@ -167,8 +167,12 @@
     return '<details><summary>Import email evidence</summary><label>Provider report (JSON) <input type="file" accept=".json,application/json" data-buyer-report-file="'+esc(candidate.domain)+'"></label></details>';
   }
   async function importEvidence(domain,bundle){
-    const candidate=adapter?.rows?.().find(c=>c.domain===domain),context=policyContext(),companyId=candidate?.crmId;
-    const current=()=>policyCurrent(context)&&candidate?.crmId===companyId&&adapter?.rows?.().includes(candidate)&&!bridge()?.conflict;
+    const findCandidate=()=>adapter?.rows?.().find(c=>c.domain===domain);
+    let candidate=findCandidate();
+    const context=policyContext(),companyId=candidate?.crmId,companyName=candidate?.company;
+    const roster=c=>JSON.stringify((c?.people||[]).map(p=>[p.id,p.publicName||p.name,p.title]).sort((a,b)=>String(a[0]).localeCompare(String(b[0]))));
+    const approvedRoster=roster(candidate);
+    const current=()=>{const active=findCandidate();return policyCurrent(context)&&active?.crmId===companyId&&active?.company===companyName&&roster(active)===approvedRoster&&!bridge()?.conflict;};
     if(!companyId||!current())return;
     try{
       if(bundle?.domain!==domain||!Array.isArray(bundle.records)||!bundle.records.length||bundle.records.length>10)throw Error('The provider report must match this company and contain one to ten buyer records.');
@@ -176,6 +180,7 @@
       if(!approved||!current())return;
       const result=await api('/api/additional-contact-services/email-evidence',{method:'POST',body:JSON.stringify({companyId,bundle})});
       if(!current())return;
+      candidate=findCandidate();
       for(const row of result.records){const person=candidate.people.find(p=>p.id===row.personId);if(person&&(person.publicName||person.name)===row.evidence.identityName&&person.title===row.evidence.identityRole)person.waterfallEmail=row.evidence;}
       if(linkedEmailEvidence()?.domain===domain)root.history.replaceState(null,'',root.location.pathname+root.location.search);
       adapter.saveOutcome?.(candidate);adapter.render();adapter.toast?.('Saved email evidence for '+result.records.length+' buyers.');

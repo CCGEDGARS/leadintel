@@ -3,7 +3,7 @@ import {FIRECRAWL_RECEIPT_EVENT,FIRECRAWL_PURPOSES} from './firecrawl-request.js
 const DAY=86400000,MAX_ROWS=10000;
 const parse=value=>{try{return JSON.parse(value||'{}')||{};}catch{return {};}};
 const finite=value=>typeof value==='number'&&Number.isFinite(value)&&value>=0?value:null;
-const kinds=new Set(['search','scrape']);
+const kinds=new Set(['search','scrape','enrich']);
 const outcomes=new Set(['succeeded','failed','credits_exhausted','rate_limited_upstream','rate_limited_locally','interrupted','network_error']);
 const labels={interactive_research:'interactive research',buyer_research:'buyer research',company_list:'company lists',company_dossier:'company dossiers',website_contacts:'website contacts',assistant_research:'Ask LeadIntel research',market_monitoring:'market monitoring',approved_workflow:'approved workflows',source_health:'source checks',email_source_check:'email-source checks'};
 export function isFirecrawlUsageQuestion(question,conversation=[]){
@@ -31,7 +31,7 @@ function safeReceipt(row){
 function total(rows){
   const sent=rows.filter(r=>r.sent),reported=sent.filter(r=>r.reportedCredits!==null),purposes={},fingerprints=new Map();
   for(const r of sent){purposes[r.purpose]=(purposes[r.purpose]||0)+1;if(r.fingerprint)fingerprints.set(r.fingerprint,(fingerprints.get(r.fingerprint)||0)+1);}
-  return {requests:sent.length,searches:sent.filter(r=>r.kind==='search').length,scrapes:sent.filter(r=>r.kind==='scrape').length,localBlocks:rows.length-sent.length,failed:sent.filter(r=>r.outcome!=='succeeded').length,rateLimited:sent.filter(r=>r.outcome==='rate_limited_upstream').length,creditFailures:sent.filter(r=>r.outcome==='credits_exhausted').length,reportedCredits:reported.reduce((n,r)=>n+r.reportedCredits,0),reportedRequests:reported.length,unreportedRequests:sent.length-reported.length,estimatedCredits:sent.reduce((n,r)=>n+(r.estimatedCredits||0),0),repeatedRequests:[...fingerprints.values()].reduce((n,count)=>n+Math.max(0,count-1),0),purposes:Object.entries(purposes).map(([purpose,requests])=>({purpose,requests})).sort((a,b)=>b.requests-a.requests)};
+  return {requests:sent.length,searches:sent.filter(r=>r.kind==='search').length,scrapes:sent.filter(r=>r.kind==='scrape').length,enrichments:sent.filter(r=>r.kind==='enrich').length,localBlocks:rows.length-sent.length,failed:sent.filter(r=>r.outcome!=='succeeded').length,rateLimited:sent.filter(r=>r.outcome==='rate_limited_upstream').length,creditFailures:sent.filter(r=>r.outcome==='credits_exhausted').length,reportedCredits:reported.reduce((n,r)=>n+r.reportedCredits,0),reportedRequests:reported.length,unreportedRequests:sent.length-reported.length,estimatedCredits:sent.reduce((n,r)=>n+(r.estimatedCredits||0),0),repeatedRequests:[...fingerprints.values()].reduce((n,count)=>n+Math.max(0,count-1),0),purposes:Object.entries(purposes).map(([purpose,requests])=>({purpose,requests})).sort((a,b)=>b.requests-a.requests)};
 }
 export async function readFirecrawlUsage(env,workspaceId,{question='',now=Date.now()}={}){
   const period=firecrawlUsageWindow(question,now),since=Math.max(now-30*DAY,Math.min(period.from,now-DAY));
@@ -48,7 +48,7 @@ export function firecrawlUsageAnswer(report){
   if(!report.available)lines.push('Usage records are unavailable, so I cannot determine what was spent or whether there was an error.');
   else if(!s.requests&&!s.localBlocks)lines.push('No detailed request receipts were found for this period. This does not prove zero usage: older activity was not fully recorded.');
   else{
-    lines.push(`Recorded Firecrawl attempts: ${s.requests} (searches: ${s.searches}; page extractions: ${s.scrapes}).${s.localBlocks?' '+s.localBlocks+' requests were held locally without contacting Firecrawl.':''}`);
+    lines.push(`Recorded Firecrawl attempts: ${s.requests} (searches: ${s.searches}; page extractions: ${s.scrapes}${s.enrichments?'; buyer email lookups: '+s.enrichments:''}).${s.localBlocks?' '+s.localBlocks+' requests were held locally without contacting Firecrawl.':''}`);
     lines.push(s.reportedRequests?`${s.reportedCredits} credits were explicitly reported by Firecrawl across ${s.reportedRequests} request${s.reportedRequests===1?'':'s'}. ${s.unreportedRequests?s.unreportedRequests+' requests have no reported amount; the total charge is unknown.':'This covers these recorded requests only.'}`:'Firecrawl did not report credit amounts for these requests. The actual charge is unknown.');
     if(s.unreportedRequests)lines.push(`The standard-operation estimate is ${s.estimatedCredits} credits for the recorded attempts. It is not a measured charge; PDF pages and provider options can cost more, and failed attempts may not be billed.`);
     if(s.purposes.length)lines.push('Recorded activity: '+s.purposes.slice(0,5).map(r=>`${labels[r.purpose]} ${r.requests}`).join('; ')+'.');

@@ -20,7 +20,8 @@ test('a saved website scan starts the ranked public job and opens Messages for i
  page.on('pageerror',error=>errors.push(error.message));
  await context.route('**/*',route=>new URL(route.request().url()).origin===f.origin?route.continue():route.abort());
  await context.addCookies([{name:'leadintel_session',value:sessionToken,url:f.origin}]);
- await page.goto(f.origin+'/customer/');await page.waitForFunction(()=>window.LeadIntelServerBridge?.ready&&window.LeadIntelServerBridge?.session?.authenticated&&window.LeadIntelDiscoveryUI?.openWebsiteBuyers);
+ const evidence={version:1,domain:c.domain,records:[{name:'Alice Berg',email:'alice@forge.example',finder:'Test finder',qualification:'valid'}]};
+ await page.goto(f.origin+'/customer/#buyer-email-evidence='+encodeURIComponent(JSON.stringify(evidence)));await page.waitForFunction(()=>window.LeadIntelServerBridge?.ready&&window.LeadIntelServerBridge?.session?.authenticated&&window.LeadIntelDiscoveryUI?.openWebsiteBuyers);
  await page.locator('[data-step-marker="2"]').click();
  await page.locator('#website-scanning-open').click();
  const find=page.getByRole('button',{name:'Find buyers',exact:true}).filter({visible:true});
@@ -43,8 +44,8 @@ test('a saved website scan starts the ranked public job and opens Messages for i
  assert.deepEqual(await card.locator('.buyer-four-actions button').allTextContents(),['Paid email','Paid phone','Refresh','Proceed']);
  assert.match(await card.innerText(),/robert@forge.example/);
  assert.equal(await card.locator('a[href="https://forge.example/team"]').count()>0,true);
- const evidence={version:1,domain:c.domain,records:[{name:'Alice Berg',email:'alice@forge.example',finder:'Test finder',qualification:'valid'}]};
- await panel.locator('[data-buyer-report-file]').setInputFiles({name:'report.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(evidence))});
+ await page.waitForFunction(()=>discovery.selectedProspects[0]?.buyerResearchJob?.status&&!["running","queued"].includes(discovery.selectedProspects[0].buyerResearchJob.status));
+ await panel.getByRole('button',{name:'Apply saved email evidence'}).click();
  await page.getByRole('button',{name:'Save evidence',exact:true}).click();
  const alice=cards.filter({hasText:'Alice Berg'});
  await alice.getByText('Imported provider report · Test finder · valid').waitFor();

@@ -8,14 +8,14 @@ const owner=(company,person)=>[D.canonicalDomain(company.domain),key(person.publ
 const personName=p=>p.publicName||p.name;
 const invalid=message=>Object.assign(Error(message),{status:400});
 const incomplete=reason=>({status:'incomplete',reason});
-const short=value=>String(value||'').slice(0,80);
-const validAddress=(email,domain)=>typeof email==='string'&&/^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/i.test(email)&&email.toLowerCase().endsWith('@'+domain)&&! /^(?:info|sales|office|contact|support|mail|team|hr|pr|reception)@/i.test(email);
+const short=value=>String(value||'').trim().slice(0,80);
+const validAddress=(email,domain)=>typeof email==='string'&&email.length<=254&&/^[a-z0-9._%+-]{1,64}@[a-z0-9.-]+\.[a-z]{2,}$/i.test(email)&&email.toLowerCase().endsWith('@'+domain)&&!/^(?:admin|info|sales|office|contact|support|mail|team|hr|pr|reception|noreply|no-reply)@/i.test(email);
 export function interpretEmail(row,domain){
  const field=row?.fields?.work_email;
  if(!field){
   const calls=Array.isArray(row?.calls)?row.calls:[];
   const misses=calls.length&&calls.every(c=>['miss','not_found','no_match'].includes(c.status));
-  return misses?{status:'not_found',reason:'No work email returned by the checked providers.'}:incomplete(calls.length?'Provider checks did not establish a result.':'No provider ran within the credit allowance.');
+  return misses?{status:'not_found',reason:'No work email returned by the checked providers.'}:incomplete(!Array.isArray(row?.calls)?'Firecrawl supplied no provider-attempt receipt.':calls.length?'Provider checks did not establish a result.':'No provider ran within the credit allowance.');
  }
  const email=String(field.value||'').toLowerCase(),provider=short(field.provider);
  if(field.warning==='employer_mismatch'||field.domain_match!==true||!validAddress(email,domain)||!provider)return incomplete('Provider result did not match the selected company.');
@@ -27,18 +27,20 @@ export function interpretEmail(row,domain){
  return {status:'found',email,finder:provider,qualification:short(verifier?.qualification||verifier?.status),mailbox:deliverable?'deliverable':verifier?.is_domain_catch_all===true?'catch_all':'unverified',...(deliverable?{verifier:provider}:{}),...(Number.isFinite(verifier?.confidence)?{confidence:verifier.confidence}:{}),...(typeof verifier?.is_domain_catch_all==='boolean'?{catchAll:verifier.is_domain_catch_all}:{})};
 }
 export async function lookupFirecrawlEmails(env,workspaceId,domain,people,{maxCredits=0,signal,requestId,guard,fetchImpl=fetch}={}){
+ if(![0,10].includes(maxCredits)||maxCredits>0&&people.length!==1)throw invalid('Use a zero-credit batch or one approved work email lookup.');
+ requestId ||= crypto.randomUUID();
  const credential=await resolveWorkspaceServiceCredential(env,workspaceId,'firecrawl');
  if(!credential.configured)return people.map(()=>incomplete('Connect Firecrawl to check email providers.'));
  const names=people.map(name=>({name,domain}));
  const options={people:names,contact_fields:['work_email'],profile:false,max_credits:maxCredits};
  const response=await requestFirecrawl(env,workspaceId,'enrich',{
-  credential,fetchImpl,beforeDispatch:guard,requestId:requestId||crypto.randomUUID(),purpose:'buyer_research',
+  credential,fetchImpl,beforeDispatch:guard,requestId,purpose:'buyer_research',
   payload:{alexandria:[{provider:'firecrawl',capability:'enrich/auto',options}],timeout:40000},
   signal:signal?AbortSignal.any([signal,AbortSignal.timeout(45000)]):AbortSignal.timeout(45000)
  });
  if(!response.ok)throw Error('Firecrawl email lookup returned HTTP '+response.status);
  const payload=await response.json(),entry=payload?.data?.alexandria?.[0],data=entry?.data;
- if(entry?.error||!Array.isArray(data?.people))throw Error('Firecrawl email lookup returned no usable receipt.');
+ if(payload?.success===false||entry?.error||!Array.isArray(data?.people))throw Error('Firecrawl email lookup returned no usable receipt.');
  const checkedAt=new Date().toISOString();
  return people.map((_,i)=>{
   const matches=data.people.filter(row=>row.input_index===i);
@@ -119,9 +121,10 @@ export async function importEmailEvidence(env,context,body){
  if(bundle?.version!==1||!domain||!Array.isArray(bundle.records)||!bundle.records.length||bundle.records.length>10)throw invalid('Choose a buyer email evidence file with one to ten records.');
  const company=await env.DB.prepare("SELECT id,company_name,normalized_domain FROM crm_companies WHERE workspace_id=? AND id=? AND normalized_domain=? AND deleted_at IS NULL AND lifecycle_status NOT IN ('archived','suppressed')").bind(context.workspaceId,body.companyId||'',domain).first();
  if(!company)throw invalid('This evidence must match the selected CRM company.');
- const saved=await env.DB.prepare("SELECT result_json FROM buyer_research_jobs WHERE workspace_id=? AND domain=? AND json_extract(input_json,'$.candidate.company')=? AND COALESCE(json_extract(input_json,'$.scope'),'all_buyers')='all_buyers' ORDER BY rowid DESC LIMIT 1").bind(context.workspaceId,domain,company.company_name).first();
+ const saved=await env.DB.prepare("SELECT result_json FROM buyer_research_jobs WHERE workspace_id=? AND domain=? AND json_extract(input_json,'$.candidate.company')=? AND COALESCE(NULLIF(json_extract(input_json,'$.candidate.crmId'),''),?)=? AND COALESCE(json_extract(input_json,'$.scope'),'all_buyers')='all_buyers' ORDER BY rowid DESC LIMIT 1").bind(context.workspaceId,domain,company.company_name,company.id,company.id).first();
  const roster=JSON.parse(saved?.result_json||'{}').people||[],rows=[],ids=new Set();
  for(const row of bundle.records){
+  if(!row||typeof row.name!=='string'||!row.name.trim())throw invalid('Each record needs a buyer name.');
   if(row.listedName){const parts=key(row.name).split(' '),alias=key(row.listedName).split(' ');if(alias.length<2||alias[0]!==parts[0]||alias.at(-1)!==parts.at(-1))throw invalid('The listed name must match this buyer.');}
   const matches=roster.filter(p=>[row.name,row.listedName].some(n=>n&&key(n)===key(personName(p))));
   if(matches.length!==1||ids.has(matches[0].id)||!row.finder||!validAddress(row.email,domain))throw invalid('Each record needs one matching buyer, a finder and a work email on this domain.');
