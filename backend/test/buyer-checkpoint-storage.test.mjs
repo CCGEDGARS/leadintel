@@ -73,3 +73,43 @@ test('resume holds a known oversized write without opening a new research window
  assert.deepEqual(row(),before);
  assert.equal(f.DB.raw.prepare('SELECT count(*) n FROM buyer_research_tasks').get().n,0);
 });
+
+test('Find buyers in a free-only workspace cannot requeue an older metered run',async t=>{
+ const f=await buyerJobsFixture(t),find={...f.body,peopleFirst:true,fullResearch:true,allowFreeFallback:true};
+ const job=(await (await request(f,find)).json()).job;
+ f.DB.raw.prepare("UPDATE buyer_research_jobs SET status='needs_review',phase='official',last_error=?,input_json=json_remove(input_json,'$.emailWaterfallVersion') WHERE id=?").run(legacyReason,job.id);
+ f.DB.raw.prepare("INSERT INTO workspace_research_settings(workspace_id,full_research_policy) VALUES(?,'free_only') ON CONFLICT(workspace_id) DO UPDATE SET full_research_policy='free_only'").run(workspaceId);
+ const snapshot=()=>f.DB.raw.prepare('SELECT * FROM buyer_research_jobs WHERE id=?').get(job.id);
+ const before=snapshot();
+ const response=await request(f,find);
+ assert.equal(response.status,200);
+ const saved=(await response.json()).job;
+ assert.equal(saved.id,job.id);
+ assert.equal(saved.status,'needs_review');
+ assert.deepEqual(snapshot(),before);
+ await tick(f,job.id,{});
+ assert.deepEqual(snapshot(),before);
+ assert.equal(f.DB.raw.prepare('SELECT count(*) AS n FROM buyer_research_tasks WHERE job_id=?').get(job.id).n,0);
+ // Older jobs can carry the metered approval without the newer Full flag.
+ f.DB.raw.prepare("UPDATE buyer_research_jobs SET input_json=json_remove(input_json,'$.fullResearch') WHERE id=?").run(job.id);
+ const legacy=snapshot(),resume={action:'resume',jobId:job.id,expectedRevision:legacy.revision};
+ assert.equal((await request(f,resume)).status,200);
+ assert.equal((await request(f,{...resume,allowMeteredPublicResearch:true})).status,403);
+ assert.deepEqual(snapshot(),legacy);
+});
+
+test('a saved full run paused at official sources keeps its checkpoint until authorized Resume',async t=>{
+ const f=await buyerJobsFixture(t),find={...f.body,peopleFirst:true,fullResearch:true};
+ const job=(await (await request(f,find)).json()).job;
+ f.DB.raw.prepare("UPDATE buyer_research_jobs SET status='needs_review',phase='official',last_error=?,input_json=json_remove(input_json,'$.emailWaterfallVersion') WHERE id=?").run(legacyReason,job.id);
+ f.DB.raw.prepare("INSERT INTO buyer_research_tasks(job_id,task_key,kind,phase,status,attempts) VALUES(?,'saved-page','read','official','complete',1)").run(job.id);
+ const opened=(await (await request(f,find)).json()).job;
+ assert.equal(opened.phase,'official');
+ assert.equal(opened.status,'needs_review');
+ const resumed=await request(f,{action:'resume',jobId:job.id,expectedRevision:opened.revision,allowMeteredPublicResearch:true});
+ assert.equal(resumed.status,200);
+ const value=(await resumed.json()).job;
+ assert.equal(value.id,job.id);assert.equal(value.phase,'official');assert.equal(value.progress.completed,1);
+ const input=JSON.parse(f.DB.raw.prepare('SELECT input_json FROM buyer_research_jobs WHERE id=?').get(job.id).input_json);
+ assert.equal(input.emailWaterfallVersion,1);
+});
