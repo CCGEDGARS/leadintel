@@ -4366,7 +4366,11 @@ async function controlSavedBuyerResearch(domain,action,button){
  if(action==='expand')return runDurableBuyerResearch(candidate,{resumeExisting:true,allowMeteredPublicResearch:true});
  if(action==='resume'){
   const full=candidate.buyerResearchProgress?.fullResearch===true;
-  if(full&&!(await window.LeadIntelDialogs.confirm('Continue unfinished checks using your connected research providers?',{title:'Resume Full research?',action:'Resume metered research'})))return;
+  if(full){
+   const owner=discoveryOperationContext(),id=candidate.buyerResearchJob?.id;
+   const confirmed=await window.LeadIntelDialogs.confirm('Continue unfinished checks using your connected research providers?',{title:'Resume Full research?',action:'Resume metered research'});
+   if(!confirmed||owner!==discoveryOperationContext()||!selectedProspects().includes(candidate)||candidate.buyerResearchJob?.id!==id)return;
+  }
   return runDurableBuyerResearch(candidate,{resumeExisting:true,allowMeteredPublicResearch:full,personIds:candidate.buyerResearchJob?.personIds||undefined});
  }
  const b=bridge(),state=discovery,scope=discoveryOperationContext(),profile={...companyQualificationProfile(mainState()),decisionMakers:LeadIntelDiscovery.buyerRolesForTarget(mainState(),candidate)||candidate.buyerRoles||''};
@@ -4518,6 +4522,7 @@ function buyerCompanyResearchAction(candidate){
   if(candidate.buyerDiscovery?.lastError?.name==='BUYER_JOB_CONTEXT_MISMATCH')return {action:'refresh',label:'Research current company context'};
   const progress=candidate.buyerResearchProgress;
   if(job?.status==='needs_review'&&progress?.diagnostics?.at(-1)?.code==='free_discovery_finished')return {action:'expand',label:'Expand web research · uses credits'};
+  if(job?.id&&job.id===progress?.jobId&&job.status==='needs_review'&&!job.personIds?.length&&progress.fullResearch)return {action:'continue',label:'Resume Full research · uses credits'};
   if(job?.id&&job.id===progress?.jobId&&job.status==='needs_review'&&!job.personIds?.length&&(progress.windowPaused??(progress.diagnostics?.at(-1)?.code==='run_window')))return {action:'continue',label:'Resume buyer research'};
   if(candidate.buyerRolesChanged)return {action:'refresh',label:'Refresh buyers'};
   const finishedPlan=!job?.personIds?.length&&['official','dossier','identities','contacts','review'].every(key=>candidate.buyerResearchProgress?.stages?.[key]===true);

@@ -111,12 +111,18 @@ export async function verifyStep5Journey({artifactDir='/tmp/leadintel-step5-jour
   const completedTasks=f.DB.raw.prepare("SELECT task_key,result_json,attempts FROM buyer_research_tasks WHERE job_id=? AND status='complete' ORDER BY task_key").all(job.id);
   await settleInitialSave(page);
   const resumeAck=page.waitForResponse(response=>new URL(response.url()).pathname==='/api/buyers/research'&&response.request().method()==='POST');
-  await page.locator('.selected-prospect-company [data-find-prospect-buyers]').click();
-  const resumed=await resumeAck;assert.equal(resumed.ok(),true);assert.ok(['start','resume'].includes(resumed.request().postDataJSON().action),'Refresh recaptures paid consent and the server resumes the same incomplete job');assert.equal((await resumed.json()).job.id,job.id);
+  await page.getByRole('button',{name:'Resume Full research · uses credits'}).click();
+  await page.getByRole('button',{name:'Resume metered research'}).click();
+  const resumed=await resumeAck;assert.equal(resumed.request().postDataJSON().allowMeteredPublicResearch,true);assert.equal(resumed.ok(),true);assert.ok(['start','resume'].includes(resumed.request().postDataJSON().action),'Refresh recaptures paid consent and the server resumes the same incomplete job');assert.equal((await resumed.json()).job.id,job.id);
   assert.equal(f.DB.raw.prepare('SELECT count(*) n FROM buyer_research_jobs').get().n,1,'Refresh resumes the same incomplete job');
   for(let attempt=0;attempt<12;attempt++){const saved=f.DB.raw.prepare('SELECT * FROM buyer_research_jobs WHERE id=?').get(job.id);if(!['queued','running'].includes(saved.status))break;phaseRuns.push(...await f.runJobs(job.id));}
   await page.waitForFunction(revision=>discovery.selectedProspects[0].buyerResearchJob?.status==='needs_review'&&discovery.selectedProspects[0].buyerResearchJob.revision>revision,terminal.revision,{timeout:15000});
-  assert.deepEqual(f.DB.raw.prepare("SELECT task_key,result_json,attempts FROM buyer_research_tasks WHERE job_id=? AND status='complete' ORDER BY task_key").all(job.id),completedTasks,'explicit resume preserves completed receipts');
+  const afterResume=f.DB.raw.prepare("SELECT task_key,result_json,attempts FROM buyer_research_tasks WHERE job_id=? AND status='complete' ORDER BY task_key").all(job.id);
+  const previousKeys=new Set(completedTasks.map(task=>task.task_key));
+  assert.deepEqual(afterResume.filter(task=>previousKeys.has(task.task_key)),completedTasks,'resume preserves every completed task and its attempt count');
+  assert.ok(afterResume.filter(task=>!previousKeys.has(task.task_key)).every(task=>task.attempts===1),'only newly admitted checks may add a receipt');
+  const previousSearches=new Set(f.providerCalls.slice(0,providerCount).filter(call=>call.kind==='search').map(call=>call.query));
+  assert.ok(f.providerCalls.slice(providerCount).filter(call=>call.kind==='search').every(call=>!previousSearches.has(call.query)),'resuming must not dispatch an already completed search');
   assert.equal(f.providerCalls.filter(call=>call.kind==='read').length,readCount,'completed official source reads are not replayed');
   await shot('00-refresh-retains-contacts.png');
   jobEvidence={roleReviewRecovered:true,actualRefreshResumed:true,completedReceiptsPreserved:true,incompleteDossierContactsVisible:true,id:job.id,status:terminal.status,phase:terminal.phase,revision:terminal.revision,phaseRuns,tasks:tasks.map(r=>({kind:r.kind,status:r.status,attempts:r.attempts})),queries:f.providerCalls.filter(c=>c.kind==='search').map(c=>c.query),sourceReads:readCount,restoreProviderReplays,explicitRefreshProviderOperations:f.providerCalls.length-providerCount,broaderQualityComplete:false};
