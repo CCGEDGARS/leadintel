@@ -37,11 +37,14 @@ export async function verifyApolloDiscoveryJourney({artifactDir='/tmp/leadintel-
   f.DB.raw.prepare("INSERT INTO workspace_research_settings(workspace_id,full_research_policy) VALUES(?,'free_only') ON CONFLICT(workspace_id) DO UPDATE SET full_research_policy='free_only'").run(workspaceId);
   await research.click();await page.waitForFunction(()=>discovery.selectedProspects[0].buyerResearchJob?.id);
   const job=f.DB.raw.prepare('SELECT id FROM buyer_research_jobs ORDER BY rowid DESC LIMIT 1').get();
-  for(let i=0;i<8;i++){
+  for(let i=0;i<18;i++){
    await f.runJobs(job.id);
    const saved=f.DB.raw.prepare('SELECT diagnostic_json FROM buyer_research_jobs WHERE id=?').get(job.id);
    if(JSON.parse(saved.diagnostic_json).at(-1)?.code==='free_discovery_finished')break;
   }
+  const savedFree=f.DB.raw.prepare('SELECT input_json,result_json,diagnostic_json FROM buyer_research_jobs WHERE id=?').get(job.id);
+  assert.equal(JSON.parse(savedFree.input_json).publicContactChecks,true);
+  assert.ok(JSON.parse(savedFree.result_json).people.some(p=>p.contactResearch?.checks?.gmail?.queryLog?.length));
   assert.equal(apiCalls,1,'free discovery uses the connected Apollo identity endpoint once');
   assert.equal(paidContactCalls,0,'standalone discovery never reveals email or phone');
   await page.waitForFunction(()=>discovery.selectedProspects[0].people.some(p=>p.id==='apollo-katja'&&p.name==='Katja Jensen'&&p.publicNameUrl==='https://www.linkedin.com/company/forge-industries'));

@@ -99,3 +99,10 @@ test('for a page with more than 18 seconds the fallback is held back six seconds
   assert.ok(firecrawl.timeoutMs>=17500&&firecrawl.timeoutMs<=18000,'Firecrawl was allowed '+firecrawl.timeoutMs+' ms of 24,000');
   assert.deepEqual(outcome.asked,['direct','firecrawl']);
 });
+
+test('a fresh official buyer page uses Firecrawl first and reuses its result without a second read',async()=>{
+ const outcome=await read('https://company.example/team',{firecrawl:firecrawlPage,direct:denied,scrapling:unavailable},{...PAGE,preferFirecrawl:true});
+ assert.deepEqual(outcome.asked,['firecrawl']);
+ assert.equal(outcome.result.data.metadata.source,'firecrawl');
+ assert.deepEqual(outcome.result.researchTrace.map(row=>[row.provider,row.status]),[['firecrawl','succeeded'],['direct','skipped'],['scrapling','skipped']]);
+});

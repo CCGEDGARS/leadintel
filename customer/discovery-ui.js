@@ -4525,7 +4525,7 @@ function buyerCompanyResearchAction(candidate){
   if(candidate.buyerDiscovery?.lastError?.name==='BUYER_JOB_ROLES_MISMATCH')return {action:'refresh',label:'Research current buyer roles'};
   if(candidate.buyerDiscovery?.lastError?.name==='BUYER_JOB_CONTEXT_MISMATCH')return {action:'refresh',label:'Research current company context'};
   const progress=candidate.buyerResearchProgress;
-  if(progress?.freeDiscovery&&['queued','running'].includes(job?.status))return {action:'upgrade',label:'Find buyers'};
+  if(progress?.freeDiscovery&&!progress.publicContactChecks&&['queued','running'].includes(job?.status))return {action:'upgrade',label:'Find buyers'};
   if(job?.status==='needs_review'&&progress?.diagnostics?.at(-1)?.code==='free_discovery_finished')return {action:'expand',label:'Expand web research · uses credits'};
   if(job?.id&&job.id===progress?.jobId&&job.status==='needs_review'&&!job.personIds?.length&&progress.fullResearch)return {action:'continue',label:'Resume Full research · uses credits'};
   if(job?.id&&job.id===progress?.jobId&&job.status==='needs_review'&&!job.personIds?.length&&(progress.windowPaused??(progress.diagnostics?.at(-1)?.code==='run_window')))return {action:'continue',label:'Resume buyer research'};

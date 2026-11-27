@@ -46,6 +46,8 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
   if(adoptLegacyJob){input.peopleFirst=true;input.freeDiscovery=true;}
   if(input.fullResearch){input.freeDiscovery=false;input.meteredPublicResearchApproved=true;}
   const siteOnly=input.freeDiscovery===true;
+  const freeContactChecks=siteOnly&&input.publicContactChecks===true;
+  const allowedFreePhase=phase=>['official','identities'].includes(phase)||freeContactChecks&&phase==='contacts';
   const peopleFirst=input.peopleFirst&&standaloneBuyerDiscovery(input);
   const nextPhase=input.fullResearch?{...standardPhaseOrder,official:'identities',identities:'dossier',dossier:'contacts',review:'done'}:peopleFirst?{...standardPhaseOrder,official:'identities',identities:'contacts',contacts:input.dossierPassFinished?'review':'dossier',dossier:'review'}:standardPhaseOrder;
   const {contactOptions}=await loadBuyerContactContext(env,{workspaceId:row.workspace_id},reconciledCandidate);
@@ -56,7 +58,7 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
   const deferSemanticStamp=row.phase==='paid'&&(sourceScopeChanged||Number(input.executionContinuationVersion||0)<4&&(originalCandidate.publicResearch?.aiReview?.inputSignature!==D.buyerReviewSignature(reconciledCandidate)||!D.buyerResearchCoveragePassed(reconciledCandidate,{contactOptions})));
   const candidate=deferSemanticStamp?originalCandidate:reconciledCandidate,controller=new AbortController();let invocationExhausted=false,activeTaskReservations=0,accepting=true,phase=row.phase,phaseMs=row.phase_ms,phaseRuns=row.phase_runs,changed=0,contextVersion=-1;
   const rescopeOfficial=sourceScopeChanged&&!deferSemanticStamp&&!input.recheck;
-  if(adoptLegacyJob||siteOnly&&!['official','identities'].includes(phase)){phase=row.phase='official';phaseMs=0;phaseRuns=0;}
+  if(adoptLegacyJob||siteOnly&&!allowedFreePhase(phase)){phase=row.phase='official';phaseMs=0;phaseRuns=0;}
   if(rescopeOfficial){phase=row.phase='official';phaseMs=0;phaseRuns=0;}
   const runWindow=buyerRunWindow(row,input,clock()),windowPause=()=>Object.assign(Error(BUYER_RUN_WINDOW_REASON),{code:'RUN_WINDOW'});
   const timer=setTimeout(()=>controller.abort(runWindow.remainingMs<=windowMs?windowPause():Object.assign(Error('Job processing slice ended'),{code:'TIME_BUDGET'})),Math.max(1,Math.min(windowMs,runWindow.remainingMs)));
@@ -82,7 +84,7 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
   const creditWindow=buyerCreditWindowKey(row,input);let creditSpent=0;
   try{creditSpent=(await readBuyerCredits(env,row.id,creditWindow)).window.counted;}catch{ /* counting never stops a job */ }
   const creditMeter=createBuyerCreditMeter(env,row.id,creditWindow,{spent:creditSpent,limit:()=>buyerCreditLimitFor(env,row.workspace_id,input.scope==='selected_buyers'?(input.personIds||[]).length:(candidate.people||[]).length),onLimit:error=>controller.abort(error)});
-  const nativeSearch=services.search||createBuyerSourceSearch(env,row.workspace_id,{guard,observe,signal:controller.signal,meter:creditMeter});
+  const nativeSearch=freeContactChecks?((query,{signal})=>(services.publicIndex||searchManagementIndex)(query,AbortSignal.any([signal,AbortSignal.timeout(6000)]),fetchDirectPublicPage)):services.search||createBuyerSourceSearch(env,row.workspace_id,{guard,observe,signal:controller.signal,meter:creditMeter});
   const scopedWrite=async(build,checkpoint=false)=>{for(let attempt=0;attempt<3;attempt++){const args=await current(checkpoint),result=await build(args).run();if(result.meta.changes)return result;}throw lost();};
   let fastEvidence=null;
   const inflightTasks=new Map(),contactTasks=new Set();
@@ -299,8 +301,12 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
       const published=D.gmailResearchMatches(person,candidate,acquiredRows);
       if(published.length)person.gmailMatches=[...new Map([...(person.gmailMatches||[]),...published].map(match=>[match.email,match])).values()].slice(0,8);
      }
-     report.status='partial';status='needs_review';
-     diagnostics.push({phase,code:'free_discovery_finished',reason:indexReport,at:new Date().toISOString()});
+     report.status='partial';
+     if(freeContactChecks&&candidate.people?.length){
+      phase='contacts';diagnostics.push({phase:'identities',reason:indexReport,at:new Date().toISOString()});
+     }else{
+      status='needs_review';diagnostics.push({phase,code:'free_discovery_finished',reason:indexReport,at:new Date().toISOString()});
+     }
     }else if(input.scope==='selected_buyers'){phase=nextPhase[phase];}else{
     const plan=D.buyerResearchPlan(candidate,input.profile);
     const strategy=input.fullResearch?await task('independent','Full research query plan',async()=>{
@@ -320,7 +326,7 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
     candidate.people=D.retainBuyerIdentities(D.mergeBuyerPool(candidate.people||[],[...trace.people,...profiled],input.profile),input.profile,candidate).slice(0,10);acquirePeople();phase=nextPhase[phase];}
    }else if(phase==='contacts'){
     if(candidate.people?.length){
-     scheduledContactWork=true;report=await D.runMandatoryBuyerResearch(candidate,{search,readPage:read,rows,guard,signal:controller.signal,contactOptions,rankedPriorities:input.fullResearch===true,recheckPlans:input.recheck?.plans,maxDurationMs:Math.min(remaining,input.recheck?Math.max(1,input.recheck.maxActiveMs-phaseMs):180000),observeTools:false,buyerAgentContext:D.buyerAgentContext(candidate,input.profile),accountability:report,crossCheck:async person=>task('independent',JSON.stringify([person.id,person.name,person.title,...(services.independent?[]:['grounded-low-v1'])]),async()=>{let result;try{result=await (services.independent?services.independent(person,controller.signal):searchWorkspaceBuyerContact(env,row.workspace_id,{company:candidate.company,domain:row.domain,person,signal:controller.signal}));}catch(error){observe({provider:'gemini',operation:'search',status:'failed',reason:'Independent research unavailable'});throw error;}if(result.status==='not_configured'||result.status==='unavailable'&&/not configured/i.test(result.reason||'')){observe({provider:'gemini',operation:'search',status:'skipped',reason:'Independent provider not configured'});return {...result,status:'not_configured'};}if(result.status!=='complete'||result.web_search===false){observe({provider:'gemini',operation:'search',status:'failed',reason:'Independent research unavailable'});throw Error('Independent research unavailable');}observe({provider:result.provider||'gemini',operation:'search',status:'succeeded',results:result.results?.length||0});return result;})});
+     scheduledContactWork=true;report=await D.runMandatoryBuyerResearch(candidate,{search,readPage:read,rows,guard,signal:controller.signal,contactOptions,rankedPriorities:input.fullResearch===true||freeContactChecks,recheckPlans:input.recheck?.plans,maxDurationMs:Math.min(remaining,input.recheck?Math.max(1,input.recheck.maxActiveMs-phaseMs):180000),observeTools:false,buyerAgentContext:D.buyerAgentContext(candidate,input.profile),accountability:report,crossCheck:freeContactChecks?undefined:async person=>task('independent',JSON.stringify([person.id,person.name,person.title,...(services.independent?[]:['grounded-low-v1'])]),async()=>{let result;try{result=await (services.independent?services.independent(person,controller.signal):searchWorkspaceBuyerContact(env,row.workspace_id,{company:candidate.company,domain:row.domain,person,signal:controller.signal}));}catch(error){observe({provider:'gemini',operation:'search',status:'failed',reason:'Independent research unavailable'});throw error;}if(result.status==='not_configured'||result.status==='unavailable'&&/not configured/i.test(result.reason||'')){observe({provider:'gemini',operation:'search',status:'skipped',reason:'Independent provider not configured'});return {...result,status:'not_configured'};}if(result.status!=='complete'||result.web_search===false){observe({provider:'gemini',operation:'search',status:'failed',reason:'Independent research unavailable'});throw Error('Independent research unavailable');}observe({provider:result.provider||'gemini',operation:'search',status:'succeeded',results:result.results?.length||0});return result;})});
      confirmNamed();
      const retryable=report.status!=='complete'&&!changed&&report.stopReason!=='time_budget'?(await stmt(env,"SELECT task_key FROM buyer_research_tasks WHERE job_id=? AND phase='contacts' AND status<>'complete' AND (status='running' OR attempts<2)",row.id).all()).results.filter(task=>contactTasks.has(task.task_key)).length:0;
      if(report.status==='complete'||!changed&&report.stopReason!=='time_budget'&&!retryable)phase=nextPhase[phase];
@@ -388,7 +394,10 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
     const requiredGap=row.phase==='official'&&!D.officialContactCoveragePassed(candidate)?'Official website checks are incomplete':row.phase==='dossier'&&candidate.buyerDiscovery?.companyDossier?.status!=='complete'?'Required company dossier is incomplete':row.phase==='identities'&&!candidate.people?.length?'No supported decision-maker identities were found':row.phase==='contacts'&&!D.buyerResearchCoveragePassed(candidate,{contactOptions})?'Mandatory contact checks are incomplete':row.phase==='review'&&candidate.publicResearch?.aiReview?.status!=='complete'?'AI evidence review is incomplete':'';
     if(requiredGap){phase=row.phase;status='needs_review';diagnostics.push({phase,code:'task_required_check',reason:requiredGap,at:new Date().toISOString()});}
    }
-   if(siteOnly&&status==='queued'&&!['identities','official'].includes(phase)){phase='identities';phaseMs=0;phaseRuns=0;}
+   if(freeContactChecks&&status==='queued'&&row.phase==='contacts'&&phase!=='contacts'){
+    status='needs_review';phase='contacts';diagnostics.push({phase,code:'free_discovery_finished',reason:'Public contact checks finished within the free research allowance. See each field for its coverage.',at:new Date().toISOString()});
+   }
+   if(siteOnly&&status==='queued'&&!allowedFreePhase(phase)){phase='identities';phaseMs=0;phaseRuns=0;}
    if(status==='queued'&&phase==='done')await settleQuality();
    // One identity record is saved once, however many copies earlier slices or the browser's list carried in.
    candidate.people=collapseSameRecords(candidate.people);
