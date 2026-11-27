@@ -114,6 +114,15 @@ test('the company\'s registered city narrows the searches for a short or common 
  assert.deepEqual(queries,['Nord Scan A/S Hvide Sande direktør ledelse','Nord Scan A/S LinkedIn medarbejder','"Nord Scan" Hvide Sande projektleder','Nord Scan A/S CVR 19400689 bestyrelse direktion','"Nord Scan" Hvide Sande Denmark manager','"Nord Scan" Hvide Sande bestyrelsesformand']);
 });
 
+// Live, 27 Nov 2026: "AS SCAN" was cut to "SCAN" (AS read as a legal form), so the searches asked for a common word.
+test('a short company name keeps its legal form when cutting it would leave one short word',()=>{
+ const queries=publicPeopleQueries({company:'AS SCAN',domain:'as-scan.example',market:'Denmark'},['Project Manager']);
+ assert.ok(queries.includes('"AS SCAN" projektleder'),JSON.stringify(queries));
+ assert.ok(queries.every(query=>!/"SCAN"/.test(query)),JSON.stringify(queries));
+ assert.ok(publicPeopleQueries({company:'HRS A/S',market:'Denmark'},['Project Manager']).includes('"HRS A/S" projektleder'));
+ assert.ok(publicPeopleQueries({company:'Alusteel A/S',market:'Denmark'},['Project Manager']).includes('"Alusteel" projektleder'));
+});
+
 test('other markets get English words, and a register label only with a number',()=>{
  const queries=publicPeopleQueries({company:'Harbor Clinics Ltd',domain:'harbor-clinics.example',market:'United Kingdom'},['Operations Director']);
  assert.deepEqual(queries,['Harbor Clinics Ltd CEO management team','Harbor Clinics Ltd LinkedIn employees','"Harbor Clinics" operations director','Harbor Clinics Ltd board of directors','"Harbor Clinics" United Kingdom manager','"Harbor Clinics" chairman of the board']);

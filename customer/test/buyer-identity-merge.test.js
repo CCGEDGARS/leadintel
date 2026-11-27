@@ -71,6 +71,13 @@ test('name variants in unrelated roles, with another first name or another profi
  assert.equal(D.mergeBuyerPool([],[at('m','Bent Mørk','Direktør',{publicLinkedinUrl:'https://www.linkedin.com/in/bent-1'}),at('n','Bent V. Mørk','Direktør',{publicLinkedinUrl:'https://www.linkedin.com/in/bent-2'})],{}).length,2);
 });
 
+// Live, 27 Nov 2026: a product heading ("SORTING SYSTEM", role "Partnership") was kept and shown as a person.
+test('a product or department heading is not a person name',()=>{
+ for(const heading of ['SORTING SYSTEM','Conveyor Solutions','Service Department','Automation Equipment'])assert.equal(D.hasFullBuyerName(heading),false,heading);
+ for(const name of ['JENS HANSEN','Bent Vestergaard Mørk','Anna Walsh'])assert.equal(D.hasFullBuyerName(name),true,name);
+ assert.equal(D.mergeBuyerPool([],[at('s','SORTING SYSTEM','Partnership'),at('b','Bent Mørk','Direktør')],{}).map(p=>p.name).join(),'Bent Mørk');
+});
+
 test('the same name at another company stays another person',()=>{
  const merged=D.mergeBuyerPool([],[person('x','CEO'),{...person('y','CEO'),organization:'Harbour Steel A/S'}],{});
  assert.equal(merged.length,2);

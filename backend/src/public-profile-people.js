@@ -134,7 +134,8 @@ const DANISH_TITLE=/(?:chef|leder|direktør|ansvarlig|fører|indkøb|[æøå])/i
 const MAX_ROLE_WORDS=6;
 export function publicPeopleQueries(candidate={},roles=[],{D=globalThis.LeadIntelDiscovery}={}){
   const company=clean(candidate.company);if(!company)return [];
-  const short=withoutLegalForm(company)||company,market=clean(candidate.market);
+  // The quoted short name drops the legal form only when a real name remains ("AS SCAN" stays, "Alusteel A/S" → "Alusteel").
+  const cut=withoutLegalForm(company),short=cut&&(cut.split(/\s+/).length>1||cut.replace(/[^\p{L}\p{N}]/gu,'').length>=5)?cut:company,market=clean(candidate.market);
   const local=/\b(?:denmark|danmark)\b/i.test(market)||/^dk$/i.test(market),words=local?WORDS.danish:WORDS.english;
   const roleWords=[],stems=new Set(),stem=word=>word.replace(/[^\p{L}]/gu,'').slice(0,5);
   for(const role of Array.isArray(roles)?roles:[]){
