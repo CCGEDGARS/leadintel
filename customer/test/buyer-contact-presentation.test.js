@@ -195,3 +195,11 @@ test('a saved paid policy never exposes company-level email or phone approval',(
   assert.equal(doc.querySelector('[data-find-buyer-emails],[data-prospect-batch-phone],[data-prospect-batch-email]'),null);
  }
 });
+
+test('a public business Gmail listing has a source and its own mailbox verification state',()=>{
+ const {ctx,person,candidate}=runtime();
+ person.gmailMatches=[{email:'anna.business@gmail.com',url:'https://example.com/team',matchBasis:'Published business contact'}];
+ const field=documentFor(ctx.buyerContactRows(person,candidate)).querySelector('[data-contact-channel="gmail"]');
+ assert.equal(field.querySelector('a').href,'https://example.com/team');
+ assert.match(field.textContent,/Mailbox unverified/);
+});

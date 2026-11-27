@@ -1560,7 +1560,7 @@ function buyerContactRows(person={},candidate={},result={}){
   const source=url=>/^https?:\/\//i.test(url||'')?` · <a href="${esc(url)}" target="_blank" rel="noopener noreferrer">Source ↗</a>`:'';
   const staff=(candidate.buyerDiscovery?.officialContactInventory?.contacts||[]).find(row=>row.name===(person.publicName||person.name)&&row.title===person.title&&canonicalDomain(row.publicNameUrl)===canonicalDomain(candidate.domain));
   const listed=(staff?.companyChannels||[]).filter(row=>row.type==='named_work_listing'&&row.url===staff.publicNameUrl&&/^https:\/\//i.test(row.url)&&!row.value.endsWith('@'+canonicalDomain(candidate.domain))&&!/@(?:gmail|googlemail|outlook|hotmail|yahoo|icloud)\.com$/i.test(row.value)&&row.quote?.includes(staff.name)&&row.quote.includes(row.value));
-  const published=listed.length===1?`<span class="buyer-email-result">${esc(listed[0].value)}<small>Published on the company staff page · mailbox unverified${source(listed[0].url)}</small></span>`:'';
+  const published=listed.length===1?`<span class="buyer-email-result">${esc(listed[0].value)}<small>Published on the company staff page${source(listed[0].url)}</small><small>Mailbox unverified</small></span>`:'';
   const found=(person.patternFindings||[]).filter(row=>source(row.url));
   if(person.publicEmail&&source(person.publicEmailUrl)&&!found.some(row=>row.email===person.publicEmail.toLowerCase()))found.unshift({email:person.publicEmail.toLowerCase(),url:person.publicEmailUrl});
   const savedData=LeadIntelDiscovery.safeContactData?.(person.contactData,person,canonicalDomain(candidate.domain));
@@ -1573,7 +1573,7 @@ function buyerContactRows(person={},candidate={},result={}){
       if(checks.some(check=>check.status==='running'))row={...row,status:'running'};
       else if(records.length){
         const complete=channel!=='company'&&LeadIntelDiscovery.buyerResearchCheckPassed?.(candidate,person,channel);
-        row={...row,status:complete?'complete':'partial',reason:`${records.length} saved ${channel==='company'?'work-email':channel} searches recorded. Contact and source checks remain unfinished; use Recheck to continue.`};
+        row={...row,status:complete?'complete':'partial',reason:complete?'Current searches and source checks completed.':`${records.length} saved ${channel==='company'?'work-email':channel} searches recorded. Contact and source checks remain unfinished; use Recheck to continue.`};
       }
     }
     if(channel==='phone'&&['pending_phone','processing','failed','not_found'].includes(result?.request?.status)){
@@ -1602,8 +1602,8 @@ function buyerContactRows(person={},candidate={},result={}){
     const guesses=type==='company'?emailPatternCandidates(person,candidate.domain,[...(candidate.people||[]),...(candidate.buyerDiscovery?.companyContacts||[])]):LeadIntelDiscovery.gmailGuessCandidates?.(person)||[];
     if(type==='gmail'){
       const matches=[...new Map((person.gmailMatches||[]).filter(row=>/@(?:gmail|googlemail)\.com$/i.test(row.email)&&source(row.url)).map(row=>[row.email,row])).values()];
-      const listings=matches.map(row=>`<span class="buyer-email-result">${esc(row.email)} · Possible match · Unconfirmed${row.matchBasis?`<small>${esc(row.matchBasis)}</small>`:''}${source(row.url)}</span>`);
-      const earlier=found.filter(row=>source(row.url)&&/@(?:gmail|googlemail)\.com$/i.test(row.email)&&!matches.some(match=>match.email===row.email)).map(row=>`<span class="buyer-email-result">${esc(row.email)} · Saved listing · Unconfirmed · Source recheck required${source(row.url)}</span>`).join('');
+      const listings=matches.map(row=>`<span class="buyer-email-result">${esc(row.email)} · Possible match · Unconfirmed${row.matchBasis?`<small>${esc(row.matchBasis)}</small>`:''}${source(row.url)}<small>Mailbox unverified</small></span>`);
+      const earlier=found.filter(row=>source(row.url)&&/@(?:gmail|googlemail)\.com$/i.test(row.email)&&!matches.some(match=>match.email===row.email)).map(row=>`<span class="buyer-email-result">${esc(row.email)} · Saved listing · Unconfirmed · Source recheck required${source(row.url)}<small>Mailbox unverified</small></span>`).join('');
       const patterns=guesses.filter(row=>!matches.some(match=>match.email===row.email));
       const patternHtml=patterns.length?`<details class="buyer-email-patterns"><summary>Name-based Gmail patterns (${patterns.length}) · Unconfirmed</summary><p>Search hypotheses only. No public ownership match; mailbox existence is unknown.</p>${patterns.map(row=>`<span class="buyer-email-result">${esc(row.email)} · Name pattern · Unconfirmed</span>`).join('')}</details>`:'';
       const logs=state('gmail').queryLog||[],checked=logs.filter(row=>row.status==='complete').length;
@@ -1626,7 +1626,7 @@ function buyerContactRows(person={},candidate={},result={}){
     const incomplete=['partial','unavailable'].includes(state(type).status)?`<details class="buyer-field-evidence"><summary>Additional checks incomplete</summary><small>${esc(state(type).reason||'Research has unfinished checks')}</small></details>`:'';
     return rows[0]+extra+published+incomplete+patternHtml+(state(type).status==='complete'?'<small>Search completed · ownership confirmation separate</small>':'');
   };
-  const phoneEvidence=person.publicPhoneEvidence?.version===2&&person.publicPhoneEvidence.url===person.publicPhoneUrl;
+  const phoneEvidence=person.publicPhoneEvidence?.version===2&&source(person.publicPhoneUrl)&&person.publicPhoneEvidence.url===person.publicPhoneUrl;
   const phone=contact.phone_number?`${esc(contact.phone_number)}<small>${String(contact.phone_status).toLowerCase()==='verified'?'Provider verified':'Provider listing · reachability and ownership unconfirmed'} · ${esc(contact.source||'Saved CRM record')}</small>`:savedPhone?`${esc(savedPhone)}<small>Saved provider listing · ${esc(savedData.phone.source||'Saved contact record')} · reachability and ownership unconfirmed${savedData?.lastAttempt?.phone==='error'?' · Latest lookup failed; saved number retained'+(savedData.lastAttempt.phoneReason?' · '+esc(savedData.lastAttempt.phoneReason):''):''}</small>`:person.publicPhone&&phoneEvidence?`${esc(person.publicPhone)}<small>${!LeadIntelDiscovery.confirmedBuyerPhone(candidate,person)?'Saved public listing · source needs rechecking':person.publicPhoneEvidence.sourceKind==='official'?'Official company listing':'Public business listing'} · reachability unverified${source(person.publicPhoneUrl)}</small>`:staff?.publicPhone&&staff.publicPhoneUrl===staff.publicNameUrl?`${esc(staff.publicPhone)}<small>Published on the company staff page${source(staff.publicNameUrl)}</small>`:person.publicPhone?'<span class="buyer-field-state">Check incomplete · Phone source needs rechecking</span>':emptyChannel('phone');
   const reviewIndex=(candidate.people||[]).findIndex(row=>String(row.id)===String(person.id));
   const reviewable=profile&&!['automatic','manual'].includes(verification?.status)&&LeadIntelDiscovery.hasFullBuyerName(person.publicName||person.name)&&person.identityStatus!=='pending'&&person.nameVerification!=='pending'&&person.id&&reviewIndex>=0&&buyerActionIdentity(candidate,candidate.people[reviewIndex],true)===buyerActionIdentity(candidate,person,true)&&candidate.people.filter(row=>String(row.id)===String(person.id)).length===1&&typeof discovery!=='undefined'&&(discovery.selectedProspects||[]).includes(candidate);
