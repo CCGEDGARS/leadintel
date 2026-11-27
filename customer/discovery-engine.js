@@ -2781,12 +2781,17 @@
   }
   function buyerPhoneContact(detail={},person={}){
     const name=clean(person.publicName||person.name).toLowerCase(),profile=normalizeLinkedInUrl(person.publicLinkedinUrl||person.linkedin_url),trace=safePhoneEnrichment(detail.intelligence?.research_snapshot?.buyerResearch?.discovery?.phoneEnrichment);
-    return (detail.contacts||[]).find(row=>{
+    const matches=(detail.contacts||[]).filter(row=>{
+      if(row.archived_at)return false;
       const current=normalizeLinkedInUrl(row.public_linkedin_url||row.linkedin_url);
       if(name&&clean(row.name).toLowerCase()!==name||profile&&current&&profile!==current)return false;
       if(String(row.external_person_id||'')===String(person.id)||matchedPhoneAlias(row,person))return true;
       return Boolean(trace&&trace.contactId&&row.id&&trace.contactId===row.id&&trace.personId===String(person.id)&&trace.identityName.toLowerCase()===name&&(!profile||!trace.identityLinkedinUrl||profile===trace.identityLinkedinUrl));
-    })||null;
+    });
+    const phones=matches.filter(row=>['apollo','treg'].includes(clean(row.source).toLowerCase())&&['verified','provider_listed'].includes(clean(row.phone_status).toLowerCase())&&validPublishedPhone(row.phone_number));
+    const numbers=new Set(phones.map(row=>clean(row.phone_number).replace(/[^0-9]/g,'')));
+    if(numbers.size===1)return phones.find(row=>clean(row.phone_status).toLowerCase()==='verified')||phones[0];
+    return numbers.size?null:matches[0]||null;
   }
   // A number is confirmed only by an exact-person verified provider record or
   // a retained named source attribution. Provider listings alone remain unconfirmed.
@@ -2824,6 +2829,7 @@
     return null;
   }
   function confirmedBuyerPhone(candidate={},person={},contact={},options={}){
+    contact=contact.phoneEvidenceContact||contact;
     const domain=canonicalDomain(candidate.domain),name=clean(person.publicName||person.name).toLowerCase();
     const valid=validPublishedPhone;
     if(!domain||!clean(person.id)||!hasFullBuyerName(name)||person.identityStatus==='pending'||person.nameVerification==='pending'||candidate.buyerRolesChanged||person.opportunityScope?.status==='review_required'||person.linkedinProfileReview?.status==='review_required')return '';

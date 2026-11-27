@@ -72,3 +72,5 @@ The two Step 2 controls dispatched different work for the same URL. The fast pat
 ### 27 November · Public shortlist and field approvals
 
 Two entry points shared the Find buyers label. The selected-company action could stop after identity discovery, while contact checks required a separate expansion. A company-level email purchase also appeared before the public job finished. The explicit click now starts the company’s durable public research plan, restores prior evidence, and schedules contact checks for the ranked priority buyers. Missing-field labels use the person’s saved query receipts. Paid email and phone remain distinct person-scoped actions.
+
+Two persistence failures also affected the result. A pause during Gmail research left previously completed phone receipts without a policy version. The worker now records each completed field’s policy version immediately. CRM can hold an accepted email and a verified phone in separate provider records for the same buyer. Reopening now resolves each field independently and carries its source, with a hold when exact phone records disagree.
