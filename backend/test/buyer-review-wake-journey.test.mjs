@@ -9,14 +9,14 @@ test('an explicitly expanded final-stage job restores queued coverage and finish
  const {chromium}=await loadPlaywright(),browser=await chromium.launch({executablePath:process.env.LEADINTEL_CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox']});let context,page;const errors=[];
  const open=async()=>{context=await browser.newContext({viewport:{width:1440,height:1050}});await context.route('**/*',r=>new URL(r.request().url()).origin===f.origin?r.continue():r.abort());await context.addCookies([{name:'leadintel_session',value:sessionToken,url:f.origin}]);page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));await page.goto(f.origin+'/customer/',{waitUntil:'domcontentloaded'});await ready(page);await settleInitialSave(page);await page.evaluate(()=>showDiscoveryStep('buyers'));};
  try{
-  const job=await startBuyerJob(f.env,workspaceId,{id:'storage-owner',role:'owner',sessionTokenHash:await sha256(sessionToken)},{candidate:f.candidate,peopleFirst:true,freeDiscovery:true});f.DB.raw.prepare("UPDATE buyer_research_jobs SET phase='identities',status='needs_review',input_json=json_set(input_json,'$.apolloIdentityVersion',1),diagnostic_json='[{\"code\":\"free_discovery_finished\"}]' WHERE id=?").run(job.id);
+  const job=await startBuyerJob(f.env,workspaceId,{id:'storage-owner',role:'owner',sessionTokenHash:await sha256(sessionToken)},{candidate:f.candidate,peopleFirst:true,freeDiscovery:true});f.DB.raw.prepare("UPDATE buyer_research_jobs SET phase='identities',status='needs_review',input_json=json_set(json_remove(input_json,'$.emailWaterfallVersion'),'$.apolloIdentityVersion',1),diagnostic_json='[{\"code\":\"free_discovery_finished\"}]' WHERE id=?").run(job.id);
   const source={url:sourceUrl,markdown:sourceText,sourceRead:true,extractedAt:new Date().toISOString()};f.DB.raw.prepare("INSERT INTO buyer_research_tasks(job_id,task_key,kind,phase,request_value,status,attempts,result_json) VALUES(?,'retained-source','read','official',?,'complete',1,?)").run(job.id,sourceUrl,JSON.stringify(source));for(let i=0;i<128;i++)f.DB.raw.prepare("INSERT INTO buyer_research_tasks(job_id,task_key,kind,phase,request_value,status,attempts,result_json) VALUES(?,?,'search','contacts',?,'complete',1,'{\"rows\":[]}')").run(job.id,'retained-'+i,'Retained query '+i);
   const receipts=f.DB.raw.prepare('SELECT * FROM buyer_research_tasks WHERE job_id=? ORDER BY task_key').all(job.id);f.env.OAUTH_TOKEN_ENCRYPTION_KEY=Buffer.alloc(32,24).toString('base64');f.DB.raw.prepare("INSERT INTO workspace_ai_integrations(workspace_id,provider,encrypted_api_key,key_hint,model,active) VALUES(?,'openai',?,'test','gpt-6.1-sol',1)").run(workspaceId,await encryptSecret('controlled-review-key',await importAesKey(f.env.OAUTH_TOKEN_ENCRYPTION_KEY)));
   await open();
   await page.getByRole('button',{name:'Expand web research · uses credits'}).click();
   await page.waitForFunction(()=>discovery.selectedProspects[0].buyerResearchJob?.status==='queued');
   const authorized=JSON.parse(f.DB.raw.prepare('SELECT input_json FROM buyer_research_jobs WHERE id=?').get(job.id).input_json);
-  assert.equal(authorized.meteredPublicResearchApproved,true);
+  assert.equal(authorized.meteredPublicResearchApproved,true);assert.equal(authorized.emailWaterfallVersion,1);
   assert.ok(!authorized.paidResearch);
   // Replay the scheduler checkpoint immediately before final AI review.
   f.DB.raw.prepare("UPDATE buyer_research_jobs SET phase='review',revision=revision+1 WHERE id=?").run(job.id);
@@ -60,4 +60,67 @@ test('reopening a running official-source job shows saved names without completi
  assert.equal(f.DB.raw.prepare('SELECT count(*) n FROM buyer_research_jobs').get().n,1);
  assert.equal(f.DB.raw.prepare('SELECT count(*) n FROM buyer_research_tasks').get().n,42);
  assert.equal(f.DB.raw.prepare('SELECT count(*) n FROM crm_enrichment_requests').get().n,0);
+});
+
+test('Step 5 can finish a saved identity search under free-only policy and reopen the exact buyer in Messages',{timeout:90000},async t=>{
+ const executablePath=process.env.LEADINTEL_CHROMIUM_PATH||'/usr/bin/chromium';
+ let chromium;
+ try{({chromium}=await loadPlaywright());await fs.access(executablePath);}
+ catch(error){if(process.env.LEADINTEL_REQUIRE_BROWSER==='true')throw error;t.skip('Chromium unavailable');return;}
+
+ const publicText=sourceText.replace('[alice@forge.example](mailto:alice@forge.example)','');
+ const failures=[];
+ const f=await journeyFixture({durableJobs:true,researchServices:{
+  read:async url=>({url,markdown:url===sourceUrl?publicText:'Forge Industries',sourceRead:true,links:url===sourceUrl?[]:[sourceUrl],extractedAt:new Date().toISOString()}),
+  publicIndex:async()=>[],registry:async()=>({status:'not_found'}),
+  emailWaterfall:async(_env,_workspace,domain,names,options)=>{
+   failures.push({domain,names,cap:options.maxCredits});throw Error('Controlled finder outage');
+  }
+ }});
+ t.after(()=>f.close());
+ f.DB.raw.prepare("INSERT INTO workspace_research_settings(workspace_id,full_research_policy) VALUES(?,'free_only') ON CONFLICT(workspace_id) DO UPDATE SET full_research_policy='free_only'").run(workspaceId);
+ const job=await startBuyerJob(f.env,workspaceId,{id:'storage-owner',role:'owner',sessionTokenHash:await sha256(sessionToken)},{candidate:f.candidate,peopleFirst:true,freeDiscovery:true});
+ const row=()=>f.DB.raw.prepare('SELECT * FROM buyer_research_jobs WHERE id=?').get(job.id);
+ // The saved run predates the per-buyer email finder.
+ f.DB.raw.prepare("UPDATE buyer_research_jobs SET input_json=json_remove(input_json,'$.emailWaterfallVersion') WHERE id=?").run(job.id);
+ async function finish(){
+  for(let i=0;i<18&&['queued','running'].includes(row().status);i++)await f.runJobs(job.id);
+  assert.equal(JSON.parse(row().diagnostic_json).at(-1).code,'free_discovery_finished');
+ }
+ await finish();
+ const reads=()=>f.DB.raw.prepare("SELECT task_key,attempts,updated_at FROM buyer_research_tasks WHERE job_id=? AND kind='read' AND phase='official' AND status='complete' ORDER BY task_key").all(job.id);
+ const before=reads();assert.ok(before.length>0);
+ const browser=await chromium.launch({executablePath,args:['--no-sandbox']});t.after(()=>browser.close());
+ const context=await browser.newContext();await context.route('**/*',r=>new URL(r.request().url()).origin===f.origin?r.continue():r.abort());
+ await context.addCookies([{name:'leadintel_session',value:sessionToken,url:f.origin}]);const page=await context.newPage();
+ async function open(){
+  await page.goto(f.origin+'/customer/');await ready(page);await settleInitialSave(page);await page.evaluate(()=>showDiscoveryStep('buyers'));
+  await page.waitForFunction(()=>discovery?.selectedProspects?.[0]?.buyerResearchJob?.status==='needs_review');
+ }
+ await open();
+ const card=page.locator('#customer-pipeline [data-buyer-company-expanded=true]');
+ const find=card.locator('[data-find-prospect-buyers]').first();assert.equal(await find.innerText(),'Find buyers');
+ await find.click();
+ await page.waitForFunction(()=>discovery.selectedProspects[0]?.buyerResearchProgress?.publicContactChecks);
+ assert.equal(JSON.parse(row().input_json).freeDiscovery,true);
+ assert.ok(!JSON.parse(row().input_json).fullResearch);
+ await finish();await page.waitForFunction(()=>discovery.selectedProspects[0]?.buyerResearchJob?.status==='needs_review');
+ const people=card.locator('.selected-prospect-people > li:visible');
+ await people.filter({hasText:'Alice Berg'}).getByText(/Firecrawl email finder.*unavailable/).waitFor({timeout:8000});
+ assert.equal(await people.count(),2);
+ assert.match(await card.locator('.buyer-quality-supervisor > p').textContent(),/1\/2 priority buyers have confirmed contact data/);
+ assert.doesNotMatch(await card.locator('.company-dossier').textContent(),/expand web research/i);
+ for(const person of await people.all()){
+  assert.equal(await person.locator('[data-contact-channel]').count(),4);
+  assert.deepEqual(await person.locator('.buyer-four-actions button').allTextContents(),['Paid email','Paid phone','Refresh','Proceed']);
+ }
+ assert.deepEqual(failures,[{domain:'forge.example',names:['Alice Berg'],cap:0}]);
+ assert.deepEqual(reads(),before);
+ assert.deepEqual(f.providerCalls.filter(call=>['search','dossier','review','independent'].includes(call.kind)),[]);
+ await settleInitialSave(page);await open();
+ await people.filter({hasText:'Robert Lund'}).getByRole('button',{name:'Proceed',exact:true}).click();
+ await page.waitForFunction(()=>document.querySelector('#step-6.active'));
+ assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('leadintel_customer_v2_discovery_meta')).selectedEmailBuyer.email),'robert@forge.example');
+ assert.equal(failures.length,1);assert.equal(f.DB.raw.prepare('SELECT COUNT(*) n FROM buyer_research_jobs').get().n,1);
+ assert.equal(f.DB.raw.prepare('SELECT COUNT(*) n FROM additional_contact_attempts').get().n,0);
 });

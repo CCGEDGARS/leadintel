@@ -1,6 +1,6 @@
 import {recoverOfficialBuyers} from './fast-research-evidence.js';
 import {applySavedEmails} from './firecrawl-buyer-email.js';
-import {allowFullResearch} from './research-strategy.js';
+import {allowFullResearch,meteredBuyerResearchAllowed} from './research-strategy.js';
 import '../../customer/strategy-integrity.js';
 import {buyerRunWindow} from './buyer-research-window.js';
 import {buyerCreditWindowKey,buyerCreditLimitFor,readBuyerCredits} from './buyer-research-credits.js';
@@ -197,8 +197,10 @@ export async function publicBuyerJob(env,row,{recoverRetained=false}={}){
  const identities=pastIdentityStage&&(candidate.people||[]).some(person=>D.sourcedBuyerIdentity(person,candidate));
  const stages={official:D.officialContactCoveragePassed(candidate),dossier:candidate.buyerDiscovery?.companyDossier?.status==='complete'&&!candidate.buyerDiscovery?.companyDossier?.lastAttempt,identities,contacts:D.buyerResearchCoveragePassed(candidate,{contactOptions}),review:quality.aiReviewStatus==='complete'&&(!input.paidResearch||['complete','disabled'].includes(candidate.publicResearch?.paidResearch?.status))};
  const diagnostics=parse(row.diagnostic_json,[]),paused=currentWindowPause(row,input,diagnostics);
+ const finishedFree=input.freeDiscovery&&!input.fullResearch&&row.status==='needs_review'&&diagnostics.at(-1)?.code==='free_discovery_finished';
+ const freeOnly=finishedFree&&!await meteredBuyerResearchAllowed(env,row.workspace_id);
  const labels={official:'Reading official company sources',dossier:'Researching the company',identities:'Finding decision-makers',contacts:'Checking contact evidence',review:'Reviewing buyer evidence',paid:'Researching approved paid channels',done:'Research saved'};
- return {id:row.id,domain:row.domain,retainedEvidenceRecovered:recoverRetained,contextKey:row.context_key,crm,input:{freeDiscovery:Boolean(input.freeDiscovery&&!input.fullResearch),publicContactChecks:input.publicContactChecks===true,fullResearch:Boolean(input.fullResearch||input.meteredPublicResearchApproved),peopleFirst:Boolean(input.peopleFirst),paidResearch:Boolean(input.paidResearch),company:input.candidate?.company,domain:row.domain,profile:input.profile,roles:input.roles,personIds:input.scope==='selected_buyers'?input.personIds:[],scope:input.scope},status:row.status,phase:row.phase,resumePhase:resumePhase(candidate,input,contactOptions),revision:row.revision,createdAt,updatedAt,candidate,quality,diagnostics:[...diagnostics,...(row.last_error?[{phase:row.phase,reason:row.last_error}]:[])],progress:{timing,stages,credits,windowPaused:Boolean(paused),executionStatus:row.status,completed:Number(completed),total,inProgress:row.status==='running'?Number((totals.results||[]).find(r=>r.status==='running')?.n)||0:0,lastActivityAt,label:input.freeDiscovery&&diagnostics.at(-1)?.code==='free_discovery_finished'?diagnostics.at(-1).reason:paused?paused.reason:activity|| (row.status==='needs_review'?'Research saved · '+(quality.gaps[0]||'review remaining gaps'):input.recheck&&row.phase==='contacts'?Object.values(input.recheck.plans).some(plan=>plan.queries.length)?'Checking missing contact details · alternative public sources':'Rechecking saved sources · no untried alternative queries':labels[row.phase]||row.phase.replaceAll('_',' '))}};
+ return {id:row.id,domain:row.domain,retainedEvidenceRecovered:recoverRetained,contextKey:row.context_key,crm,input:{...(freeOnly?{freeOnly:true}:{}),freeDiscovery:Boolean(input.freeDiscovery&&!input.fullResearch),publicContactChecks:input.publicContactChecks===true,fullResearch:Boolean(input.fullResearch||input.meteredPublicResearchApproved),peopleFirst:Boolean(input.peopleFirst),paidResearch:Boolean(input.paidResearch),company:input.candidate?.company,domain:row.domain,profile:input.profile,roles:input.roles,personIds:input.scope==='selected_buyers'?input.personIds:[],scope:input.scope},status:row.status,phase:row.phase,resumePhase:resumePhase(candidate,input,contactOptions),revision:row.revision,createdAt,updatedAt,candidate,quality,diagnostics:[...diagnostics,...(row.last_error?[{phase:row.phase,reason:row.last_error}]:[])],progress:{timing,stages,credits,windowPaused:Boolean(paused),executionStatus:row.status,completed:Number(completed),total,inProgress:row.status==='running'?Number((totals.results||[]).find(r=>r.status==='running')?.n)||0:0,lastActivityAt,label:input.freeDiscovery&&diagnostics.at(-1)?.code==='free_discovery_finished'?diagnostics.at(-1).reason:paused?paused.reason:activity|| (row.status==='needs_review'?'Research saved · '+(quality.gaps[0]||'review remaining gaps'):input.recheck&&row.phase==='contacts'?Object.values(input.recheck.plans).some(plan=>plan.queries.length)?'Checking missing contact details · alternative public sources':'Rechecking saved sources · no untried alternative queries':labels[row.phase]||row.phase.replaceAll('_',' '))}};
 }
 // A second Full click reopens its run, including a partial or budget-paused result.
 // Only a separate resume command authorizes another execution window.
@@ -218,7 +220,7 @@ async function reuseFullResearch(env,workspaceId,user,current,input){
  if(current.status==='canceled')return null;
  if(activeBuyerJob(current.status)){
   // Keep the current lease. The worker observes this flag at its next boundary.
-  const saved=await stmt(env,`UPDATE buyer_research_jobs SET input_json=json_set(input_json,'$.fullResearch',json('true'))
+  const saved=await stmt(env,`UPDATE buyer_research_jobs SET input_json=json_set(input_json,'$.fullResearch',json('true'),'$.emailWaterfallVersion',1)
    WHERE id=? AND status IN ('queued','running') AND ${callerSql}`,current.id,...callerArgs(workspaceId,user)).run();
   if(saved.meta.changes)return readBuyerJob(env,workspaceId,{id:current.id});
   throw Object.assign(Error('Research or your access changed. Reopen the saved run.'),{status:409});
@@ -228,7 +230,7 @@ async function reuseFullResearch(env,workspaceId,user,current,input){
  const phase=['contacts','dossier'].includes(missing)?'identities':missing;
  if(phase==='done')return current;
  const saved=await stmt(env,`UPDATE buyer_research_jobs SET status='queued',phase=?,phase_ms=0,phase_runs=0,next_at=0,last_error='',revision=revision+1,
-  input_json=json_set(input_json,'$.fullResearch',json('true'),'$.freeDiscovery',json('false'),'$.meteredPublicResearchApproved',json('true'),'$.executionWindowStartedAt',?),
+  input_json=json_set(input_json,'$.fullResearch',json('true'),'$.emailWaterfallVersion',1,'$.freeDiscovery',json('false'),'$.meteredPublicResearchApproved',json('true'),'$.executionWindowStartedAt',?),
   session_hash=?,requested_by=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND revision=? AND ${callerSql}`,phase,new Date().toISOString(),user.sessionTokenHash,user.id,current.id,current.revision,...callerArgs(workspaceId,user)).run();
  if(!saved.meta.changes)throw Object.assign(Error('Research changed. Reopen the saved run.'),{status:409});
  return readBuyerJob(env,workspaceId,{id:current.id});
@@ -284,7 +286,7 @@ export async function startBuyerJob(env,workspaceId,user,body,trusted=null){
   if(previous.freeDiscovery&&!previous.publicContactChecks&&sameFullScope(previous,input)){
    const finished=parse(current.diagnostic_json,[]).at(-1)?.code==='free_discovery_finished';
    if(activeBuyerJob(current.status)||finished){
-    const updated=await stmt(env,`UPDATE buyer_research_jobs SET input_json=json_set(input_json,'$.publicContactChecks',json('true')),phase=CASE WHEN ? THEN 'contacts' ELSE phase END,status=CASE WHEN ? THEN 'queued' ELSE status END,next_at=0,revision=revision+1 WHERE id=? AND revision=? AND ${callerSql}`,Number(finished),Number(finished),current.id,current.revision,...callerArgs(workspaceId,user)).run();
+    const updated=await stmt(env,`UPDATE buyer_research_jobs SET input_json=json_set(input_json,'$.publicContactChecks',json('true'),'$.emailWaterfallVersion',1),phase=CASE WHEN ? THEN 'contacts' ELSE phase END,status=CASE WHEN ? THEN 'queued' ELSE status END,next_at=0,revision=revision+1 WHERE id=? AND revision=? AND ${callerSql}`,Number(finished),Number(finished),current.id,current.revision,...callerArgs(workspaceId,user)).run();
     if(updated.meta.changes)return readBuyerJob(env,workspaceId,{id:current.id});
     throw Object.assign(Error('Buyer research changed. Reopen the saved run.'),{status:409});
    }
@@ -374,7 +376,7 @@ export async function commandBuyerJob(env,workspaceId,user,body){
   if(input.freeDiscovery&&parse(row.diagnostic_json,[]).at(-1)?.code==='free_discovery_finished'){
    if(body.allowMeteredPublicResearch!==true)return row;
    input.freeDiscovery=false;
-   input.meteredPublicResearchApproved=true;input.fullResearch=true;
+   input.meteredPublicResearchApproved=true;input.fullResearch=true;input.emailWaterfallVersion=1;
   }
   const candidate=parse(row.result_json,input.candidate),{contactOptions}=await loadBuyerContactContext(env,{workspaceId},candidate),diagnostics=parse(row.diagnostic_json,[]),paused=currentWindowPause(row,input,diagnostics),phase=expanding?'identities':input.freeDiscovery?(row.phase==='identities'?'identities':'official'):paused&&row.phase!=='done'?row.phase:resumePhase(candidate,input,contactOptions);
   if(phase==='done')return row;
