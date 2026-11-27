@@ -163,7 +163,7 @@
         if(!current())return false;
         if(!loadedCurrent()||!policy)throw Error('Paid search preferences could not load. Check Settings and retry.');
         if(!automatic&&policy.provider==='treg'&&!(phoneOnly?policy.phoneEnabled:policy.enabled)){openSettings('treg');throw Error('Paid '+(phoneOnly?'phone':'email')+' search is off. Activate it in Settings, then return and click this buyer’s '+(phoneOnly?'Phone':'E-mail')+' button. No lookup was started.');}
-        dataLookup=policy.provider==='treg';
+        dataLookup=policy.provider==='treg'&&phoneOnly;
       }
       if(!phoneOnly&&!dataLookup&&adapter?.email?.(candidate,person))return true;
       // Every Find email action checks saved/public evidence before provider credits,

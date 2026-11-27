@@ -411,3 +411,14 @@ test('leaving while status reads are unanswered stops the asking at once',async(
  await assert.rejects(h.client.research(h.owner,{profile:{decisionMakers:'COO'},signal:stop.signal}),{name:'AbortError'});
  const seen=h.polls();await new Promise(resolve=>setTimeout(resolve,30));assert.equal(h.polls(),seen);assert.ok(seen<=3);
 });
+
+test('an updated full roster admits the newly ranked person and retains displaced research',async()=>{
+ const D=require('../discovery-engine.js'),previous=globalThis.LeadIntelDiscovery;
+ globalThis.LeadIntelDiscovery=D;
+ try{
+  const owner=candidate();owner.people=Array.from({length:10},(_,i)=>({...person('p'+i),name:'Buyer '+String.fromCharCode(65+i)+'lson'}));
+  const job=snapshot(owner);job.input={scope:'all_buyers',fullResearch:true};job.candidate.people[9]={...person('new'),name:'Nora Berg'};
+  const h=harness(()=>job);await h.client.restore(owner,{profile:{decisionMakers:'COO'}});
+  assert.equal(owner.people.length,10);assert.ok(owner.people.some(p=>p.id==='new'));assert.ok(owner.buyerDiscovery.pool.some(p=>p.id==='p9'));
+ }finally{globalThis.LeadIntelDiscovery=previous;}
+});

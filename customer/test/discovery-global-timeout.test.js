@@ -578,7 +578,7 @@ test('a first-name-only buyer triggers one public source check and renders a sou
   assert.equal(publicQueries.filter(query=>query.startsWith('site:linkedin.com/in/')&&query.includes('"Mikael Example"')).length,1);
   assert.equal(context.__discoveryState().selectedProspects[0].people[0].publicName,'Mikael Example');
   assert.equal(context.__discoveryState().selectedProspects[0].people[0].publicLinkedinUrl,'https://www.linkedin.com/in/mikael-example');
-  assert.match(context.__elements.get('customer-pipeline').innerHTML,/mailto:mikael\.example@boliden\.com/);assert.match(context.__elements.get('customer-pipeline').innerHTML,/Publicly listed · unverified/);
+  assert.match(context.__elements.get('customer-pipeline').innerHTML,/mailto:mikael\.example@boliden\.com/);assert.match(context.__elements.get('customer-pipeline').innerHTML,/Publicly listed[\s\S]*?Mailbox unverified/);
   const linkedinField=new (require('jsdom').JSDOM)(context.__elements.get('customer-pipeline').innerHTML).window.document.querySelector('[data-contact-channel="linkedin"]');
   assert.equal(linkedinField.dataset.contactStatus,'found');assert.match(linkedinField.textContent,/Profile matched automatically/);assert.match(linkedinField.querySelector('a').href,/linkedin\.com\/in\//);
   assert.match(context.__elements.get('customer-pipeline').innerHTML,/mikael\.example@boliden\.com/);
@@ -2216,7 +2216,7 @@ test('the Buyers page keeps four existing cards without a separate published-con
  assert.equal(dom.window.document.querySelectorAll('.published-company-contacts').length,0);
  assert.equal(dom.window.document.querySelectorAll('.selected-prospect-person').length,4);
  assert.equal(dom.window.document.querySelectorAll('[data-prospect-enrich-email]').length,4);
- for(const button of dom.window.document.querySelectorAll('[data-prospect-enrich-email]'))assert.equal(button.textContent,'E-mail');
+ for(const button of dom.window.document.querySelectorAll('[data-prospect-enrich-email]'))assert.equal(button.textContent,'Paid email');
  assert.equal(candidate.buyerDiscovery.companyContacts[0].publicEmail,'staff@northstar.com');dom.window.close();
 });
 

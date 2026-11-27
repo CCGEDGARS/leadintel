@@ -36,7 +36,7 @@ test('phone card distinguishes public research from a pending or failed paid loo
  const person={id:'alex',name:'Alex Buyer',contactResearch:{channels:{phone:{status:'complete'}}}},candidate={domain:'example.com'};
  const pending=context.buyerContactRows(person,candidate,{request:{status:'pending_phone'}});
  assert.match(pending,/Phone lookup pending/);assert.doesNotMatch(pending,/No direct phone found in completed searches/);
- assert.match(pending,/Public-source searches completed without a direct phone/);
+ assert.doesNotMatch(pending,/Public-source searches completed without a direct phone/);assert.match(pending,/Check incomplete/);
  const failed=context.buyerContactRows(person,candidate,{request:{status:'failed'}});assert.match(failed,/Phone lookup failed/);assert.doesNotMatch(failed,/data-contact-channel="phone" data-contact-status="not_found"/);
  const empty=context.buyerContactRows(person,candidate,{request:{status:'not_found'}});assert.match(empty,/Apollo completed without a usable direct phone/);assert.doesNotMatch(empty,/Phone lookup pending/);
 });

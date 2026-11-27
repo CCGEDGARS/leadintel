@@ -25,10 +25,10 @@ export async function verifyPaidBuyerJourney({artifactDir='/tmp/leadintel-paid-b
   await page.waitForFunction(()=>Boolean(discovery.selectedProspects[0].buyerResearchJob?.id));
   const current=()=>f.DB.raw.prepare('SELECT * FROM buyer_research_jobs ORDER BY rowid DESC LIMIT 1').get();
   const free=current();
-  assert.equal(JSON.parse(free.input_json).freeDiscovery,true);
+  assert.equal(JSON.parse(free.input_json).fullResearch,true);
   assert.ok(!JSON.parse(free.input_json).paidResearch);
   for(let i=0;i<12&&['queued','running'].includes(current().status);i++)await f.runJobs(free.id);
-  assert.equal(JSON.parse(current().diagnostic_json).at(-1)?.code,'free_discovery_finished');
+  assert.ok(!['queued','running'].includes(current().status));
   assert.equal(calls.length,0,'a saved paid policy cannot make free discovery spend contact credits');
   await contexts[0].close();
 

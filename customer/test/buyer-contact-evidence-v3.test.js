@@ -24,7 +24,7 @@ test('company and Gmail patterns remain labelled unconfirmed and separate from s
  assert.match(html,/anna.smith@example.com · Unverified pattern/);
  assert.match(html,/anna.smith@gmail.com · Name pattern · Unconfirmed/);
  assert.match(html,/Phone request timed out/);assert.match(html,/Profile matched automatically/);
- assert.doesNotMatch(html,/<strong>Gmail[\s\S]*Additional checks incomplete/);
+ assert.doesNotMatch(html,/<strong>Public business Gmail[\s\S]*Additional checks incomplete/);
  const invalid=ctx.render({...p,hunterChecks:{'anna.smith@example.com':{status:'invalid',deliverability:'undeliverable'}}},company);
  assert.doesNotMatch(invalid,/anna.smith@example.com/);
 });
@@ -52,8 +52,9 @@ test('homepage capture date is not presented as a company event date',()=>{
 
 test('Gmail absence is never presented as a completed search without its dedicated check',()=>{
  const ctx=contactRuntime(),p={...person,emailResearch:{status:'complete'},contactResearch:{checks:{public:{status:'complete'}},channels:{gmail:{status:'complete'}}}};
- const html=ctx.render(p,company),gmail=html.slice(html.indexOf('<strong>Gmail</strong>'));
+ const html=ctx.render(p,company),gmail=html.slice(html.indexOf('<strong>Public business Gmail</strong>'));
  assert.match(gmail,/Not searched yet/);assert.doesNotMatch(gmail,/No Gmail address found in completed searches/);
- const checked=ctx.render({...p,contactResearch:{...p.contactResearch,checks:{gmail:{status:'complete',checkedAt:new Date().toISOString(),queryLog:[1,2,3].map(()=>({status:'complete'}))}}}},company);
- assert.match(checked,/<strong>Gmail<\/strong>[\s\S]*No Gmail address found in completed searches/);
+ const stamp=new Date().toISOString(),queries=D.buyerResearchQueryPlan(company,p).gmail;
+ const checked=ctx.render({...p,contactResearch:{policyVersion:D.BUYER_CONTACT_RESEARCH_POLICY.version,identityKey:D.buyerResearchIdentityKey(company,p),checks:{gmail:{status:'complete',checkedAt:stamp,queryLog:queries.map(query=>({query,status:'complete',searchStatus:'complete',checkedAt:stamp,resultCount:0,sourceReads:[]}))}}}},company);
+ assert.match(checked,/<strong>Public business Gmail<\/strong>[\s\S]*Not found in checked sources/);
 });

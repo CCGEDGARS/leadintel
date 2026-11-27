@@ -1,3 +1,4 @@
+import '../../customer/discovery-engine.js';
 import {productionProvider} from './copilot-service.js';
 
 // Named in the job's own words; the provider's message stays out of the customer's record.
@@ -12,10 +13,12 @@ function failureCause(error){
 // cannot grant contact permissions, call providers or supply a verified fact.
 export async function planBuyerSearch(env,workspaceId,{candidate,profile,queries,pages,signal}){
  const engine=await productionProvider(env,workspaceId);
- const fallback={queries:queries.slice(0,3),findMorePeople:!candidate.people?.length,provider:'rules'};
+ const shortlist=globalThis.LeadIntelDiscovery.rankedBuyerShortlist(candidate.people||[],profile,candidate);
+ const shortfall=shortlist.priorityIds.length<4;
+ const fallback={queries:queries.slice(0,3),findMorePeople:shortfall,provider:'rules'};
  if(!engine)return fallback;
  const brief={company:candidate.company,domain:candidate.domain,offer:profile.priorityOffers,roles:profile.decisionMakers,
-  people:(candidate.people||[]).map(p=>({name:p.publicName||p.name,role:p.title,hasEmail:Boolean(p.publicEmail),hasPhone:Boolean(p.publicPhone)})),
+  priorityPlacesRemaining:Math.max(0,4-shortlist.priorityIds.length),people:(candidate.people||[]).map(p=>({name:p.publicName||p.name,role:p.title,hasEmail:Boolean(p.publicEmail),hasPhone:Boolean(p.publicPhone)})),
   pages:pages.filter(p=>p.sourceRead).slice(0,15).map(p=>p.url),queries};
  // A model call that fails is a known outcome, like an answer that cannot be read: the rule plan applies and keeps the
  // cause. A call cut off with its processing slice stays an error, so the runner retains that dispatch for review.
@@ -29,5 +32,5 @@ export async function planBuyerSearch(env,workspaceId,{candidate,profile,queries
  let answer;try{answer=JSON.parse(String(result.text||result.output_text||'').replace(/^```(?:json)?\s*|\s*```$/gi,''));}catch{return fallback;}
  if(!Array.isArray(answer?.indices)||typeof answer.findMorePeople!=='boolean')return fallback;
  const indices=[...new Set(answer.indices)].filter(i=>Number.isInteger(i)&&i>=0&&i<queries.length).slice(0,3);
- return {queries:indices.map(i=>queries[i]),findMorePeople:answer.findMorePeople,provider:engine.key.split(':')[0]};
+ return {queries:indices.map(i=>queries[i]),findMorePeople:shortfall||answer.findMorePeople,provider:engine.key.split(':')[0]};
 }

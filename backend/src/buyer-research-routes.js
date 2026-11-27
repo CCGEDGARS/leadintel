@@ -28,6 +28,9 @@ export async function handleBuyerResearchRoute(request,env,cors={},ctx){
   const body=await request.json().catch(()=>null);
   if(!body||typeof body!=='object'||Array.isArray(body)||new TextEncoder().encode(JSON.stringify(body)).byteLength>262144)return json({error:'A bounded buyer context is required'},400,cors);
   if(!['start','resume','cancel'].includes(body.action||'start'))return json({error:'Unknown buyer research command'},400,cors);
+  if(body.paidEmailLimit!==undefined||body.peopleFirst===true&&body.paidResearch===true){
+   return json({error:'Approve paid contact research on the individual buyer and field.'},400,cors);
+  }
   if(free){
    if(body.action!=='start'||body.personIds?.length||body.paidResearch||body.fullResearch||body.allowMeteredPublicResearch)return json({error:'Free discovery is a company-wide public search'},400,cors);
    body.freeDiscovery=true;body.peopleFirst=true;

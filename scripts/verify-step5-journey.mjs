@@ -79,14 +79,8 @@ export async function verifyStep5Journey({artifactDir='/tmp/leadintel-step5-jour
   await page.waitForFunction(()=>discovery.selectedProspects[0].buyerResearchJob?.id,null,{timeout:10000});
   const job=f.DB.raw.prepare('SELECT * FROM buyer_research_jobs').get();assert.equal(job.status,'queued');
   const phaseRuns=[];
-  for(let i=0;i<8;i++){
-   phaseRuns.push(...await f.runJobs(job.id));
-   const row=f.DB.raw.prepare('SELECT diagnostic_json FROM buyer_research_jobs WHERE id=?').get(job.id);
-   if(JSON.parse(row.diagnostic_json).at(-1)?.code==='free_discovery_finished')break;
-  }
-  assert.ok(f.providerCalls.every(call=>call.kind==='read'),'the initial command may only read public pages');
-  await page.getByRole('button',{name:'Expand web research · uses credits'}).click();
-  await page.waitForFunction(()=>['queued','running'].includes(discovery.selectedProspects[0].buyerResearchJob?.status));
+  assert.equal(JSON.parse(job.input_json).fullResearch,true,'the company click starts all public checks');
+  assert.ok(!JSON.parse(job.input_json).paidResearch);
   phaseRuns.push(...await f.runJobs(job.id));
   assert.ok(f.DB.raw.prepare("SELECT count(*) n FROM buyer_research_tasks WHERE job_id=? AND kind='read' AND status='complete'").get(job.id).n>0);
   await page.close();

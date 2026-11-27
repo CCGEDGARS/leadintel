@@ -107,9 +107,9 @@ test('Gmail display distinguishes unsearched from not-found and never displays i
  const start=source.indexOf('function buyerContactRows('),end=source.indexOf('function emailPatternCandidates(',start);
  vm.runInNewContext(`${source.slice(start,end)};globalThis.render=buyerContactRows;`,ctx);
  const absent=ctx.render({hunterChecks:{'guess@gmail.com':{status:'invalid'}}},{domain:'example.lv'});
- assert.match(absent,/data-contact-channel="gmail" data-contact-status="not_searched"/);assert.match(absent,/<strong>Gmail<\/strong><span><span class="buyer-field-state">Not checked/);assert.match(absent,/Not searched yet/);assert.doesNotMatch(absent,/guess@gmail/);
+ assert.match(absent,/data-contact-channel="gmail" data-contact-status="not_searched"/);assert.match(absent,/<strong>Public business Gmail<\/strong><span><span class="buyer-field-state">Check incomplete/);assert.match(absent,/Not searched yet/);assert.doesNotMatch(absent,/guess@gmail/);
  const found=ctx.render({patternFindings:[{email:'bluebird42@gmail.com',url:'https://association.test'}]},{domain:'example.lv'});
- assert.match(found,/<strong>Gmail<\/strong><span><span class="buyer-email-result">bluebird42@gmail.com · Saved listing · Unconfirmed/);
+ assert.match(found,/<strong>Public business Gmail<\/strong><span><span class="buyer-email-result">bluebird42@gmail.com · Saved listing · Unconfirmed/);
 });
 test('person-first official research recovers a published email and phone even when guesses return nothing',async()=>{
  const queries=[],ctx={...context,crmAuthenticated:()=>false,fetchFirecrawlBuyerResearch:async()=>({ok:true,json:async()=>({data:{markdown:'Contact manager Marta Berzina, marta.berzina@example.lv, +371 2000 1234.'}})}),searchBuyerPublicPages:async query=>{queries.push(query);return query==='site:example.lv "Marta Berzina"'?[{url:'https://example.lv/jobs/engineering',markdown:'Contact manager Marta Berzina, marta.berzina@example.lv, +371 2000 1234.'}]:[];}};

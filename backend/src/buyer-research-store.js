@@ -98,7 +98,7 @@ export async function recoverInterruptedContactJob(env,{jobId}={}){
  }
  return null;
 }
-function resumePhase(saved,input={},contactOptions={}){const candidate=D.reconcileBuyerEvidence(saved,{trustedAgentSources:true}),review=D.safeBuyerAiReview(candidate.publicResearch?.aiReview),coverage=D.buyerResearchCoveragePassed(candidate,{contactOptions});return input.recheck?(!coverage?'contacts':review?.status!=='complete'||review.inputSignature!==D.buyerReviewSignature(candidate)?'review':'done'):!D.officialContactCoveragePassed(candidate)?'official':input.peopleFirst&&!candidate.people?.length?'identities':input.peopleFirst&&!coverage?'contacts':candidate.buyerDiscovery?.companyDossier?.status!=='complete'?'dossier':!candidate.people?.length?'identities':!coverage?'contacts':review?.status!=='complete'||review.inputSignature!==D.buyerReviewSignature(candidate)?'review':input.paidResearch&&!['complete','disabled'].includes(candidate.publicResearch?.paidResearch?.status)?'paid':'done';}
+function resumePhase(saved,input={},contactOptions={}){const candidate=D.reconcileBuyerEvidence(saved,{trustedAgentSources:true}),review=D.safeBuyerAiReview(candidate.publicResearch?.aiReview),coverage=D.buyerResearchCoveragePassed(candidate,{contactOptions});return input.recheck?(!coverage?'contacts':review?.status!=='complete'||review.inputSignature!==D.buyerReviewSignature(candidate)?'review':'done'):!D.officialContactCoveragePassed(candidate)?'official':input.peopleFirst&&!input.fullResearch&&!candidate.people?.length?'identities':input.peopleFirst&&!input.fullResearch&&!coverage?'contacts':candidate.buyerDiscovery?.companyDossier?.status!=='complete'?'dossier':!candidate.people?.length?'identities':!coverage?'contacts':review?.status!=='complete'||review.inputSignature!==D.buyerReviewSignature(candidate)?'review':input.paidResearch&&!['complete','disabled'].includes(candidate.publicResearch?.paidResearch?.status)?'paid':'done';}
 async function retainedJobCandidate(env,row,input,current){
  // Only server-owned results in this workspace and seller context can restore
  // source facts. Current roster, rejections and execution receipts remain authoritative.
@@ -194,7 +194,7 @@ export async function publicBuyerJob(env,row,{recoverRetained=false}={}){
  const stages={official:D.officialContactCoveragePassed(candidate),dossier:candidate.buyerDiscovery?.companyDossier?.status==='complete'&&!candidate.buyerDiscovery?.companyDossier?.lastAttempt,identities,contacts:D.buyerResearchCoveragePassed(candidate,{contactOptions}),review:quality.aiReviewStatus==='complete'&&(!input.paidResearch||['complete','disabled'].includes(candidate.publicResearch?.paidResearch?.status))};
  const diagnostics=parse(row.diagnostic_json,[]),paused=currentWindowPause(row,input,diagnostics);
  const labels={official:'Reading official company sources',dossier:'Researching the company',identities:'Finding decision-makers',contacts:'Checking contact evidence',review:'Reviewing buyer evidence',paid:'Researching approved paid channels',done:'Research saved'};
- return {id:row.id,domain:row.domain,retainedEvidenceRecovered:recoverRetained,contextKey:row.context_key,crm,input:{fullResearch:Boolean(input.fullResearch||input.meteredPublicResearchApproved),peopleFirst:Boolean(input.peopleFirst),paidResearch:Boolean(input.paidResearch),company:input.candidate?.company,domain:row.domain,profile:input.profile,roles:input.roles,personIds:input.scope==='selected_buyers'?input.personIds:[],scope:input.scope},status:row.status,phase:row.phase,resumePhase:resumePhase(candidate,input,contactOptions),revision:row.revision,createdAt,updatedAt,candidate,quality,diagnostics:[...diagnostics,...(row.last_error?[{phase:row.phase,reason:row.last_error}]:[])],progress:{timing,stages,credits,windowPaused:Boolean(paused),executionStatus:row.status,completed:Number(completed),total,inProgress:row.status==='running'?Number((totals.results||[]).find(r=>r.status==='running')?.n)||0:0,lastActivityAt,label:input.freeDiscovery&&diagnostics.at(-1)?.code==='free_discovery_finished'?diagnostics.at(-1).reason:paused?paused.reason:activity|| (row.status==='needs_review'?'Research saved · '+(quality.gaps[0]||'review remaining gaps'):input.recheck&&row.phase==='contacts'?Object.values(input.recheck.plans).some(plan=>plan.queries.length)?'Checking missing contact details · alternative public sources':'Rechecking saved sources · no untried alternative queries':labels[row.phase]||row.phase.replaceAll('_',' '))}};
+ return {id:row.id,domain:row.domain,retainedEvidenceRecovered:recoverRetained,contextKey:row.context_key,crm,input:{freeDiscovery:Boolean(input.freeDiscovery&&!input.fullResearch),publicContactChecks:input.publicContactChecks===true,fullResearch:Boolean(input.fullResearch||input.meteredPublicResearchApproved),peopleFirst:Boolean(input.peopleFirst),paidResearch:Boolean(input.paidResearch),company:input.candidate?.company,domain:row.domain,profile:input.profile,roles:input.roles,personIds:input.scope==='selected_buyers'?input.personIds:[],scope:input.scope},status:row.status,phase:row.phase,resumePhase:resumePhase(candidate,input,contactOptions),revision:row.revision,createdAt,updatedAt,candidate,quality,diagnostics:[...diagnostics,...(row.last_error?[{phase:row.phase,reason:row.last_error}]:[])],progress:{timing,stages,credits,windowPaused:Boolean(paused),executionStatus:row.status,completed:Number(completed),total,inProgress:row.status==='running'?Number((totals.results||[]).find(r=>r.status==='running')?.n)||0:0,lastActivityAt,label:input.freeDiscovery&&diagnostics.at(-1)?.code==='free_discovery_finished'?diagnostics.at(-1).reason:paused?paused.reason:activity|| (row.status==='needs_review'?'Research saved · '+(quality.gaps[0]||'review remaining gaps'):input.recheck&&row.phase==='contacts'?Object.values(input.recheck.plans).some(plan=>plan.queries.length)?'Checking missing contact details · alternative public sources':'Rechecking saved sources · no untried alternative queries':labels[row.phase]||row.phase.replaceAll('_',' '))}};
 }
 // A second Full click reopens its run, including a partial or budget-paused result.
 // Only a separate resume command authorizes another execution window.
@@ -235,7 +235,12 @@ export async function startBuyerJob(env,workspaceId,user,body,trusted=null){
  input.freeDiscovery=input.peopleFirst&&body.freeDiscovery===true&&body.paidResearch!==true;
  if(body.fullResearch===true){
   if(trusted||!input.peopleFirst||body.freeDiscovery||body.paidResearch||input.scope!=='all_buyers')throw Object.assign(Error('Full research applies to one company and public sources only.'),{status:400});
-  await allowFullResearch(env,workspaceId);input.fullResearch=true;input.meteredPublicResearchApproved=true;
+  try{
+   await allowFullResearch(env,workspaceId);input.fullResearch=true;input.meteredPublicResearchApproved=true;
+  }catch(error){
+   if(!body.allowFreeFallback||error.code!=='FULL_RESEARCH_DISABLED')throw error;
+   input.freeDiscovery=true;input.publicContactChecks=true;
+  }
  }
  input.executionWindowStartedAt=new Date().toISOString();
  input.contactContinuationVersion=1;
@@ -261,7 +266,18 @@ export async function startBuyerJob(env,workspaceId,user,body,trusted=null){
   // Opening the free action cannot replace or restart a metered job.
   return current;
  }
- if(input.fullResearch){
+ if(input.publicContactChecks&&current){
+  const previous=parse(current.input_json);
+  if(previous.freeDiscovery&&!previous.publicContactChecks&&sameFullScope(previous,input)){
+   const finished=parse(current.diagnostic_json,[]).at(-1)?.code==='free_discovery_finished';
+   if(activeBuyerJob(current.status)||finished){
+    const updated=await stmt(env,`UPDATE buyer_research_jobs SET input_json=json_set(input_json,'$.publicContactChecks',json('true')),phase=CASE WHEN ? THEN 'contacts' ELSE phase END,status=CASE WHEN ? THEN 'queued' ELSE status END,next_at=0,revision=revision+1 WHERE id=? AND revision=? AND ${callerSql}`,Number(finished),Number(finished),current.id,current.revision,...callerArgs(workspaceId,user)).run();
+    if(updated.meta.changes)return readBuyerJob(env,workspaceId,{id:current.id});
+    throw Object.assign(Error('Buyer research changed. Reopen the saved run.'),{status:409});
+   }
+  }
+ }
+ if(input.fullResearch&&(!body.force||current&&activeBuyerJob(current.status))){
   // A newer one-person check may be the latest job without replacing this
   // company's Full run or its provider receipts.
   const currentInput=current&&parse(current.input_json);

@@ -20,7 +20,7 @@ test('unreviewed LinkedIn field offers the existing review dialog without changi
   assert.equal(button.textContent,'Review profile');assert.equal(button.closest('[data-contact-channel]').dataset.contactChannel,'linkedin');
   assert.equal(button.dataset.reviewLinkedin,h.candidate.domain);assert.equal(button.dataset.personId,h.person.id);assert.equal(button.dataset.personIndex,'0');assert.ok(button.dataset.personIdentity);assert.ok(button.dataset.buyerContext);
   assert.equal(button.disabled,false);assert.equal(button.closest('.buyer-four-actions'),null);
-  assert.deepEqual([...h.dom.window.document.querySelector('.buyer-four-actions').querySelectorAll('button')].map(b=>b.textContent),['E-mail','Phone','Recheck','Proceed']);
+  assert.deepEqual([...h.dom.window.document.querySelector('.buyer-four-actions').querySelectorAll('button')].map(b=>b.textContent),['Paid email','Paid phone','Refresh','Proceed']);
   button.click();assert.equal(h.dialog()?.open,true);assert.match(h.dialog().textContent,/Avery Buyer/);assert.ok(h.dialog().querySelector('[data-review-confirm]'));assert.ok(h.dialog().querySelector('[data-review-message]'));
   assert.equal(h.person.linkedinConfirmedUrl,undefined);assert.equal(h.calls.some(call=>call?.type==='leadintel:buyer-for-scripts'),false,'opening review neither confirms nor opens Messages');
  }finally{h.close();}
