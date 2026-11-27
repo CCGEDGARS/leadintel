@@ -132,3 +132,26 @@ test('an interrupted empty full run recovers named staff on reopening from compl
  assert.equal(f.DB.raw.prepare('SELECT sum(attempts) used FROM buyer_research_tasks WHERE job_id=?').get(job.id).used,2);
  assert.deepEqual((await publicBuyerJob(f.env,{...row,input_json:JSON.stringify({...JSON.parse(row.input_json),scope:'selected_buyers'})})).candidate.people,[]);
 });
+
+test('a free-only Find buyers click received during identity discovery reaches public contact checks',async t=>{
+ const f=await buyerJobsFixture(t);
+ f.DB.raw.prepare("INSERT INTO workspace_research_settings(workspace_id,full_research_policy) VALUES(?,'free_only')").run(workspaceId);
+ const initial=await startBuyerJob(f.env,workspaceId,f.users.owner,{...f.body,peopleFirst:true,freeDiscovery:true});
+ f.DB.raw.prepare("UPDATE buyer_research_jobs SET phase='identities' WHERE id=?").run(initial.id);
+ let upgraded;
+ const services={
+  registry:async()=>({status:'not_found'}),read:async url=>({url,markdown:'Forge Industries',links:[]}),
+  publicIndex:async()=>{
+   if(!upgraded)upgraded=await startBuyerJob(f.env,workspaceId,f.users.owner,{...f.body,peopleFirst:true,fullResearch:true,allowFreeFallback:true});
+   return [];
+  }
+ };
+ const tick=()=>runBuyerResearchJobs(f.env,{jobId:initial.id,maxJobs:1,windowMs:8000,services});
+ await tick();
+ assert.equal(upgraded?.status,'running');assert.equal(upgraded.id,initial.id);
+ let saved=await readBuyerJob(f.env,workspaceId,{id:initial.id});
+ assert.equal(saved.status,'queued','the earlier identity-only worker must honor the public contact request');
+ if(saved.phase==='identities'){await tick();saved=await readBuyerJob(f.env,workspaceId,{id:initial.id});}
+ assert.equal(saved.phase,'contacts');assert.equal(JSON.parse(saved.input_json).publicContactChecks,true);
+ assert.equal(JSON.parse(saved.input_json).freeDiscovery,true);assert.ok(!JSON.parse(saved.input_json).paidResearch);
+});
