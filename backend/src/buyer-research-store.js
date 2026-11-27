@@ -98,7 +98,7 @@ export async function recoverInterruptedContactJob(env,{jobId}={}){
  }
  return null;
 }
-function resumePhase(saved,input={},contactOptions={}){const candidate=D.reconcileBuyerEvidence(saved,{trustedAgentSources:true}),review=D.safeBuyerAiReview(candidate.publicResearch?.aiReview),coverage=D.buyerResearchCoveragePassed(candidate,{contactOptions});return input.recheck?(!coverage?'contacts':review?.status!=='complete'||review.inputSignature!==D.buyerReviewSignature(candidate)?'review':'done'):!D.officialContactCoveragePassed(candidate)?'official':input.peopleFirst&&!candidate.people?.length?'identities':input.peopleFirst&&!coverage?'contacts':candidate.buyerDiscovery?.companyDossier?.status!=='complete'?'dossier':!candidate.people?.length?'identities':!coverage?'contacts':review?.status!=='complete'||review.inputSignature!==D.buyerReviewSignature(candidate)?'review':input.paidResearch&&!['complete','disabled'].includes(candidate.publicResearch?.paidResearch?.status)?'paid':'done';}
+function resumePhase(saved,input={},contactOptions={}){const candidate=D.reconcileBuyerEvidence(saved,{trustedAgentSources:true}),review=D.safeBuyerAiReview(candidate.publicResearch?.aiReview),coverage=D.buyerResearchCoveragePassed(candidate,{contactOptions});return input.recheck?(!coverage?'contacts':review?.status!=='complete'||review.inputSignature!==D.buyerReviewSignature(candidate)?'review':'done'):!D.officialContactCoveragePassed(candidate)?'official':input.peopleFirst&&!input.fullResearch&&!candidate.people?.length?'identities':input.peopleFirst&&!input.fullResearch&&!coverage?'contacts':candidate.buyerDiscovery?.companyDossier?.status!=='complete'?'dossier':!candidate.people?.length?'identities':!coverage?'contacts':review?.status!=='complete'||review.inputSignature!==D.buyerReviewSignature(candidate)?'review':input.paidResearch&&!['complete','disabled'].includes(candidate.publicResearch?.paidResearch?.status)?'paid':'done';}
 async function retainedJobCandidate(env,row,input,current){
  // Only server-owned results in this workspace and seller context can restore
  // source facts. Current roster, rejections and execution receipts remain authoritative.
@@ -189,7 +189,7 @@ export async function publicBuyerJob(env,row,{recoverRetained=false}={}){
  }catch{}
  const timing={estimate,lastResultAt,runWindow,nextAttemptAt:row.status==='queued'&&Number(row.next_at)>0?new Date(Number(row.next_at)).toISOString():null};
  // The input roster may already contain names before the worker reaches discovery.
- const pastIdentityStage=input.peopleFirst&&row.phase==='dossier'||['contacts','review','paid','done'].includes(row.phase);
+ const pastIdentityStage=input.peopleFirst&&!input.fullResearch&&row.phase==='dossier'||['contacts','review','paid','done'].includes(row.phase);
  const identities=pastIdentityStage&&(candidate.people||[]).some(person=>D.sourcedBuyerIdentity(person,candidate));
  const stages={official:D.officialContactCoveragePassed(candidate),dossier:candidate.buyerDiscovery?.companyDossier?.status==='complete'&&!candidate.buyerDiscovery?.companyDossier?.lastAttempt,identities,contacts:D.buyerResearchCoveragePassed(candidate,{contactOptions}),review:quality.aiReviewStatus==='complete'&&(!input.paidResearch||['complete','disabled'].includes(candidate.publicResearch?.paidResearch?.status))};
  const diagnostics=parse(row.diagnostic_json,[]),paused=currentWindowPause(row,input,diagnostics);
@@ -235,7 +235,12 @@ export async function startBuyerJob(env,workspaceId,user,body,trusted=null){
  input.freeDiscovery=input.peopleFirst&&body.freeDiscovery===true&&body.paidResearch!==true;
  if(body.fullResearch===true){
   if(trusted||!input.peopleFirst||body.freeDiscovery||body.paidResearch||input.scope!=='all_buyers')throw Object.assign(Error('Full research applies to one company and public sources only.'),{status:400});
-  await allowFullResearch(env,workspaceId);input.fullResearch=true;input.meteredPublicResearchApproved=true;
+  try{
+   await allowFullResearch(env,workspaceId);input.fullResearch=true;input.meteredPublicResearchApproved=true;
+  }catch(error){
+   if(!body.allowFreeFallback||error.code!=='FULL_RESEARCH_DISABLED')throw error;
+   input.freeDiscovery=true;
+  }
  }
  input.executionWindowStartedAt=new Date().toISOString();
  input.contactContinuationVersion=1;
@@ -261,7 +266,7 @@ export async function startBuyerJob(env,workspaceId,user,body,trusted=null){
   // Opening the free action cannot replace or restart a metered job.
   return current;
  }
- if(input.fullResearch){
+ if(input.fullResearch&&(!body.force||current&&activeBuyerJob(current.status))){
   // A newer one-person check may be the latest job without replacing this
   // company's Full run or its provider receipts.
   const currentInput=current&&parse(current.input_json);

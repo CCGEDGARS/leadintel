@@ -511,7 +511,7 @@
    <td><div class="cl-ranked-name"><span class="cl-rank" aria-label="Rank ${rank}">${rank}</span><div><strong>${esc(r.company)}</strong><a href="${esc(r.website)}" target="_blank" rel="noopener noreferrer">${esc(r.domain)} ↗</a></div></div></td>
    <td class="cl-place">${esc(r.location)}</td>
    <td class="cl-fit"><details data-detail="company:${esc(r.domain)}"><summary aria-label="Company fit ${esc(r.score)} out of 100 for ${esc(r.company)}. Show score details"><b>${esc(r.score)}</b><span>/100</span></summary><div class="cl-score-evidence">${breakdown}${evidence}</div></details></td>
-   <td class="cl-buyer-action"><button type="button" class="secondary-btn" data-cl="buyer" data-domain="${esc(r.domain)}" ${active?'disabled title="'+esc(BUYERS_WAIT)+'"':''}>Find buyers →</button> <button type="button" class="secondary-btn" data-cl="full-buyer" data-domain="${esc(r.domain)}" ${active?'disabled':''}>Full research · uses credits</button></td>
+   <td class="cl-buyer-action"><button type="button" class="secondary-btn" data-cl="buyer" data-domain="${esc(r.domain)}" ${active?'disabled title="'+esc(BUYERS_WAIT)+'"':''}>Find buyers →</button><small>Uses connected web and AI research within workspace limits.</small></td>
   </tr>`;
  }
  function render(){
@@ -677,14 +677,9 @@
     const confirmed=await root.LeadIntelDialogs.confirm('Add $1 to the estimated AI reasoning budget for this list?',{title:'Continue research?',action:'Approve $1'});
     if(!confirmed||owner!==identity()||current!==list)return;
    }
-   const full=command==='full-buyer';
-   if(full){
-    const ok=await root.LeadIntelDialogs.confirm('Reuse saved research for '+b.dataset.domain+' and use your connected AI and web search providers for missing evidence? Email and phone reveals require separate approval.',{title:'Start Full research?',action:'Use metered web research'});
-    if(!ok||owner!==identity()||current!==list)return;
-   }
    const extension=command==='extend'?{additional:Number($('cl-extra-count').value)}:{};
-   const result=await api({}, {...extension,...(extraSearch?{additionalGroundedQueries:3}:{}),...(extraSpend?{additionalReasoningUsd:1}:{}),action:full?'buyer':command,id:list.id,revision:list.revision,...(full||command==='buyer'?{domain:b.dataset.domain}:{})});
-   if(full||command==='buyer'){if(owner!==identity()||current!==list)return;await root.LeadIntelDiscoveryUI?.openListCompany?.(result.candidate,{fullResearch:full});return;}
+   const result=await api({}, {...extension,...(extraSearch?{additionalGroundedQueries:3}:{}),...(extraSpend?{additionalReasoningUsd:1}:{}),action:command,id:list.id,revision:list.revision,...(command==='buyer'?{domain:b.dataset.domain}:{})});
+   if(command==='buyer'){if(owner!==identity()||current!==list)return;await root.LeadIntelDiscoveryUI?.openListCompany?.(result.candidate,{fullResearch:true});return;}
    if(command==='resume'&&result.list)startedHere.set(result.list.id,Date.now());
    current=result.list;render();
   },command==='review'||command==='start',({new:'Loading the list criteria…',lists:'Loading your company lists…',open:'Opening the list…'})[command]||'');

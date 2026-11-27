@@ -16,14 +16,14 @@ test('saved email and partial phone receipts cannot be hidden by a stale not-sea
  const check=(count,status='complete')=>({status,checkedAt:stamp,attempts:count,queryLog:Array.from({length:count},(_,i)=>({query:'Recorded query '+i,status,searchStatus:status,checkedAt:stamp,sourceReads:[]}))});
  person.contactResearch={checks:{linkedin:check(1),official:check(1),public:check(1),direct_email:check(2),phone:check(1,'partial')},channels:{company:{status:'not_searched'},phone:{status:'not_searched'},gmail:{status:'not_searched'}}};
  const doc=documentFor(ctx.buyerContactRows(person,candidate));
- for(const channel of ['company','phone']){const field=doc.querySelector(`[data-contact-channel="${channel}"]`);assert.equal(field.dataset.contactStatus,'incomplete');assert.match(visibleText(field),/Checks incomplete/);assert.doesNotMatch(visibleText(field),/Not checked|Not found/);}
+ for(const channel of ['company','phone']){const field=doc.querySelector(`[data-contact-channel="${channel}"]`);assert.equal(field.dataset.contactStatus,'incomplete');assert.match(visibleText(field),/Check incomplete/);assert.doesNotMatch(visibleText(field),/Not checked|Not found/);}
  assert.match(doc.querySelector('[data-contact-channel="company"] details').textContent,/4 .*searches recorded/);
  assert.equal(doc.querySelector('[data-contact-channel="gmail"]').dataset.contactStatus,'not_searched','LinkedIn and work-email queries never impersonate Gmail execution');
 });
 test('LinkedIn-only research leaves genuinely unstarted email and phone fields unchecked',()=>{
  const {ctx,person,candidate}=runtime();person.contactResearch={checks:{linkedin:{status:'complete',queryLog:[{status:'complete',query:'LinkedIn match'}]}},channels:{company:{status:'not_searched'},phone:{status:'not_searched'}}};
  const doc=documentFor(ctx.buyerContactRows(person,candidate));
- for(const channel of ['company','phone','gmail']){const field=doc.querySelector(`[data-contact-channel="${channel}"]`);assert.equal(field.dataset.contactStatus,'not_searched');assert.match(visibleText(field),/Not checked/);}
+ for(const channel of ['company','phone','gmail']){const field=doc.querySelector(`[data-contact-channel="${channel}"]`);assert.equal(field.dataset.contactStatus,'not_searched');assert.match(visibleText(field),/Check incomplete/);}
 });
 test('a completed current phone receipt repairs its summary while a different identity remains incomplete',()=>{
  const {ctx,person,candidate}=runtime(),stamp=new Date().toISOString(),query=D.buyerResearchQueryPlan(candidate,person).phone[0];
@@ -35,15 +35,15 @@ test('contact fields expose concise found, not-found and incomplete states with 
  const {ctx,person,candidate}=runtime(),doc=documentFor(ctx.buyerContactRows(person,candidate));
  const linkedin=doc.querySelector('[data-contact-channel="linkedin"]');assert.ok(linkedin,'LinkedIn is a labelled channel');assert.equal(linkedin.dataset.contactStatus,'found');
  assert.equal(linkedin.querySelector('a').href,'https://linkedin.com/in/anna-smith');assert.match(linkedin.querySelector('a').textContent,/View profile/);
- for(const channel of ['company','gmail']){const field=doc.querySelector(`[data-contact-channel="${channel}"]`);assert.equal(field.dataset.contactStatus,'not_found');assert.match(visibleText(field),/Not found/);assert.doesNotMatch(visibleText(field),/No .* found in completed searches/);}
- const phone=doc.querySelector('[data-contact-channel="phone"]');assert.equal(phone.dataset.contactStatus,'incomplete');assert.match(visibleText(phone),/Checks incomplete/);assert.doesNotMatch(visibleText(phone),/Phone request timed out/);assert.match(phone.querySelector('details').textContent,/Phone request timed out/);
+ for(const channel of ['company','gmail']){const field=doc.querySelector(`[data-contact-channel="${channel}"]`);assert.equal(field.dataset.contactStatus,'incomplete');assert.match(visibleText(field),/Check incomplete/,'an aggregate flag cannot substitute for current receipts');}
+ const phone=doc.querySelector('[data-contact-channel="phone"]');assert.equal(phone.dataset.contactStatus,'incomplete');assert.match(visibleText(phone),/Check incomplete/);assert.doesNotMatch(visibleText(phone),/Phone request timed out/);assert.match(phone.querySelector('details').textContent,/Phone request timed out/);
  assert.equal(doc.querySelectorAll('.buyer-contact-fields > div').length,4);
 });
 test('unsearched and running channels cannot be mistaken for a completed not-found result',()=>{
  const {ctx,person,candidate}=runtime();person.contactResearch={checks:{gmail:{status:'running'}},channels:{company:{status:'not_searched'},phone:{status:'running'}}};person.publicLinkedinUrl='';
  const doc=documentFor(ctx.buyerContactRows(person,candidate));
- assert.equal(doc.querySelector('[data-contact-channel="company"]').dataset.contactStatus,'not_searched');assert.match(visibleText(doc.querySelector('[data-contact-channel="company"]')),/Not checked/);
- for(const key of ['gmail','phone']){const field=doc.querySelector(`[data-contact-channel="${key}"]`);assert.equal(field.dataset.contactStatus,'running');assert.match(visibleText(field),/Searching/);}
+ assert.equal(doc.querySelector('[data-contact-channel="company"]').dataset.contactStatus,'not_searched');assert.match(visibleText(doc.querySelector('[data-contact-channel="company"]')),/Check incomplete/);
+ for(const key of ['gmail','phone']){const field=doc.querySelector(`[data-contact-channel="${key}"]`);assert.equal(field.dataset.contactStatus,'running');assert.match(visibleText(field),/Check incomplete/);}
  assert.equal(doc.querySelector('[data-contact-channel="linkedin"]').querySelector('a'),null);assert.equal(doc.querySelector('[data-contact-channel="linkedin"]').dataset.contactStatus,'not_searched');
 });
 test('qualification keeps priority and research status compact while role and authority evidence start collapsed',()=>{
@@ -185,11 +185,13 @@ test('a published reception route is visible outside the research details and se
  assert.equal(summary.querySelector('a[target="_blank"]').href,contact);
 });
 
-test('the optional work-email search shows its own limit separately from the free company action',()=>{
+test('a saved paid policy never exposes company-level email or phone approval',()=>{
  const {ctx,candidate}=runtime();candidate.crmId='saved-company';
- const render=()=>documentFor(ctx.renderSelectedProspects([candidate]));
- assert.equal(render().querySelector('[data-find-buyer-emails]'),null);
  ctx.window.LeadIntelAdditionalContacts={policy:()=>({enabled:true,provider:'treg',phoneEnabled:true,automaticBuyerLimit:3})};
- const doc=render();assert.equal(doc.querySelectorAll('[data-find-prospect-buyers]').length,1);
- const paid=doc.querySelector('[data-find-buyer-emails]');assert.equal(paid.dataset.paidEmailLimit,'3');assert.match(doc.getElementById(paid.getAttribute('aria-describedby')).textContent,/up to \$0\.225 for 3 buyers/);assert.match(paid.textContent,/up to 3 work emails · uses credits/);
+ for(const state of ['loading','complete']){
+  candidate.peopleStatus=state;
+  const doc=documentFor(ctx.renderSelectedProspects([candidate]));
+  assert.equal(doc.querySelectorAll('[data-find-prospect-buyers]').length,1);
+  assert.equal(doc.querySelector('[data-find-buyer-emails],[data-prospect-batch-phone],[data-prospect-batch-email]'),null);
+ }
 });

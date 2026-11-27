@@ -54,7 +54,7 @@ test('durable Recheck acknowledges a delayed command immediately and prevents du
   const work=r.c.recheckBuyerContact('example.com',0,{personId:r.person.id});
   const node=r.dom.window.document.createElement('div');node.innerHTML=r.c.prospectContactControls(r.candidate,r.person);
   assert.equal(node.querySelector('[data-recheck-buyer]').disabled,true);
-  assert.equal(node.querySelector('[data-recheck-buyer]').textContent,'Rechecking…');
+  assert.equal(node.querySelector('[data-recheck-buyer]').textContent,'Refreshing…');
   assert.equal(await r.c.recheckBuyerContact('example.com',0,{personId:r.person.id}),false);
   assert.equal(requests,1);finish(true);assert.equal(await work,true);
   node.innerHTML=r.c.prospectContactControls(r.candidate,r.person);assert.equal(node.querySelector('[data-recheck-buyer]').disabled,false);
@@ -75,8 +75,8 @@ test('durable selected recheck marks only that buyer busy and preserves other re
   const other={...r.person,id:'other',name:'Other Buyer'};r.candidate.people=[r.person,other];r.candidate.peopleStatus='loading';r.candidate.publicContactStatus='loading';r.candidate.buyerResearchJob={id:'selected-job',status:'running',personIds:[String(r.person.id)],startedAt:new Date(Date.now()-40000).toISOString()};r.candidate.buyerResearchProgress={startedAt:r.candidate.buyerResearchJob.startedAt,label:'Reading official contact page',timing:{estimate:{samples:8,lowerSeconds:60,upperSeconds:180}}};
   r.c.verifiedBuyerEmail=()=> 'confirmed@example.com';
   const node=r.dom.window.document.createElement('div');node.innerHTML=r.c.prospectContactControls(r.candidate,r.person);
-  assert.equal(node.querySelector('[data-recheck-buyer]').textContent,'Rechecking…');assert.match(node.querySelector('[data-buyer-contact-progress]').textContent,/Reading official contact page.*40s elapsed.*1–3 min remaining/);
-  node.innerHTML=r.c.prospectContactControls(r.candidate,other);assert.equal(node.querySelector('[data-buyer-contact-progress]'),null);assert.equal(node.querySelector('[data-recheck-buyer]').textContent,'Recheck');assert.equal(node.querySelector('[data-prospect-enrich-email]').disabled,false);assert.equal(node.querySelector('[data-keep-buyer]').disabled,false);assert.doesNotMatch(node.textContent,/another buyer/);assert.equal(node.querySelector('[data-recheck-buyer]').disabled,false);
+  assert.equal(node.querySelector('[data-recheck-buyer]').textContent,'Refreshing…');assert.match(node.querySelector('[data-buyer-contact-progress]').textContent,/Reading official contact page.*40s elapsed.*1–3 min remaining/);
+  node.innerHTML=r.c.prospectContactControls(r.candidate,other);assert.equal(node.querySelector('[data-buyer-contact-progress]'),null);assert.equal(node.querySelector('[data-recheck-buyer]').textContent,'Refresh');assert.equal(node.querySelector('[data-prospect-enrich-email]').disabled,false);assert.equal(node.querySelector('[data-keep-buyer]').disabled,false);assert.doesNotMatch(node.textContent,/another buyer/);assert.equal(node.querySelector('[data-recheck-buyer]').disabled,false);
  }finally{r.close();}
 });
 test('contact progress reports unknown estimates honestly and queue waits explicitly',()=>{

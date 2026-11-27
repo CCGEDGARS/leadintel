@@ -2403,7 +2403,7 @@
       try{return await Promise.race([Promise.resolve().then(operation),stopped]);}finally{clearTimeout(timer);signal?.removeEventListener('abort',cancel);}
     };
     const attributable=person=>Boolean(acceptedOfficialBuyerEmail(candidate,person));
-    const researchPriorities=()=>mandatoryBuyerResearchPriorities(people,candidate,{forExecution:true,contactOptions:options.contactOptions});
+    const researchPriorities=()=>mandatoryBuyerResearchPriorities(people,candidate,{forExecution:true,confirmedFirst:options.rankedPriorities!==true,contactOptions:options.contactOptions});
     let priorities=researchPriorities();
     const observePage=page=>{for(const entry of page?.researchTrace||[])recordBuyerResearchTool(report,entry);};
     const staffPages=new Set();
@@ -2702,7 +2702,7 @@
     if(!employer)blocked.push('Employer mismatch');if(!source&&!directory)blocked.push('Identity source missing');if(!match)blocked.push('Required role not matched');
     if(FORMER_ROLE.test(clean(person.title)))blocked.push('Former role');
     if(candidate.buyerRolesChanged)blocked.push('Buying roles changed; research again');
-    if((candidate.publicResearch?.conflicts||[]).some(row=>String(row.person_id)===String(person.id)))blocked.push('Identity or employment conflict');
+    if([...(candidate.publicResearch?.conflicts||[]),...(candidate.publicResearch?.aiReview?.conflicts||[])].some(row=>String(row.person_id)===String(person.id)))blocked.push('Identity or employment conflict');
     const now=Date.parse(options.now||new Date().toISOString()),date=Date.parse(person.identityEvidenceDate||''),age=Number.isFinite(date)?(now-date)/86400000:null;
     if(age!==null&&(age<0||age>365))blocked.push('Current role requires review; identity source is stale or future-dated');
     const executive=isExecutiveBuyer(person),title=clean(person.title),subordinate=/\b(deputy|assistant|associate|vice head|staff|advisor|adviser)\b/i.test(title);

@@ -35,16 +35,10 @@ export async function verifyApolloDiscoveryJourney({artifactDir='/tmp/leadintel-
   const research=page.locator('.selected-prospect-company [data-find-prospect-buyers]');
   await research.click();await page.waitForFunction(()=>discovery.selectedProspects[0].buyerResearchJob?.id);
   const job=f.DB.raw.prepare('SELECT id FROM buyer_research_jobs ORDER BY rowid DESC LIMIT 1').get();
-  for(let i=0;i<8;i++){
-   await f.runJobs(job.id);
-   const saved=f.DB.raw.prepare('SELECT diagnostic_json FROM buyer_research_jobs WHERE id=?').get(job.id);
-   if(JSON.parse(saved.diagnostic_json).at(-1)?.code==='free_discovery_finished')break;
-  }
+  for(let i=0;i<12&&!apiCalls;i++)await f.runJobs(job.id);
   assert.equal(apiCalls,1,'free discovery uses the connected Apollo identity endpoint once');
   assert.equal(paidContactCalls,0,'standalone discovery never reveals email or phone');
   await page.waitForFunction(()=>discovery.selectedProspects[0].people.some(p=>p.id==='apollo-katja'&&p.name==='Katja Jensen'&&p.publicNameUrl==='https://www.linkedin.com/company/forge-industries'));
-  await research.filter({hasText:'Expand web research'}).click();
-  await page.waitForFunction(()=>['queued','running'].includes(discovery.selectedProspects[0].buyerResearchJob?.status));
   await f.runJobs(job.id);
   assert.equal(apiCalls,1);await page.waitForFunction(()=>discovery.selectedProspects[0].publicResearch?.accountability?.tools?.find(x=>x.provider==='apollo')?.succeeded===1);
   assert.equal(await page.evaluate(()=>discovery.selectedProspects[0].people.some(p=>p.id==='robert')),true,'Apollo aliases cannot replace the saved official buyer identity');

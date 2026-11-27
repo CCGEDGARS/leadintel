@@ -107,7 +107,7 @@ function render(person){const ctx={URL,LeadIntelDiscovery:D,canonicalDomain:D.ca
 test('Gmail patterns disclose missing ownership and LinkedIn matching does not claim full verification',()=>{
  const html=render({...johan,publicNameUrl:johan.publicLinkedinUrl,gmailCandidates:D.gmailGuessCandidates(johan),contactResearch:{checks:{gmail:{status:'complete',checkedAt:new Date().toISOString()}},channels:{gmail:{status:'complete'},company:{status:'complete'},phone:{status:'complete'}}}});
  assert.match(html,/johan\.menckel@gmail\.com · Name pattern · Unconfirmed/);assert.doesNotMatch(html,/Verified automatically/);
- assert.match(html,/Profile matched automatically/);assert.match(html,/Expanded three-search Gmail research needs refreshing/);
+ assert.match(html,/Profile matched automatically/);assert.match(html,/Current searches and source checks for this person are incomplete/);
 });
 test('legacy phone listings require rechecking before they are shown as a direct contact',()=>{
  const html=render({...johan,publicPhone:'+46 (0)70 309 81 63',publicPhoneUrl:press.url});
