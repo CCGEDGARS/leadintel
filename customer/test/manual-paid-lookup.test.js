@@ -55,12 +55,12 @@ test('manual company verification uses its own saved date, never a newer unrelat
  }finally{r.close();}
 });
 
-test('one-click paid Phone reports a found number independently of missing email',async()=>{
- const r=setup({phoneEnabled:true,approve:false});try{
+test('one approved phone sequence reports a found number independently of missing email',async()=>{
+ const r=setup({phoneEnabled:true,approve:true});try{
   await r.c.LeadIntelAdditionalContacts.load();const original=r.c.fetch;let payload;
   r.c.fetch=async(url,options)=>{if(!url.includes('/email?'))return original(url,options);payload=JSON.parse(options.body);return {ok:true,json:async()=>({contact:{id:'phone-contact',company_id:'company',workspace_id:'w',external_person_id:r.person.id,name:r.person.name,title:r.person.title,phone_number:'+46701234567',phone_status:'provider_listed',source:'treg'},contactData:{version:1,domain:r.candidate.domain,personId:r.person.id,identityName:r.person.name,identityTitle:r.person.title,identityOrganization:r.person.organization,identityLinkedinUrl:r.person.publicLinkedinUrl,checkedAt:new Date().toISOString(),status:'updated',profile:{status:'not_requested'},phone:{status:'provider_listed',number:'+46701234567'}},research:{status:'not_requested'}})};};
   assert.equal(await r.c.confirmBuyerContact(r.candidate,0,{paidOnly:true,kind:'phone',personId:r.person.id}),true);
-  assert.equal(payload.email_lookup,false);assert.equal(payload.phone_approved,true);assert.equal(r.dialogs.length,0);
+  assert.equal(payload.email_lookup,false);assert.equal(payload.phone_approved,true);assert.equal(payload.phone_sequence,true);assert.equal(r.dialogs.length,1);
   assert.match(r.c.LeadIntelAdditionalContacts.card(r.candidate,r.person),/46701234567/);
   assert.match(r.c.LeadIntelAdditionalContacts.card(r.candidate,r.person),/unconfirmed/);
   assert.doesNotMatch(r.person.contactVerification.issues.join(' '),/not_requested/);

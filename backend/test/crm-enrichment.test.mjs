@@ -353,3 +353,23 @@ sqliteTest('atomic Apollo reservations include submitted requests cancelled afte
  const next=[...values];next[0]='next-paid';next[5]='apollo-p2';next[7]='processing';next[11]=0;
  const result=await reserveCrmEnrichment(env.DB,{values:next,workspaceId:'w1',companyId:company.id,personId:'apollo-p2',phone:false,reserved:1},{daily_credit_limit:1,monthly_credit_limit:1});assert.equal(result,null);
 });
+
+sqliteTest('shared buyer phone approval waits for a definitive miss and reuses the result across contacts',async()=>{
+ const {startBuyerPhone,runBuyerPhoneFallbacks}=await import('../src/buyer-phone-lookup.js');
+ const f=await phoneFixture(),db=f.env.DB,company=f.company.id,person={id:'source-one',name:'Alex Buyer',title:'Procurement Director'};
+ db.raw.exec(fs.readFileSync(new URL('../migrations/0087_buyer_phone_lookups.sql',import.meta.url),'utf8'));
+ const context={workspaceId:'w1',userId:'u1',role:'owner',sessionHash:await sha256(f.token)};
+ let apollo=0,treg=0,callback;const original=globalThis.fetch;
+ globalThis.fetch=async url=>{apollo++;callback=new URL(url).searchParams.get('webhook_url');return Response.json(apolloPerson());};
+ const start=source=>startBuyerPhone(f.env,context,company,{...person,id:source},'fixture-person',{guard:async()=>{}});
+ const tick=()=>runBuyerPhoneFallbacks(f.env,{lookup:async(_env,_context,_company,input,options)=>{await options.guard();treg++;assert.equal(input.email_lookup,false);return {request:{status:'complete'},contactData:{phone:{status:'provider_listed',number:'+12025550199'}}};}});
+ try{
+  await start('source-one');await start('source-two');await tick();
+  assert.equal(apollo,1);assert.equal(treg,0);
+  await CrmRoutes.handleApolloCrmWebhook(callbackRequest(callback,{status:'pending',people:[]}),f.env,{});await tick();assert.equal(treg,0);
+  const miss=phoneCallback();miss.people[0].phone_numbers[0].type_cd='corporate';
+  await CrmRoutes.handleApolloCrmWebhook(callbackRequest(callback,miss),f.env,{});
+  await Promise.all([tick(),tick()]);assert.equal(treg,1);
+  const result=await start('source-two');assert.equal(result.contact.phone_number,'+12025550199');assert.equal(result.contact.phone_status,'provider_listed');assert.equal(apollo,1);
+ }finally{globalThis.fetch=original;}
+});
