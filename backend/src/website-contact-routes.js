@@ -18,9 +18,8 @@ export async function handleWebsiteContactRoute(request,env,cors={},ctx){
   let body;try{body=JSON.parse(text);}catch{throw contactError('A contact research request is required.',400);}
   if(!body||typeof body!=='object'||Array.isArray(body))throw contactError('A contact research request is required.',400);
   if(body.action==='scan-website'){
-   const {job,...scan}=await scanWebsite(request,env,context,body);
-   if(job&&ctx?.waitUntil&&['queued','running'].includes(job.status))ctx.waitUntil(runWebsiteContactJobs(env,{jobId:job.id,windowMs:18000}).catch(()=>{}));
-   return json({...scan,job:await websiteContactView(env,job)});
+   const scan=await scanWebsite(request,env,context,body);
+   return json({...scan,job:null});
   }
   if(body.action==='paid'){const result=await lookupWebsiteContact(request,env,context,body);return json({result,job:await websiteContactView(env,await readWebsiteContacts(env,workspaceId,{id:body.jobId}))});}
   if(!['start','shortlist','resume','cancel','wake','review-identities','check-linkedin','check-identity'].includes(body.action||'start'))throw contactError('Unknown research action.',400);

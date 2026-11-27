@@ -5,8 +5,7 @@ import {allowFullResearch} from './research-strategy.js';
 import {contactRequestGuard} from './contact-operation-authority.js';
 import {sha256} from './security.js';
 import {findCrmCompanyByDomain,upsertCrmCompany} from './crm.js';
-import {contactError,contactSql,startWebsiteContacts} from './website-contact-store.js';
-import {managementLimit} from './website-management.js';
+import {contactError,contactSql} from './website-contact-store.js';
 import {fastCompanyPage} from './fast-research-evidence.js';
 
 function looksLikeDirectory(page){
@@ -17,7 +16,8 @@ function groundedHomepage(page){
  const candidates=page.title.split(/\s+[–—-]\s+|[|]/).map(s=>s.trim());
  for(const name of candidates){
   if(/^(?:home|homepage|welcome|front page|forside|startseite)$/i.test(name)||name.includes('.')||name.length<2||name.length>100||!S.assessIdentity({name},page).verified)continue;
-  const line=page.text.split('\n').find(s=>s.toLowerCase().includes(name.toLowerCase())&&s.trim().length<=700);
+  const lines=page.text.split('\n').map(s=>s.trim()).filter(s=>s.toLowerCase().includes(name.toLowerCase())&&s.length<=700);
+  const line=lines.find(s=>s.length>=name.length+25)||lines[0];
   if(line)return {pageType:'company',companies:[{name,quote:line.trim(),website:page.url}]};
  }
  return null;
@@ -26,7 +26,6 @@ function groundedHomepage(page){
 export async function scanWebsite(request,env,context,body){
  const url=S.safeUrl(body.url),domain=S.domain(url);
  if(!url)throw contactError('Enter a public website URL.',400);
- const limit=managementLimit(body.managementLimit??10);
  const guard=await contactRequestGuard(request,env,context);
  const scope={...context,guard,writeAuthority:guard.writeAuthority};
  const key=await sha256(url),token=crypto.randomUUID(),now=Date.now();
@@ -40,22 +39,21 @@ export async function scanWebsite(request,env,context,body){
   if(result.fastResearch){
    const company=await findCrmCompanyByDomain(env.DB,scope.workspaceId,domain);
    if(!company||company.id!==result.rows[0].crmId||company.company_name!==result.rows[0].name)throw contactError('Company identity changed. Review the saved website.');
-   result.job=await startWebsiteContacts(env,scope,{action:'shortlist',companyId:company.id,managementLimit:limit,buyerRoles:body.buyerRoles});
   }
   await guard();return result;
  }
  try{
-  const {job,...scan}=await identifyWebsite(request,env,scope,{url,domain,limit,buyerRoles:body.buyerRoles});
+  const scan=await identifyWebsite(request,env,scope,{url,domain});
   await guard();
   await contactSql(env,'UPDATE website_scan_requests SET result_json=?,expires_at=? WHERE workspace_id=? AND url_hash=? AND token=?',JSON.stringify(scan),Date.now()+120000,scope.workspaceId,key,token).run();
-  return {...scan,job};
+  return scan;
  }catch(error){
   await contactSql(env,'DELETE FROM website_scan_requests WHERE workspace_id=? AND url_hash=? AND token=?',scope.workspaceId,key,token).run();
   throw error;
  }
 }
 
-async function identifyWebsite(request,env,scope,{url,domain,limit,buyerRoles}){
+async function identifyWebsite(request,env,scope,{url,domain}){
  const {guard,workspaceId}=scope;
  const known=await findCrmCompanyByDomain(env.DB,workspaceId,domain);
  // Only a prior scan of this exact company page can establish its type without a new read.
@@ -90,7 +88,5 @@ async function identifyWebsite(request,env,scope,{url,domain,limit,buyerRoles}){
  const company=known||(await upsertCrmCompany(env.DB,scope,{company_name:row.name,website:actual,domain,source:'website_scan'})).company;
  if(['suppressed','archived'].includes(company.lifecycle_status))throw contactError('Review the company’s CRM status before starting contact research.');
  Object.assign(row,{name:company.company_name,crmId:company.id,website:actual,identityUrl:actual,identityEvidence:page.title,identityStatus:'verified'});
- const seed={url:actual,title:page.title.slice(0,300),markdown:page.text.slice(0,60000),textTruncated:page.text.length>60000,sourceRead:true,evidenceKind:'page_extract',metadata:{sourceURL:actual,statusCode:200},extractedAt:data.extractedAt||new Date().toISOString(),links:page.links.map(link=>S.safeUrl(typeof link==='string'?link:link.href)).filter(Boolean).slice(0,160)};
- const job=await startWebsiteContacts(env,scope,{action:'shortlist',companyId:company.id,managementLimit:limit,buyerRoles},seed,raw.researchTrace);
- return {url,rows,fastResearch:true,notice,job};
+ return {url,rows,fastResearch:true,notice};
 }
