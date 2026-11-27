@@ -1,3 +1,4 @@
+import {recoverOfficialBuyers} from './fast-research-evidence.js';
 import {applySavedEmails} from './firecrawl-buyer-email.js';
 import {allowFullResearch} from './research-strategy.js';
 import '../../customer/strategy-integrity.js';
@@ -152,6 +153,7 @@ export async function savedBuyerResearchReceipts(env,row){
 export async function publicBuyerJob(env,row,{recoverRetained=false}={}){
  if(!row)return null;const input=parse(row.input_json);let candidate=parse(row.result_json,input.candidate||{});
  if(recoverRetained)candidate=await retainedJobCandidate(env,row,input,candidate);
+ await recoverOfficialBuyers(env,row,input,candidate);
  candidate=D.reconcileBuyerEvidence(candidate,{trustedAgentSources:true});
  // A person saved before f5036bf8 with the description of a publication as the job title is not handed out.
  if(Array.isArray(candidate.people))candidate.people=candidate.people.filter(person=>!D.publicationRole(person?.title));

@@ -1,4 +1,5 @@
 import {checkFreeEmails} from './firecrawl-buyer-email.js';
+import {websiteStaffCards} from './website-contact-staff.js';
 import {savedFastResearch} from './fast-research-evidence.js';
 import {planBuyerSearch} from './buyer-search-plan.js';
 import {buyerRunWindow,BUYER_RUN_WINDOW_REASON} from './buyer-research-window.js';
@@ -187,9 +188,12 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
    for(const person of candidate.people||[]){const email=D.acceptedOfficialBuyerEmail(candidate,person);if(email)person.publicEmailSourceCheck={version:2,status:'confirmed',email,url:person.publicEmailUrl,checkedAt:person.publicEmailEvidence.checkedAt};}
   };
   let acquiredRows=[];
+  const parsedBodies=new Map();
   const acquirePeople=()=>{
-   if(acquiredRows.length){candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),companyContacts:D.discoverCompanyContacts(acquiredRows,candidate,candidate.buyerDiscovery?.companyContacts||[])};candidate.people=D.matchPublicBuyerDetails(candidate.people||[],acquiredRows,candidate.domain,candidate.company);}
-   const sources=candidate.buyerDiscovery?.companyContacts||[],dossier=C.buyers(candidate.buyerDiscovery?.companyDossier,candidate.company);
+   const newPages=acquiredRows.filter(page=>page.markdown&&parsedBodies.get(page.url)!==page.markdown);
+   for(const page of newPages)parsedBodies.set(page.url,page.markdown);
+   if(newPages.length){candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),companyContacts:D.discoverCompanyContacts(newPages,candidate,candidate.buyerDiscovery?.companyContacts||[])};candidate.people=D.matchPublicBuyerDetails(candidate.people||[],acquiredRows,candidate.domain,candidate.company);}
+   const sources=[...(candidate.buyerDiscovery?.companyContacts||[]),...newPages.filter(r=>r.sourceRead&&typeof r.markdown==='string'&&D.canonicalDomain(r.url)===candidate.domain).flatMap(page=>websiteStaffCards(page,candidate))],dossier=C.buyers(candidate.buyerDiscovery?.companyDossier,candidate.company);
    const merged=D.mergeBuyerPool([...(candidate.buyerDiscovery?.pool||[]),...(candidate.people||[])],[...sources,...dossier],input.profile);
    const reconciled=D.reconcileBuyerEvidence({...candidate,people:merged},{trustedAgentSources:true});candidate.buyerDiscovery=reconciled.buyerDiscovery;candidate.publicResearch=reconciled.publicResearch;
    reassessRoles(merged);
@@ -230,13 +234,14 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
    if(input.fullResearch||input.meteredPublicResearchApproved)await allowFullResearch(env,row.workspace_id);
    if(standaloneBuyerDiscovery(input)&&!input.paidResearch){
     fastEvidence=await savedFastResearch(env,row.workspace_id,candidate);
-    if(fastEvidence?.active&&input.fullResearch)throw Object.assign(Error('Waiting for Fast research to finish its source checks.'),{code:'FAST_RESEARCH_ACTIVE'});
     if(fastEvidence?.pages.size&&!diagnostics.some(d=>d.code==='fast_evidence'&&d.jobId===fastEvidence.jobId)){
      diagnostics.push({phase,code:'fast_evidence',jobId:fastEvidence.jobId,reason:'Reused '+fastEvidence.pages.size+' saved Fast research pages',at:new Date().toISOString()});
     }
    }
    const rows=await allRows(),phaseStart=clock(),remaining=Math.max(1000,windowMs-(clock()-start)-500);
-   if(fastEvidence?.pages.size){acquiredRows=rows.filter(r=>r.sourceRead);acquirePeople();}
+   if(fastEvidence?.staff?.length)addIdentities(fastEvidence.staff);
+   if(fastEvidence?.pages.size||!candidate.people?.length&&rows.some(r=>r.sourceRead)){acquiredRows=rows.filter(r=>r.sourceRead);acquirePeople();}
+    if(fastEvidence?.active&&input.fullResearch)throw Object.assign(Error('Waiting for Fast research to finish its source checks.'),{code:'FAST_RESEARCH_ACTIVE'});
    if(input.scope!=='selected_buyers'&&!apolloIdentityChecked&&['identities','contacts','review','paid'].includes(phase)){
     const before=new Set((candidate.people||[]).map(person=>person.id));
     const directory=await discoverApolloBuyerIdentities({candidate,profile:input.profile,task,guard,record:observe,observed:input.apolloIdentityReceipts,savedDirectory:fastEvidence?.directory,
@@ -274,7 +279,7 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
     }
    }
    if(phase==='official'){
-    await D.runOfficialContactResearch(candidate,{rows,search,readPage:read,signal:controller.signal,guard,peopleFirst,siteOnly,force:false,maxDurationMs:Math.min(remaining,180000),seedUrls:(candidate.people||[]).flatMap(p=>[p.publicNameUrl,p.publicEmailUrl,p.publicPhoneUrl]).filter(url=>D.canonicalDomain(url)===candidate.domain),onCheckpoint:acquirePeople});acquiredRows=(await allRows()).filter(r=>r.sourceRead===true);acquirePeople();
+    await D.runOfficialContactResearch(candidate,{rows,search,readPage:read,signal:controller.signal,guard,peopleFirst,siteOnly,force:false,maxDurationMs:Math.min(remaining,180000),seedUrls:(candidate.people||[]).flatMap(p=>[p.publicNameUrl,p.publicEmailUrl,p.publicPhoneUrl]).filter(url=>D.canonicalDomain(url)===candidate.domain),onCheckpoint:({rows:checkpointRows})=>{if(checkpointRows.some(r=>r.sourceRead&&r.markdown&&parsedBodies.get(r.url)!==r.markdown)){acquiredRows=checkpointRows.filter(r=>r.sourceRead);acquirePeople();}}});acquiredRows=(await allRows()).filter(r=>r.sourceRead===true);acquirePeople();
     if(siteOnly||D.officialContactCoveragePassed(candidate)||Number(phaseRuns)>=2&&!changed)phase=nextPhase[phase];
    }else if(phase==='dossier'){
     if(candidate.buyerDiscovery?.companyDossier?.status==='complete'){phase=nextPhase[phase];}
@@ -312,10 +317,20 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
      }
     }else if(input.scope==='selected_buyers'){phase=nextPhase[phase];}else{
     const plan=D.buyerResearchPlan(candidate,input.profile);
-    const strategy=input.fullResearch?await task('independent','Full research query plan',async()=>{
+    let strategy=null;
+    if(input.fullResearch)try{strategy=await task('independent','Full research query plan',async()=>{
      const options={candidate,profile:input.profile,queries:plan.queries,pages:rows,signal:controller.signal};
-     return (services.plan||planBuyerSearch)(env,row.workspace_id,options);
-    }):null;
+     try{return await (services.plan||planBuyerSearch)(env,row.workspace_id,options);}
+     catch(error){
+      if(controller.signal.aborted||['CANCELED','CONTEXT_CHANGED','LEASE_EXPIRED','TIME_BUDGET','RUN_WINDOW','CREDIT_LIMIT'].includes(error.code))throw error;
+      await guard();
+      return {queries:plan.queries.slice(0,3),findMorePeople:true,provider:'rules',unavailable:errorReason(error,'planning')};
+     }
+    });}catch(error){
+     if(controller.signal.aborted||!['UNCERTAIN_DISPATCH','TASK_LIMIT'].includes(error.code))throw error;
+     strategy={queries:plan.queries.slice(0,3),findMorePeople:true,provider:'rules',unavailable:'earlier planning request has no usable answer'};
+     if(!diagnostics.some(d=>d.code==='planner_fallback'))diagnostics.push({phase,code:'planner_fallback',reason:'Used the saved research questions after the planning request failed to return a usable answer.',at:new Date().toISOString()});
+    }
     if(strategy&&!diagnostics.some(d=>d.code==='query_plan'))diagnostics.push({phase,code:'query_plan',reason:'Search plan · '+strategy.provider+' · '+strategy.queries.length+' targeted queries'+(strategy.unavailable?' · planning model: '+strategy.unavailable:''),at:new Date().toISOString()});
     for(const query of (strategy?strategy.queries:plan.queries.slice(0,6))){await guard();try{await search(query);}catch(error){if(error.code==='CANCELED'||controller.signal.aborted)throw error;}}
     if(!strategy||strategy.findMorePeople)await searchPeople();

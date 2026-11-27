@@ -50,6 +50,12 @@ test('a saved website scan starts the ranked public job and opens Messages for i
  const alice=cards.filter({hasText:'Alice Berg'});
  await alice.getByText('Imported provider report · Test finder · valid').waitFor();
  assert.match(await alice.innerText(),/Mailbox unverified/);
+ const download=page.waitForEvent('download');
+ await panel.getByRole('button',{name:'Download research report',exact:true}).click();
+ const {readFile}=await import('node:fs/promises');
+ const report=JSON.parse(await readFile(await (await download).path(),'utf8'));
+ assert.equal(report.execution.jobId,job.id);assert.equal(report.domain,c.domain);
+ assert.ok(report.execution.completedChecks>0);
  const commands=f.calls.filter(call=>call.path.startsWith('/api/buyers/research')&&call.action==='start').length;
  const save=await page.evaluate(()=>LeadIntelServerBridge.saveNow({saveIntent:true,explicitSave:true}));assert.equal(save.saved,true);
  await page.reload();
