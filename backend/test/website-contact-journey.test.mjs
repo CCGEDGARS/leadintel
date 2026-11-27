@@ -9,7 +9,10 @@ import {encryptSecret,importAesKey} from '../src/oauth.js';
 
 // Exercise the saved legacy contact panel directly. New scans use the ranked Buyers panel.
 async function openSavedContactPanel(page){
- await page.evaluate(()=>LeadIntelWebsiteContacts.open(LeadIntelWebsiteScanUI.active().rows,{fastResearch:true}));
+ await page.evaluate(()=>{
+  const scan=LeadIntelWebsiteScanUI.active();
+  return LeadIntelWebsiteContacts.open(scan.rows,{fastResearch:true,managementLimit:scan.managementLimit,retainSavedContacts:scan.retainSavedContacts});
+ });
 }
 
 test('Nordic company scans recover a saved blank website and reach native CRM/contact research without a discovery search',{timeout:100000},async t=>{
