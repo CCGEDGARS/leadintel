@@ -1,3 +1,4 @@
+import {startBuyerPhone} from './buyer-phone-lookup.js';
 import {websiteContactRole,websiteNameKey,websiteProfileKey,websitePaidReadiness} from './website-contact-evidence.js';
 import {enrichCrmContact} from './crm-routes.js';
 import {lookupAdditionalEmail} from './additional-contact-services.js';
@@ -59,9 +60,9 @@ export async function lookupWebsiteContact(request,env,context,body,deps={}){
  if(!shown||view.researchBlocked)throw contactError('Review the current company and person before purchase.');
  const card=shown.publishedStaffCard,crm=shown.savedContact;
  const email=body.channel==='email'&&(D.acceptedOfficialBuyerEmail(view,shown)||card?.email||crm?.email_status==='verified'&&crm.work_email);
- const phone=body.channel==='phone'&&(card?.phone||shown.contactData?.phone?.number||['verified','provider_listed'].includes(crm?.phone_status)&&crm.phone_number);
+ const phone=body.channel==='phone'&&(card?.phone||shown.contactData?.phone?.number||['verified','provider_listed'].includes(String(crm?.phone_status).toLowerCase())&&crm.phone_number);
  if(email||phone)return {cached:true,contact:crm,reason:'Reused the saved '+body.channel+' for this person.',request:{status:'already_confirmed',credits_used:0}};
- if(body.channel==='phone'&&crm?.phone_status==='pending')return {duplicate:true,reason:'phone_request_already_pending',request:{status:'pending_phone'}};
+ if(body.channel==='phone'&&crm?.phone_status==='pending'&&!body.phone_sequence)return {duplicate:true,reason:'phone_request_already_pending',request:{status:'pending_phone'}};
  const runtime=await withWorkspaceServiceCredentials(request,env);await guard();
  if(body.provider==='apollo'&&body.channel==='phone'){
   const resolved=await scope.resolvePerson(runtime,person);await guard();
@@ -73,6 +74,7 @@ export async function lookupWebsiteContact(request,env,context,body,deps={}){
    const authority=guard.writeAuthority(),saved=await sql(env,`UPDATE website_contact_jobs SET state_json=?,revision=revision+1 WHERE id=? AND workspace_id=? AND state_json=? AND ${authority.sql}`,JSON.stringify(state),row.id,context.workspaceId,row.state_json,...authority.args).run();
    if(!saved.meta.changes)throw contactError('Contact research changed. Reopen the saved contact.');
   }
+  if(body.phone_sequence===true)return startBuyerPhone(runtime,context,row.company_id,person,resolved.id,{guard,signal:request.signal,websiteJob:row.id,enrich:deps.enrich});
   const lookup=new Request('https://leadintel.internal/enrich',{method:'POST',body:JSON.stringify({person_id:resolved.id,name:person.publicName||person.name,title:person.title,phone_lookup:true}),signal:request.signal});
   const response=await (deps.enrich||enrichCrmContact)(lookup,runtime,{},{context,guard},row.company_id),result=await response.json();
   if(!response.ok)throw contactError(result.error||'Apollo phone lookup unavailable.',response.status,result.code);

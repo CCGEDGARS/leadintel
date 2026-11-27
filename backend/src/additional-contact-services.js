@@ -1,3 +1,4 @@
+import {startBuyerPhone,phoneIdentity} from './buyer-phone-lookup.js';
 import {findTregWorkEmail,mergeTregContactData,tregLookupAccounting} from './treg-contact-research.js';
 import {findHunterWorkEmail} from './hunter-contact-research.js';
 import '../../customer/discovery-engine.js';
@@ -60,13 +61,13 @@ function reuseAttempt(attempt,detail,person,confirmationLevel){
   }
   return {...result,cached:true,request:{status:attempt.status}};
 }
-async function resolvePerson(env,candidate,person){
+async function resolvePerson(env,candidate,person,phone=false){
   if(!String(person.id).startsWith('public-')&&!String(person.id).startsWith('person-'))return person;
   const response=await fetch(APOLLO_PEOPLE_SEARCH_URL,{method:'POST',headers:{'Content-Type':'application/json','X-Api-Key':env.APOLLO_API_KEY},body:JSON.stringify(D.buildApolloPeopleSearchPayload(candidate,{decisionMakers:person.title})),signal:AbortSignal.timeout(25000)});
   if(!response.ok)throw fail('Apollo identity search is unavailable',502);
   const people=D.normalizeApolloPeople(await response.json()),name=String(person.publicName||person.name).toLowerCase().trim();
   const profile=D.normalizeLinkedInUrl(person.publicLinkedinUrl||person.linkedin_url);
-  const matches=people.filter(p=>profile&&D.normalizeLinkedInUrl(p.linkedin_url)===profile||String(p.name).toLowerCase().trim()===name);
+  const matches=phone?people.filter(p=>String(p.name).trim().toLowerCase()===name&&String(p.organization).trim().toLowerCase()===String(person.organization||candidate.company).trim().toLowerCase()&&(profile?D.normalizeLinkedInUrl(p.linkedin_url)===profile:String(p.title).trim().toLowerCase()===String(person.title).trim().toLowerCase())):people.filter(p=>profile&&D.normalizeLinkedInUrl(p.linkedin_url)===profile||String(p.name).toLowerCase().trim()===name);
   if(matches.length!==1)throw fail('No unique provider identity matched this qualified buyer');
   return {...person,id:matches[0].id};
 }
@@ -88,14 +89,24 @@ export async function lookupAdditionalEmail(env,context,companyId,input={},deps=
   const dataLookup=input.data_lookup===true,includePhone=input.phone_approved===true,includeEmail=input.email_lookup!==false;
   if((dataLookup||includePhone)&&(providerName!=='treg'||includePhone&&!dataLookup||input.automatic!==true&&input.approved!==true))throw fail('Data research requires explicit approval',403,'ADDITIONAL_CONTACT_APPROVAL_REQUIRED');
   const policy=await readAdditionalContactPolicy(env,context.workspaceId);
-  if(providerName==='treg'&&(policy.provider!=='treg'||includeEmail&&!policy.enabled||includePhone&&!policy.phoneEnabled||!includeEmail&&!includePhone))throw fail('The requested paid email or phone search is off. Activate it in Setup.',403,'ADDITIONAL_CONTACT_APPROVAL_REQUIRED');
+  if(providerName==='treg'&&!(input.phone_sequence===true&&policy.provider==='apollo')&&(policy.provider!=='treg'||includeEmail&&!policy.enabled||includePhone&&!policy.phoneEnabled||!includeEmail&&!includePhone))throw fail('The requested paid email or phone search is off. Activate it in Setup.',403,'ADDITIONAL_CONTACT_APPROVAL_REQUIRED');
   if(input.automatic===true?(providerName!=='treg'&&(!policy.enabled||policy.provider!==providerName)):input.approved!==true)throw fail('Paid contact research requires explicit approval',403,'ADDITIONAL_CONTACT_APPROVAL_REQUIRED');
   const detail=await (deps.getCompany||getCrmCompany)(env.DB,context,companyId),candidate=deps.researchScope?await deps.researchScope.candidate(detail):fromSnapshot(detail);
   const selectedId=String(input.person_id??'').trim(),identities=selectedId?candidate.people.filter(p=>String(p.id)===selectedId):[];
   if(identities.length!==1)throw fail('The saved buyer needs one unique nonempty identity. Refresh the company research before contact lookup.',409,'ADDITIONAL_CONTACT_IDENTITY_REQUIRED');
   const person=identities[0];
+  if(deps.phoneFallbackIdentity&&phoneIdentity(person)!==deps.phoneFallbackIdentity)throw fail('Buyer identity changed before phone lookup.');
   const contactOptions=buyerContactOptions(candidate,context,detail);
   const readiness=deps.researchScope?await deps.researchScope.readiness(candidate,person):P.readiness(candidate,person,{workEmailSearch,automatic:input.automatic===true,provider:providerName,contactOptions});if(!readiness.eligible)throw fail(readiness.reason,409,readiness.code);
+  if(deps.phoneFallbackIdentity&&D.confirmedBuyerPhone(candidate,person,D.buyerPhoneContact(detail,person)||{},{workspaceId:context.workspaceId,companyId}))return {cached:true,request:{status:'already_confirmed',credits_used:0}};
+  if(input.phone_sequence===true){
+    if(!includePhone||includeEmail||input.approved!==true||input.automatic===true)throw fail('Approve this buyer phone lookup.',403);
+    const contact=D.buyerPhoneContact(detail,person);
+    if(D.confirmedBuyerPhone(candidate,person,contact||{},{workspaceId:context.workspaceId,companyId}))return {cached:true,contact,request:{status:'already_confirmed',credits_used:0}};
+    if(!env.APOLLO_API_KEY)throw fail('Connect Apollo before starting a phone lookup.');
+    const resolved=await resolvePerson(env,candidate,person,true);
+    return startBuyerPhone(env,context,companyId,person,resolved.id,{guard:parentGuard,signal:deps.signal});
+  }
   const confirmationLevel=await loadConfirmationLevel(env,context.workspaceId);
   let existing=detail.contacts?.filter(c=>String(c.external_person_id)===String(person.id)&&String(c.name).trim().toLowerCase()===String(person.publicName||person.name).trim().toLowerCase()).find(c=>C.accepted(c,candidate.domain,confirmationLevel));
   const canonicalTitle=value=>{const title=String(value||'').trim().toLowerCase(),name=String(person.publicName||person.name).trim().toLowerCase();return title.startsWith(name)?title.slice(name.length).replace(/^[\s—–:|-]+/,'').trim():title;};
@@ -255,7 +266,7 @@ export async function handleAdditionalContactRoute(request,env,cors={}){
     const user=hash?await env.DB.prepare("SELECT user_id FROM sessions WHERE token_hash=? AND expires_at>datetime('now')").bind(hash).first():null;
     if(!user)throw fail('Authentication required',401);
     const member=await env.DB.prepare('SELECT role FROM workspace_members WHERE workspace_id=? AND user_id=?').bind(workspaceId,user.user_id).first();if(!member)throw fail('Workspace access denied',403);
-    const context={workspaceId,userId:user.user_id,role:member.role};
+    const context={workspaceId,userId:user.user_id,role:member.role,sessionHash:hash};
     if(url.pathname.endsWith('/policy')){
       if(request.method==='GET')return json({policy:await readAdditionalContactPolicy(env,workspaceId),role:member.role},200,cors);
       if(request.method==='PUT')return json({policy:await saveAdditionalContactPolicy(env,context,await request.json())},200,cors);

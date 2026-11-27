@@ -30,7 +30,7 @@ function validPhoneFromCallback(body,personId){
   const people=Array.isArray(body?.people)?body.people:[];
   const person=people.find(item=>clean(item?.id||item?.person_id,180)===clean(personId,180))||null;
   const phones=Array.isArray(person?.phone_numbers)?person.phone_numbers:[];
-  const valid=phones.filter(item=>String(item?.status_cd||item?.status||'').toLowerCase()==='valid_number'&&clean(item?.sanitized_number||item?.raw_number,80));
+  const valid=phones.filter(item=>['work_direct','direct','mobile'].includes(clean(item?.type_cd||item?.type).toLowerCase())&&String(item?.status_cd||item?.status||'').toLowerCase()==='valid_number'&&clean(item?.sanitized_number||item?.raw_number,80));
   valid.sort((left,right)=>{
     const rank=value=>String(value?.type_cd||value?.type||'').toLowerCase()==='work_direct'?0:String(value?.type_cd||value?.type||'').toLowerCase()==='mobile'?1:2;
     return rank(left)-rank(right);
@@ -88,10 +88,12 @@ export async function handleApolloCrmWebhook(request,env,corsOverride={}){
   if(!Number.isFinite(callbackCredits)||callbackCredits<0||callbackCredits>100000)return error('Invalid callback credits',400,cors,'CRM_APOLLO_WEBHOOK_INVALID_CREDITS');
   const phone=validPhoneFromCallback(body,row.person_provider_id);
   if(!phone&&['pending','processing','running','queued'].includes(clean(body.status,80).toLowerCase()))return json({ok:true,pending:true,request:{id:row.id,status:row.status}},202,cors);
+  const terminalPhoneMiss=!phone&&['success','completed','complete','not_found'].includes(clean(body.status,80).toLowerCase())&&!body.error&&body.people.every(p=>!p.error&&!['error','failed','pending','processing','queued','timeout'].includes(clean(p.status).toLowerCase()));
+  if(!phone&&!terminalPhoneMiss)return json({ok:true,pending:true,request:{id:row.id,status:row.status}},202,cors);
   const target=row.contact_id?await env.DB.prepare('SELECT * FROM crm_contacts WHERE id=? AND workspace_id=? AND company_id=? AND archived_at IS NULL').bind(row.contact_id,row.workspace_id,row.company_id).first():null;
   let retainedSummary={};try{retainedSummary=JSON.parse(row.response_summary_json||'{}');}catch{}
   const receivedAt=stamp(),finalStatus=phone?(apolloCrmIdentityVerified(row,target,retainedSummary)?'verified':'pending_phone'):'not_found';
-  const summary={status:clean(body.status,80)||null,total_requested_enrichments:Number(body.total_requested_enrichments)||0,unique_enriched_records:Number(body.unique_enriched_records)||0,missing_records:Number(body.missing_records)||0,phone_found:Boolean(phone),callback_phone:phone,credits_consumed:callbackCredits};
+  const summary={definitive_phone_miss:terminalPhoneMiss,status:clean(body.status,80)||null,total_requested_enrichments:Number(body.total_requested_enrichments)||0,unique_enriched_records:Number(body.unique_enriched_records)||0,missing_records:Number(body.missing_records)||0,phone_found:Boolean(phone),callback_phone:phone,credits_consumed:callbackCredits};
   const claimed=await env.DB.prepare(`UPDATE crm_enrichment_requests SET status=?,credits_used=credits_used+?,response_summary_json=json_patch(response_summary_json,?),webhook_received_at=?,completed_at=?,updated_at=? WHERE id=? AND webhook_received_at IS NULL RETURNING *`).bind(finalStatus,callbackCredits,JSON.stringify(summary),receivedAt,receivedAt,receivedAt,row.id).first();
   const settled=claimed||await env.DB.prepare('SELECT * FROM crm_enrichment_requests WHERE id=?').bind(row.id).first();
   const contact=await applyApolloCrmPhoneResult(env.DB,settled);

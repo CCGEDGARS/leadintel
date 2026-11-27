@@ -198,7 +198,7 @@
     const identity=key(candidate,person),current=buyerOperation(candidate,person),intent=requestIntent({automatic,dataLookup,phoneOnly,emailOnly,paidOnly}),existing=running.get(identity);
     if(existing?.current?.()){if(existing.intent===intent)return existing;await existing;if(!current())return false;return run(candidate,person,{automatic,dataLookup,phoneOnly,emailOnly,paidOnly});}
     const pendingToken={};const pendingPerson=person;let progressTimer;
-    const report=label=>{paidProgress.set(identity,{label,startedAt:paidProgress.get(identity)?.startedAt||Date.now(),current});adapter.render();};
+    const report=label=>{if(phoneOnly&&!automatic)return;paidProgress.set(identity,{label,startedAt:paidProgress.get(identity)?.startedAt||Date.now(),current});adapter.render();};
     const execute=(async()=>{
       const domain=candidate.domain,personId=person.id;
       const check=()=>{if(!current())throw Error('Workspace or buyer changed. Retry in the current workspace.');person=candidate.people.find(p=>String(p.id)===String(personId));const ready=readiness(candidate,person,{automatic,dataLookup,...(dataLookup||phoneOnly?{confirmedEmail:''}:{})});if(!ready.eligible)throw Object.assign(Error(ready.reason+(ready.code==='ADDITIONAL_CONTACT_COMPANY_REQUIRED'?'':/public research|mandatory public/i.test(ready.reason)?' Use Recheck to finish this buyer’s free checks.':'')),{code:ready.code});return ready;};
@@ -211,18 +211,22 @@
         if(automatic&&!policy.enabled&&!policy.phoneEnabled)throw Error('Automatic paid contact research is off.');
         if(busyPolicy)throw Error('Paid service preferences are changing. Retry after saving finishes.');
         const authority=authoritySignature(),checkAuthority=()=>{check();if(authority!==authoritySignature())throw Error('Paid service approval, connection or limits changed. Review current settings and retry.');};
+        const phoneSequence=phoneOnly&&!automatic;
         const tregReady=(dataLookup||policy.provider==='treg')&&treg?.configured&&treg.source==='customer';
         const apolloReady=!dataLookup&&policy.provider!=='treg'&&provider?.configured&&provider.source==='customer'&&provider.metadata?.email_enrichment_enabled===true;
         const hunterReady=!dataLookup&&policy.provider!=='treg'&&!automatic&&hunter?.configured&&hunter.source==='customer'&&hunter.metadata?.additional_verification_enabled===true;
-        if(!tregReady&&!apolloReady&&!hunterReady)throw Error('Connect Treg in Settings before paid email research.');
-        for(const service of [...(tregReady?['treg']:[]),...(apolloReady?['apollo']:[]),...(hunterReady?['hunter']:[])]){
+        if(!phoneSequence&&!tregReady&&!apolloReady&&!hunterReady)throw Error('Connect Treg in Settings before paid email research.');
+        for(const service of phoneSequence?['treg']:[...(tregReady?['treg']:[]),...(apolloReady?['apollo']:[]),...(hunterReady?['hunter']:[])]){
           check();const name=service==='treg'?'Treg':service==='apollo'?'Apollo':'Hunter';
-          if(phoneOnly&&!policy.phoneEnabled)throw Error('Paid phone search is off. Activate it in Setup.');
+          if(phoneOnly&&policy.provider==='treg'&&!policy.phoneEnabled)throw Error('Paid phone search is off. Activate it in Setup.');
           if(emailOnly&&!policy.enabled)throw Error('Paid email search is off. Activate it in Step 1 or Settings.');
-          const includePhone=!emailOnly&&service==='treg'&&policy.phoneEnabled===true&&(!automatic||!savedPhone(candidate,person)),includeEmail=!phoneOnly&&(service!=='treg'||policy.enabled===true)&&(!automatic||!adapter.email(candidate,person));
+          const includePhone=phoneSequence||!emailOnly&&service==='treg'&&policy.phoneEnabled===true&&(!automatic||!savedPhone(candidate,person)),includeEmail=!phoneOnly&&(service!=='treg'||policy.enabled===true)&&(!automatic||!adapter.email(candidate,person));
           if(!includeEmail&&!includePhone)return true;
           const lookupData=automatic?includePhone:dataLookup||includePhone;
-          if(dataLookup&&!automatic&&!paidOnly){
+          if(phoneOnly&&!automatic){
+            const approved=await root.LeadIntelDialogs?.confirm('Find a work phone for '+(person.publicName||person.name)+'? Apollo can use up to 9 credits. If it finds no direct number, Treg can use up to $0.25 within your saved limits.',{action:'Find work phone'});
+            if(!approved||!current())return false;
+          }else if(dataLookup&&!automatic&&!paidOnly){
             if(service!=='treg')throw Error('Data confirmation requires Treg.');
             const choice=await (root.LeadIntelDialogs?.confirm(`${person.publicName||person.name} at ${candidate.company}: ${check().manualFitPending?'Purchasing-fit review is still pending. This is a manual contact lookup only. ':''}${includeEmail?'research work email and professional profile':'phone only; no paid email or profile lookup'}${includePhone?'; find a phone number':''}. Estimated ${includeEmail&&includePhone?'€0.50/contact':includeEmail?'€0.30/contact':'€0.20 per number found'}. Actual research costs vary. Treg request ceilings: ${includeEmail?'$0.125 for email + profile':''}${includeEmail&&includePhone?' plus ':''}${includePhone?'$0.25 for phone':''}. Saved phases are reused. Phone results remain provider-listed unless separately confirmed. This action does not send messages.`,{title:phoneOnly?'Confirm phone':'Confirm data',action:includeEmail&&includePhone?'Confirm email + phone':includePhone?'Confirm phone':'Confirm email'})??false);
             if(!choice||!current())return false;
@@ -243,10 +247,11 @@
             const company=await adapter.prepare(candidate,person,{automatic});checkAuthority();
             if(!company?.id)throw Error('The selected CRM company could not be prepared.');
             report('Searching and checking '+(phoneOnly?'phone number':emailOnly?'work email':'contact details')+' · '+name);
-            const result=await api('/api/additional-contact-services/email',{method:'POST',body:JSON.stringify({company_id:company.id,person_id:personId,provider:service,automatic,...(automatic?{automatic_buyer_limit:buyerLimit()}:{}),approved:!automatic,...(service==='treg'?{data_lookup:lookupData,phone_approved:includePhone,email_lookup:includeEmail}:{}),hunter_approved:service==='hunter'&&!automatic})});
+            const result=await api('/api/additional-contact-services/email',{method:'POST',body:JSON.stringify({company_id:company.id,person_id:personId,phone_sequence:phoneOnly&&!automatic,provider:service,automatic,...(automatic?{automatic_buyer_limit:buyerLimit()}:{}),approved:!automatic,...(service==='treg'?{data_lookup:lookupData,phone_approved:includePhone,email_lookup:includeEmail}:{}),hunter_approved:service==='hunter'&&!automatic})});
             if(!current())return false;
             if(!result||typeof result!=='object'||Array.isArray(result))throw Error('Invalid contact result identity; result was not applied.');
             if(result.error)throw Error(result.error);
+            if(phoneOnly&&!automatic&&['pending_phone','processing'].includes(result.request?.status))return true;
             if(!result.contact&&!result.contactData&&!(typeof (result.research?.status||result.request?.status)==='string'&&(result.research?.status||result.request?.status).trim()))throw Error('Invalid empty contact result; retry the saved lookup.');
             person=candidate.people.find(p=>String(p.id)===String(personId));
             const mismatches=[],contact=result.contact,data=result.contactData;
@@ -254,7 +259,7 @@
               const expectedProfile=person.publicLinkedinUrl||person.linkedin_url,normalizeProfile=root.LeadIntelDiscovery?.normalizeLinkedInUrl||normalized;
               if(typeof contact!=='object'||Array.isArray(contact))mismatches.push('contact format');
               if(!contact.name||normalized(contact.name)!==normalized(person.publicName||person.name))mismatches.push('contact name');
-              if(!contact.external_person_id||String(contact.external_person_id)!==String(personId))mismatches.push('contact buyer ID');
+              if((!contact.external_person_id||String(contact.external_person_id)!==String(personId))&&!(phoneOnly&&root.LeadIntelDiscovery?.buyerPhoneContact?.({contacts:[contact]},person)))mismatches.push('contact buyer ID');
               if(contact.linkedin_url&&expectedProfile&&normalizeProfile(contact.linkedin_url)!==normalizeProfile(expectedProfile))mismatches.push('contact LinkedIn profile');
               if(contact.title&&normalized(contact.title)!==normalized(person.title))mismatches.push('contact role');
               if(contact.organization&&normalized(contact.organization)!==normalized(person.organization))mismatches.push('contact employer');

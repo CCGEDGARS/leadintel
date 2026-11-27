@@ -2775,12 +2775,16 @@
     const status=v=>['available','pending','unavailable','failed','skipped','requested','not_found'].includes(v)?v:'unavailable';
     return {contactId:clean(value.contactId).slice(0,160),personId:clean(value.personId).slice(0,180),identityName:clean(value.identityName).slice(0,180),identityLinkedinUrl:normalizeLinkedInUrl(value.identityLinkedinUrl),status:status(value.status),checkedAt:clean(value.checkedAt).slice(0,40),events:value.events.slice(-12).map(row=>({provider:['existing','buyer_agent','treg','apollo'].includes(row.provider)?row.provider:'unknown',status:status(row.status),reason:clean(row.reason).slice(0,240),checkedAt:clean(row.checkedAt).slice(0,40),requestId:clean(row.requestId).slice(0,180)}))};
   }
+  function matchedPhoneAlias(contact,person){
+    const identity=JSON.stringify([person.publicName||person.name,person.title||'',person.organization||'',person.publicLinkedinUrl||person.linkedin_url||'']);
+    return contact.phone_identity_aliases?.some(a=>a.id===String(person.id)&&a.identity===identity);
+  }
   function buyerPhoneContact(detail={},person={}){
     const name=clean(person.publicName||person.name).toLowerCase(),profile=normalizeLinkedInUrl(person.publicLinkedinUrl||person.linkedin_url),trace=safePhoneEnrichment(detail.intelligence?.research_snapshot?.buyerResearch?.discovery?.phoneEnrichment);
     return (detail.contacts||[]).find(row=>{
       const current=normalizeLinkedInUrl(row.public_linkedin_url||row.linkedin_url);
       if(name&&clean(row.name).toLowerCase()!==name||profile&&current&&profile!==current)return false;
-      if(String(row.external_person_id||'')===String(person.id))return true;
+      if(String(row.external_person_id||'')===String(person.id)||matchedPhoneAlias(row,person))return true;
       return Boolean(trace&&trace.contactId&&row.id&&trace.contactId===row.id&&trace.personId===String(person.id)&&trace.identityName.toLowerCase()===name&&(!profile||!trace.identityLinkedinUrl||profile===trace.identityLinkedinUrl));
     })||null;
   }
@@ -2830,7 +2834,7 @@
     const profileConflict=profiles.some(value=>!/^https:\/\/linkedin\.com\/in\//i.test(value))||new Set(profiles).size>1;
     if(profileConflict)return '';
     const matched=buyerPhoneContact({contacts:[contact]},person);
-    if(matched&&!contact.archived_at&&['apollo','treg'].includes(clean(contact.source).toLowerCase())&&String(contact.external_person_id||'')===String(person.id)&&String(contact.phone_status||'').toLowerCase()==='verified'&&valid(contact.phone_number)&&(!contact.company_id||companyId&&String(contact.company_id)===String(companyId))&&(!contact.workspace_id||String(contact.workspace_id)===String(options.workspaceId||''))&&(!contact.title||clean(contact.title).toLowerCase()===clean(person.title).toLowerCase())&&(!contact.organization||companyNameMatches(contact.organization,candidate.company)))return clean(contact.phone_number);
+    if(matched&&!contact.archived_at&&['apollo','treg'].includes(clean(contact.source).toLowerCase())&&(String(contact.external_person_id||'')===String(person.id)||matchedPhoneAlias(contact,person))&&String(contact.phone_status||'').toLowerCase()==='verified'&&valid(contact.phone_number)&&(!contact.company_id||companyId&&String(contact.company_id)===String(companyId))&&(!contact.workspace_id||String(contact.workspace_id)===String(options.workspaceId||''))&&(!contact.title||clean(contact.title).toLowerCase()===clean(person.title).toLowerCase())&&(!contact.organization||companyNameMatches(contact.organization,candidate.company)))return clean(contact.phone_number);
     const evidence=person.publicPhoneEvidence,check=person.publicPhoneSourceCheck,url=normalizeUrl(person.publicPhoneUrl),quote=clean(evidence?.quote);
     if(!valid(person.publicPhone)||!url||evidence?.version!==2||normalizeUrl(evidence.url)!==url||check?.version!==2||check.status!=='attributed'||normalizeUrl(check.url)!==url||!quote.toLowerCase().includes(name)||!quote.includes(clean(person.publicPhone)))return '';
     const now=new Date(options.now??Date.now()).getTime(),fresh=stamp=>{const age=now-Date.parse(stamp||'');return Number.isFinite(age)&&age>=0&&age<30*86400000;};

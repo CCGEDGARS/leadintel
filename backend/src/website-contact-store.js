@@ -42,7 +42,7 @@ export async function websiteContactView(env,row){
   if(found.length===1){
    person.savedContact={...found[0]};
    person.savedContactRoleDiffers=String(found[0].title||'').trim().toLowerCase()!==String(person.title||'').trim().toLowerCase();
-   const phones=results.filter(c=>aliases.has(String(c.external_person_id))&&bound(c)&&['verified','provider_listed','pending'].includes(c.phone_status));
+   const phones=results.filter(c=>aliases.has(String(c.external_person_id))&&bound(c)&&['verified','provider_listed','pending'].includes(String(c.phone_status).toLowerCase()));
    if(primary.length===1&&!person.savedContact.phone_number&&phones.length===1){
     person.savedContact.phone_number=phones[0].phone_number;
     person.savedContact.phone_status=phones[0].phone_status;
