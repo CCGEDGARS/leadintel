@@ -1,3 +1,4 @@
+import {allowFullResearch} from './research-strategy.js';
 import {spendLedger,spendIncrement} from './company-list-spend.js';
 import '../../customer/company-lists.js';
 import {sha256,cookieValue} from './security.js';
@@ -60,6 +61,7 @@ async function saveSearchSnapshot(env,workspaceId,user,body){
 }
 async function access(request,env,workspaceId){const token=cookieValue(request,'leadintel_session');if(!token)throw fail('Sign in to use company lists.',401);const hash=await sha256(token),row=await sql(env,"SELECT s.user_id,m.role FROM sessions s JOIN workspace_members m ON m.user_id=s.user_id WHERE s.token_hash=? AND s.expires_at>datetime('now') AND m.workspace_id=?",hash,workspaceId).first();if(!row||!['owner','researcher','sales'].includes(row.role))throw fail('Workspace research access required.',403);return {id:row.user_id,role:row.role,hash};}
 export async function startCompanyList(env,workspaceId,user,raw,trusted=null){
+ if(!trusted?.taskId)await allowFullResearch(env,workspaceId);
  const options=trusted?.options||await companyListOptions(env,workspaceId);
  if(!trusted&&Object.hasOwn(raw,'profileIds')&&raw.contextFingerprint!==options.contextFingerprint)throw fail('Strategy profiles, signals or references changed. Reopen Build company list and review the current criteria.');
  if(!trusted&&options.profileConfigurationPresent&&!Object.hasOwn(raw,'profileIds'))throw fail('Reload Build company list to choose the active targeting profiles and buying signals.');
@@ -134,6 +136,7 @@ export async function handleCompanyListsRoute(request,env,cors={},ctx){
    else if(body.action==='delete'){const deleted=await sql(env,`DELETE FROM company_lists WHERE id=? AND workspace_id=? AND revision=? AND EXISTS(SELECT 1 FROM sessions s JOIN workspace_members m ON m.user_id=s.user_id WHERE s.token_hash=? AND s.expires_at>datetime('now') AND m.user_id=? AND m.workspace_id=? AND m.role IN ('owner','researcher','sales'))`,row.id,workspaceId,row.revision,user.hash,user.id,workspaceId).run();if(!deleted.meta.changes)throw fail('The list changed. Reload before deleting.');return respond({deleted:true});}
    else{
     const extending=body.action==='extend';
+    if(!criteria.taskId&&(extending||body.action==='resume'))await allowFullResearch(env,workspaceId);
     if(extending){
      if(active(row.status)||!s.results.length)throw fail('Pause research and find at least one company before adjusting this list.');
      if(!Number.isInteger(body.additional)||body.additional<1||s.results.length+body.additional>200)throw fail('Choose an additional count within the 200-company list limit.',400);

@@ -153,3 +153,41 @@ test('one Check identity button completes a selected person through native HTTP 
   await fs.writeFile(dir+'/focused-identity.json',JSON.stringify({nativeHttp:true,registeredScheduler:true,selectedPersonOnly:true,siblingUnchanged:true,twoPublicQueries:true,incompleteEmailRetained:true,freshMobileReopen:true,bothPaidButtonsReady:true,bothPaidDialogsCanceled:true,paidCalls:0,pageErrors:errors},null,2));
  }finally{await context?.close();await browser.close();await f.close();}
 });
+
+test('Step 2 Fast research starts from a known website and reopens the same saved job in a fresh browser',{timeout:65000},async t=>{
+ let chromium;
+ try{({chromium}=await loadPlaywright());await fs.access(process.env.LEADINTEL_CHROMIUM_PATH||'/usr/bin/chromium');}
+ catch(error){if(process.env.LEADINTEL_REQUIRE_BROWSER==='true')throw error;t.skip('Chromium unavailable');return;}
+ const f=await journeyFixture({durableWebsite:true});
+ const browser=await chromium.launch({executablePath:process.env.LEADINTEL_CHROMIUM_PATH||'/usr/bin/chromium',args:['--no-sandbox']});
+ t.after(async()=>{await browser.close();await f.close();});
+ const metered=[];let observing=false;
+ async function open(){
+  const context=await browser.newContext();
+  await context.addCookies([{name:'leadintel_session',value:sessionToken,url:f.origin}]);
+  await context.route('**/*',route=>new URL(route.request().url()).origin===f.origin?route.continue():route.abort());
+  const page=await context.newPage();page.on('request',r=>{
+   const path=new URL(r.url()).pathname;
+   if(observing&&r.method()==='POST'&&(/\/firecrawl\/(scrape|search|crawl)|\/ai\/generate/.test(path)||path==='/api/buyers/research'))metered.push(path);
+  });await page.goto(f.origin+'/customer/');
+  await page.waitForFunction(()=>window.LeadIntelServerBridge?.session?.authenticated&&window.LeadIntelProfileAnswers?.isReady());
+  await page.waitForLoadState('networkidle');
+  await page.evaluate(()=>LeadIntelCustomerNavigation.setStep(2));await page.locator('#website-scanning-open').click();
+  return page;
+ }
+ const page=await open();
+ await page.locator('#website-fast-company').fill('North Metal');
+ await page.locator('#website-scanning-url').fill('https://northmetal.example/');
+ observing=true;await page.locator('[data-scan-action="fast"]').click();
+ await page.waitForFunction(()=>document.querySelector('#website-scanning-status')?.textContent.includes('Fast research opened'));
+ const initial=f.DB.raw.prepare('SELECT id,company_id,input_json FROM website_contact_jobs').get();
+ assert.equal(JSON.parse(initial.input_json).company,'North Metal');
+ await page.evaluate(()=>LeadIntelServerBridge.saveNow({saveIntent:true,explicitSave:true}));await page.context().close();
+ observing=false;const reopened=await open();
+ assert.equal(await reopened.locator('#website-fast-company').inputValue(),'North Metal');
+ observing=true;await reopened.locator('[data-scan-action="fast"]').click();
+ await reopened.waitForFunction(()=>document.querySelector('#website-scanning-status')?.textContent.includes('Fast research opened'));
+ assert.deepEqual(f.DB.raw.prepare('SELECT id,company_id,input_json FROM website_contact_jobs').all(),[initial]);
+ assert.deepEqual(metered,[]);
+ assert.equal(f.DB.raw.prepare('SELECT count(*) n FROM additional_contact_attempts').get().n,0);
+});

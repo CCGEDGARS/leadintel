@@ -66,6 +66,14 @@ test('company-list browser chooses one reference, verifies criteria, builds 200 
  const changed=await f.getState();changed.payload.main.market.icps.find(x=>x.id==='icp-reference-lookalike').active=false;changed.payload.main.market.icps.find(x=>x.id==='icp-core').active=false;changed.payload.main.market.deletedSignalIds=['hiring'];await putCustomerState(f.env,{workspaceId,userId:'storage-owner',expectedVersion:changed.version,payload:changed.payload});
  p=await open();await p.locator('[data-cl="new"]').click();await p.waitForSelector('#company-list-form');assert.equal(await p.locator('[name="profile"][value="icp-reference-lookalike"]').isDisabled(),true);assert.equal(await p.locator('[name="profile"][value="icp-core"]').isDisabled(),true);assert.equal(await p.locator('[name="signal"][value="hiring"]').count(),0);
  await p.locator('[data-cl="lists"]').click();await p.locator('[data-cl="open"]').first().click();await p.waitForSelector('.cl-table-wrap');assert.match(await p.locator('#company-list-content').textContent(),/Lookalike/);assert.match(await p.locator('#company-list-content').textContent(),/200 of 200/);
+ const full=p.locator('[data-cl="full-buyer"]').nth(1);
+ const fullCalls=()=>f.calls.filter(c=>c.path==='/api/buyers/research'&&c.body?.fullResearch===true);
+ await full.click();await p.locator('[data-li-cancel]').click();assert.equal(fullCalls().length,0);
+ await full.click();
+ const started=p.waitForResponse(r=>r.url().includes('/api/buyers/research')&&r.request().method()==='POST'&&r.request().postDataJSON()?.fullResearch===true);
+ await p.getByRole('button',{name:'Use metered web research'}).click();
+ const response=await started;assert.equal(response.status(),200);
+ const fullJob=(await response.json()).job;assert.equal(fullJob.domain,'maker1.example');assert.equal(fullJob.input.fullResearch,true);
  assert.deepEqual(errors,[]);await fs.writeFile('/tmp/leadintel-company-lists/evidence.json',JSON.stringify({rows:200,crm:200,backgroundWithBrowserClosed:true,visibleTop:10,downloads:['csv','xlsx'],freshBrowser:true,errors},null,2));
 });
 

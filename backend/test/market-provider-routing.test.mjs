@@ -93,12 +93,18 @@ test('Perplexity research selection saves, reloads, searches and falls back usin
  try{
   await f.connectControlledAi('openai');
   const endpoint=f.origin+'/api/integrations/ai/research-settings?workspace_id='+workspaceId;
-  const save=()=>fetch(endpoint,{method:'PUT',headers,body:JSON.stringify({primary:'perplexity',secondary:'openai'})});
+  const save=fullResearchPolicy=>fetch(endpoint,{method:'PUT',headers,body:JSON.stringify({primary:'perplexity',secondary:'openai',fullResearchPolicy})});
   assert.equal((await save()).status,409);
   const connected=await fetch(f.origin+'/api/integrations/services/provider?workspace_id='+workspaceId,{method:'PUT',headers,body:JSON.stringify({provider:'perplexity',api_key:'pplx-workspace-test-key'})});
   assert.equal(connected.status,200);
   assert.equal((await save()).status,200);
-  assert.deepEqual(await (await fetch(endpoint,{headers})).json(),{primary_provider:'perplexity',secondary_provider:'openai'});
+  const selection={primary_provider:'perplexity',secondary_provider:'openai'};
+  const reload=async()=> (await fetch(endpoint,{headers})).json();
+  assert.deepEqual(await reload(),{...selection,full_research_policy:'ask'});
+  assert.equal((await save('free_only')).status,200);
+  assert.equal((await save()).status,200);
+  assert.deepEqual(await reload(),{...selection,full_research_policy:'free_only'});
+  assert.equal((await save('ask')).status,200);
   const response=await search(f),result=await response.json();
   assert.equal(response.status,200);
   assert.equal(result.provider,'perplexity');

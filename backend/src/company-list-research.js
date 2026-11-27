@@ -1,3 +1,5 @@
+import {allowFullResearch} from './research-strategy.js';
+import {fastCompanyPage} from './fast-research-evidence.js';
 import {reserveReasoning,researchPrompt} from './company-list-spend.js';
 import '../../customer/company-lists.js';
 import {dossierSettings} from './company-dossier.js';
@@ -225,6 +227,15 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
   };
   // A change that must be stored by the very next write: a kept company together with its evidence row.
   const commit=change=>{const next=writes.then(async()=>{change();await write();});writes=next.catch(()=>{});return next;};
+  if(!criteria.taskId){
+   try{await allowFullResearch(env,row.workspace_id);}
+   catch(error){
+    if(error.code!=='FULL_RESEARCH_DISABLED')throw error;
+    s.failureCode='research_policy';s.reason=error.message;
+    await checkpoint('incomplete');
+    return [row.id];
+   }
+  }
   const atAllowance=()=>!criteria.runToTarget&&s.operations>=s.allowance;
   const mainResearcher=!services.search&&!criteria.taskId?(await dossierSettings(env,row.workspace_id)).primary_provider:null;
   s.mainResearcher=mainResearcher||null;
@@ -240,6 +251,11 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
   };
   const makeSearch=observe=>services.search||createBuyerSourceSearch(env,row.workspace_id,{purpose:'company_list',guard,observe,beforeGrounded,preferGrounded:Boolean(mainResearcher&&mainResearcher!=='perplexity'),scrapeResults:false,primaryTimeoutMs:12000});
   const search=makeSearch(observe);
+  const readCompanyPage=async(url,signal)=>{
+   const saved=await fastCompanyPage(env,row.workspace_id,url,M.domain(url));
+   if(saved)return saved;
+   return services.read?services.read(url,{signal}):readPublicBuyerPage(env,row.workspace_id,url,{purpose:'company_list',signal,totalTimeoutMs:18000,directTimeoutMs:3000,firecrawlTimeoutMs:12000});
+  };
   // A reasoning call the provider refused keeps who refused, the HTTP status and the provider's own code on its receipt.
   const refused=(r,e)=>{const seen=refusal(e);if(!seen.id)return;if(!r.provider)r.provider=seen.id;if(seen.status)r.http=seen.status;if(seen.code)r.providerCode=seen.code;};
   const operation=async(kind,target,fn)=>{
@@ -417,12 +433,12 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
     if(s.results.some(r=>r.domain===M.domain(task.url))){drop(task);save();return;}
     if(!task.page){
      const raw=await laneOperation(lane,'page_read',task.url,async(signal,receipt,events)=>{
-      const value=await (services.read?services.read(task.url,{signal}):readPublicBuyerPage(env,row.workspace_id,task.url,{purpose:'company_list',signal,totalTimeoutMs:18000,directTimeoutMs:3000,firecrawlTimeoutMs:12000}));
+      const value=await readCompanyPage(task.url,signal);
       for(const trace of value.researchTrace||[])events.push(safeEvent(trace));return value;
      });
      const p=raw.data||raw,actual=M.url(p.url||p.metadata?.sourceURL||task.url),text=String(p.markdown||p.description||p.text||'').slice(0,16000);
      if(M.domain(actual)!==M.domain(task.url)||text.trim().length<40){recordGap(task,'Source redirected to another domain or returned no readable evidence.');drop(task);save();return;}
-     task.page={url:actual,text,links:pageLinks(p,actual,text),readAt:new Date().toISOString(),receipt:{...lane.last}};
+     task.page={url:actual,text,links:pageLinks(p,actual,text),readAt:p.extractedAt||new Date().toISOString(),receipt:{...lane.last}};
      s.phase='checking';save();return;
     }
     const pages=[...(task.context||[]),task.page];
@@ -628,12 +644,12 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
      if(s.results.some(r=>r.domain===M.domain(task.url))){s.pending.shift();await checkpoint();continue;}
      if(!task.page){
       const raw=await operation('page_read',task.url,async signal=>{
-       const value=await (services.read?services.read(task.url,{signal}):readPublicBuyerPage(env,row.workspace_id,task.url,{purpose:'company_list',signal,totalTimeoutMs:18000,directTimeoutMs:3000,firecrawlTimeoutMs:12000}));
+       const value=await readCompanyPage(task.url,signal);
        for(const trace of value.researchTrace||[])observe(trace);return value;
       });
       const p=raw.data||raw,actual=M.url(p.url||p.metadata?.sourceURL||task.url),text=String(p.markdown||p.description||p.text||'').slice(0,16000);
       if(M.domain(actual)!==M.domain(task.url)||text.trim().length<40){recordGap(task,'Source redirected to another domain or returned no readable evidence.');s.pending.shift();await checkpoint();continue;}
-      task.page={url:actual,text,links:pageLinks(p,actual,text),readAt:new Date().toISOString(),receipt:{...lastOperation}};
+      task.page={url:actual,text,links:pageLinks(p,actual,text),readAt:p.extractedAt||new Date().toISOString(),receipt:{...lastOperation}};
       s.phase='checking';s.reason=profilePolicy?'Checking company identity, market and selected profiles':'Checking company identity, market and selected signals';await checkpoint();
      }else{
       // Preserve actual read pages for follow-up and review. Never reconstruct a

@@ -1,3 +1,4 @@
+import {allowFullResearch} from './research-strategy.js';
 import '../../customer/strategy-integrity.js';
 import {buyerRunWindow} from './buyer-research-window.js';
 import {buyerCreditWindowKey,buyerCreditLimitFor,readBuyerCredits} from './buyer-research-credits.js';
@@ -193,12 +194,49 @@ export async function publicBuyerJob(env,row,{recoverRetained=false}={}){
  const stages={official:D.officialContactCoveragePassed(candidate),dossier:candidate.buyerDiscovery?.companyDossier?.status==='complete'&&!candidate.buyerDiscovery?.companyDossier?.lastAttempt,identities,contacts:D.buyerResearchCoveragePassed(candidate,{contactOptions}),review:quality.aiReviewStatus==='complete'&&(!input.paidResearch||['complete','disabled'].includes(candidate.publicResearch?.paidResearch?.status))};
  const diagnostics=parse(row.diagnostic_json,[]),paused=currentWindowPause(row,input,diagnostics);
  const labels={official:'Reading official company sources',dossier:'Researching the company',identities:'Finding decision-makers',contacts:'Checking contact evidence',review:'Reviewing buyer evidence',paid:'Researching approved paid channels',done:'Research saved'};
- return {id:row.id,domain:row.domain,retainedEvidenceRecovered:recoverRetained,contextKey:row.context_key,crm,input:{peopleFirst:Boolean(input.peopleFirst),paidResearch:Boolean(input.paidResearch),company:input.candidate?.company,domain:row.domain,profile:input.profile,roles:input.roles,personIds:input.scope==='selected_buyers'?input.personIds:[],scope:input.scope},status:row.status,phase:row.phase,resumePhase:resumePhase(candidate,input,contactOptions),revision:row.revision,createdAt,updatedAt,candidate,quality,diagnostics:[...diagnostics,...(row.last_error?[{phase:row.phase,reason:row.last_error}]:[])],progress:{timing,stages,credits,windowPaused:Boolean(paused),executionStatus:row.status,completed:Number(completed),total,inProgress:row.status==='running'?Number((totals.results||[]).find(r=>r.status==='running')?.n)||0:0,lastActivityAt,label:input.freeDiscovery&&diagnostics.at(-1)?.code==='free_discovery_finished'?diagnostics.at(-1).reason:paused?paused.reason:activity|| (row.status==='needs_review'?'Research saved · '+(quality.gaps[0]||'review remaining gaps'):input.recheck&&row.phase==='contacts'?Object.values(input.recheck.plans).some(plan=>plan.queries.length)?'Checking missing contact details · alternative public sources':'Rechecking saved sources · no untried alternative queries':labels[row.phase]||row.phase.replaceAll('_',' '))}};
+ return {id:row.id,domain:row.domain,retainedEvidenceRecovered:recoverRetained,contextKey:row.context_key,crm,input:{fullResearch:Boolean(input.fullResearch||input.meteredPublicResearchApproved),peopleFirst:Boolean(input.peopleFirst),paidResearch:Boolean(input.paidResearch),company:input.candidate?.company,domain:row.domain,profile:input.profile,roles:input.roles,personIds:input.scope==='selected_buyers'?input.personIds:[],scope:input.scope},status:row.status,phase:row.phase,resumePhase:resumePhase(candidate,input,contactOptions),revision:row.revision,createdAt,updatedAt,candidate,quality,diagnostics:[...diagnostics,...(row.last_error?[{phase:row.phase,reason:row.last_error}]:[])],progress:{timing,stages,credits,windowPaused:Boolean(paused),executionStatus:row.status,completed:Number(completed),total,inProgress:row.status==='running'?Number((totals.results||[]).find(r=>r.status==='running')?.n)||0:0,lastActivityAt,label:input.freeDiscovery&&diagnostics.at(-1)?.code==='free_discovery_finished'?diagnostics.at(-1).reason:paused?paused.reason:activity|| (row.status==='needs_review'?'Research saved · '+(quality.gaps[0]||'review remaining gaps'):input.recheck&&row.phase==='contacts'?Object.values(input.recheck.plans).some(plan=>plan.queries.length)?'Checking missing contact details · alternative public sources':'Rechecking saved sources · no untried alternative queries':labels[row.phase]||row.phase.replaceAll('_',' '))}};
+}
+// A second Full click reopens its run, including a partial or budget-paused result.
+// Only a separate resume command authorizes another execution window.
+function sameFullScope(previous,input){
+ const roles=value=>JSON.stringify([...(value.roles||[])].sort());
+ return !previous.taskId&&!previous.paidResearch&&previous.scope==='all_buyers'
+  &&previous.candidate?.company===input.candidate.company&&previous.workspaceContext===input.workspaceContext&&roles(previous)===roles(input);
+}
+async function reuseFullResearch(env,workspaceId,user,current,input){
+ if(!current)return null;
+ const previous=parse(current.input_json);
+ if(!sameFullScope(previous,input)){
+  if(activeBuyerJob(current.status))throw Object.assign(Error('Another research scope is active for this company. Open its progress before starting Full research.'),{status:409});
+  return null;
+ }
+ if(previous.fullResearch||previous.meteredPublicResearchApproved||current.status==='complete')return current;
+ if(current.status==='canceled')return null;
+ if(activeBuyerJob(current.status)){
+  // Keep the current lease. The worker observes this flag at its next boundary.
+  const saved=await stmt(env,`UPDATE buyer_research_jobs SET input_json=json_set(input_json,'$.fullResearch',json('true'))
+   WHERE id=? AND status IN ('queued','running') AND ${callerSql}`,current.id,...callerArgs(workspaceId,user)).run();
+  if(saved.meta.changes)return readBuyerJob(env,workspaceId,{id:current.id});
+  throw Object.assign(Error('Research or your access changed. Reopen the saved run.'),{status:409});
+ }
+ const candidate=parse(current.result_json),{contactOptions}=await loadBuyerContactContext(env,{workspaceId},candidate);
+ const missing=resumePhase(candidate,{...previous,freeDiscovery:false},contactOptions);
+ const phase=['contacts','dossier'].includes(missing)?'identities':missing;
+ if(phase==='done')return current;
+ const saved=await stmt(env,`UPDATE buyer_research_jobs SET status='queued',phase=?,phase_ms=0,phase_runs=0,next_at=0,last_error='',revision=revision+1,
+  input_json=json_set(input_json,'$.fullResearch',json('true'),'$.freeDiscovery',json('false'),'$.meteredPublicResearchApproved',json('true'),'$.executionWindowStartedAt',?),
+  session_hash=?,requested_by=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND revision=? AND ${callerSql}`,phase,new Date().toISOString(),user.sessionTokenHash,user.id,current.id,current.revision,...callerArgs(workspaceId,user)).run();
+ if(!saved.meta.changes)throw Object.assign(Error('Research changed. Reopen the saved run.'),{status:409});
+ return readBuyerJob(env,workspaceId,{id:current.id});
 }
 export async function startBuyerJob(env,workspaceId,user,body,trusted=null){
  const stored=await workspaceBuyerContext(env,workspaceId,trusted?.taskId),input=normalizeBuyerInput(body,stored.payload);
  input.peopleFirst=body.peopleFirst===true&&!trusted?.taskId&&input.scope==='all_buyers';
  input.freeDiscovery=input.peopleFirst&&body.freeDiscovery===true&&body.paidResearch!==true;
+ if(body.fullResearch===true){
+  if(trusted||!input.peopleFirst||body.freeDiscovery||body.paidResearch||input.scope!=='all_buyers')throw Object.assign(Error('Full research applies to one company and public sources only.'),{status:400});
+  await allowFullResearch(env,workspaceId);input.fullResearch=true;input.meteredPublicResearchApproved=true;
+ }
  input.executionWindowStartedAt=new Date().toISOString();
  input.contactContinuationVersion=1;
  input.executionContinuationVersion=4;
@@ -218,9 +256,29 @@ export async function startBuyerJob(env,workspaceId,user,body,trusted=null){
   prepareBuyerRecheck(input,history.results||[]);
  }
  const current=await readBuyerJob(env,workspaceId,{domain:input.candidate.domain});
+ if(body.jobId&&current?.id!==body.jobId||body.expectedRevision!==undefined&&Number(body.expectedRevision)!==current?.revision)throw Object.assign(Error('Buyer research changed; reload the latest saved job'),{status:409});
+ if(input.freeDiscovery&&current&&parse(current.input_json).fullResearch&&parse(current.input_json).workspaceContext===stored.hash){
+  // Opening the free action cannot replace or restart a metered job.
+  return current;
+ }
+ if(input.fullResearch){
+  // A newer one-person check may be the latest job without replacing this
+  // company's Full run or its provider receipts.
+  const currentInput=current&&parse(current.input_json);
+  if(current&&!activeBuyerJob(current.status)&&!(currentInput.fullResearch&&sameFullScope(currentInput,input))){
+   const retained=await stmt(env,`SELECT * FROM buyer_research_jobs WHERE workspace_id=? AND domain=?
+    AND json_extract(input_json,'$.candidate.company')=? AND json_extract(input_json,'$.workspaceContext')=?
+    AND json_extract(input_json,'$.fullResearch')=1 AND updated_at>=datetime('now','-30 days')
+    AND id<>? ORDER BY rowid DESC LIMIT 8`,workspaceId,input.candidate.domain,input.candidate.company,stored.hash,current.id).all();
+   for(const previous of retained.results){
+    if(sameFullScope(parse(previous.input_json),input))return previous;
+   }
+  }
+  const existing=await reuseFullResearch(env,workspaceId,user,current,input);
+  if(existing)return existing;
+ }
  if(body.paidEmailLimit&&current&&activeBuyerJob(current.status))throw Object.assign(Error('A buyer search is already running for this company.'),{status:409});
  if(trusted?.taskId&&current&&activeBuyerJob(current.status)&&parse(current.input_json).taskId!==trusted.taskId)throw Object.assign(Error('Another buyer research job is active for this company. Finish or pause it first.'),{status:409});
- if(body.jobId&&current?.id!==body.jobId||body.expectedRevision!==undefined&&Number(body.expectedRevision)!==current?.revision)throw Object.assign(Error('Buyer research changed; reload the latest saved job'),{status:409});
  if(current?.context_key===key&&parse(current.input_json).workspaceContext===stored.hash&&(!body.force||activeBuyerJob(current.status))){
   if((input.paidResearch||body.resumeIncomplete===true)&&!activeBuyerJob(current.status)&&current.status==='needs_review')return commandBuyerJob(env,workspaceId,user,{action:'resume',jobId:current.id,expectedRevision:current.revision});
   return current;
@@ -231,7 +289,7 @@ export async function startBuyerJob(env,workspaceId,user,body,trusted=null){
   const canceled=await stmt(env,`UPDATE buyer_research_jobs SET status='canceled',lease_token=NULL,lease_until=0,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND revision=? AND status IN ('queued','running') AND ${callerSql}`,current.id,current.revision,...callerArgs(workspaceId,user)).run();if(!canceled.meta.changes)throw Object.assign(Error('Buyer research changed before replacement'),{status:409});
  }
  let initialPhase=input.recheck?'contacts':'official';
- if(body.resumeIncomplete===true&&input.scope==='all_buyers'){
+ if((body.resumeIncomplete===true||input.fullResearch)&&input.scope==='all_buyers'){
   const prior=await stmt(env,`SELECT result_json FROM buyer_research_jobs WHERE workspace_id=? AND domain=? AND updated_at>datetime('now','-30 days') AND json_extract(input_json,'$.workspaceContext')=? AND COALESCE(json_extract(input_json,'$.scope'),'all_buyers')!='selected_buyers' AND COALESCE(json_extract(input_json,'$.roles'),'[]')=? ORDER BY rowid DESC LIMIT 1`,workspaceId,input.candidate.domain,stored.hash,JSON.stringify(input.roles||[])).first();
   if(prior){
    input.candidate=D.reconcileBuyerEvidence(D.mergeRetainedBuyerResearch(parse(prior.result_json,{}),input.candidate,{retainPeople:!input.candidate.people.length}),{trustedAgentSources:true});
@@ -247,8 +305,16 @@ export async function startBuyerJob(env,workspaceId,user,body,trusted=null){
   }
  }
  const id=crypto.randomUUID();
- const written=await stmt(env,`INSERT INTO buyer_research_jobs(id,workspace_id,requested_by,session_hash,domain,context_key,input_json,result_json) SELECT ?,?,?,?,?,?,?,? WHERE ${callerSql}`,id,workspaceId,user.id,user.sessionTokenHash,input.candidate.domain,key,JSON.stringify(input),JSON.stringify(input.candidate),...callerArgs(workspaceId,user)).run();if(!written.meta.changes)throw Object.assign(Error('Research authorization changed'),{status:403});
- if(initialPhase!=='official')await stmt(env,"UPDATE buyer_research_jobs SET phase=? WHERE id=?",initialPhase,id).run();
+ const written=await stmt(env,`INSERT INTO buyer_research_jobs(id,workspace_id,requested_by,session_hash,domain,context_key,input_json,result_json,phase) SELECT ?,?,?,?,?,?,?,?,? WHERE ${callerSql} ON CONFLICT DO NOTHING`,id,workspaceId,user.id,user.sessionTokenHash,input.candidate.domain,key,JSON.stringify(input),JSON.stringify(input.candidate),initialPhase,...callerArgs(workspaceId,user)).run();
+ if(!written.meta.changes){
+  const concurrent=await stmt(env,`SELECT * FROM buyer_research_jobs WHERE workspace_id=? AND domain=? AND status IN ('queued','running') AND ${callerSql}`,workspaceId,input.candidate.domain,...callerArgs(workspaceId,user)).first();
+  if(input.fullResearch&&concurrent){
+   const existing=await reuseFullResearch(env,workspaceId,user,concurrent,input);
+   if(existing)return existing;
+  }
+  if(concurrent?.context_key===key&&parse(concurrent.input_json).workspaceContext===stored.hash)return concurrent;
+  throw Object.assign(Error('Research authorization or the active company run changed.'),{status:409});
+ }
  return readBuyerJob(env,workspaceId,{id});
 }
 export function standaloneBuyerDiscovery(input){
@@ -264,7 +330,9 @@ export async function commandBuyerJob(env,workspaceId,user,body){
   if(activeBuyerJob(row.status))return row;
   const input=parse(row.input_json),context=await workspaceBuyerContext(env,workspaceId,input.taskId);
   if(input.workspaceContext!==context.hash)throw Object.assign(Error('The company profile changed. Start research with the updated context.'),{status:409});
-  const freeResume=standaloneBuyerDiscovery(input)&&(
+  if(input.fullResearch&&body.resumeFreeCompany&&body.allowMeteredPublicResearch!==true)return row;
+  if(input.fullResearch||body.allowMeteredPublicResearch===true)await allowFullResearch(env,workspaceId);
+  const freeResume=!input.fullResearch&&standaloneBuyerDiscovery(input)&&(
    body.resumeFreeCompany===true||!input.meteredPublicResearchApproved&&!input.paidResearch&&input.peopleFirst==null
   );
   if(freeResume){
@@ -273,18 +341,19 @@ export async function commandBuyerJob(env,workspaceId,user,body){
    input.paidResearch=null;
    input.meteredPublicResearchApproved=false;
   }
+  const expanding=input.freeDiscovery&&parse(row.diagnostic_json,[]).at(-1)?.code==='free_discovery_finished'&&body.allowMeteredPublicResearch===true;
   if(input.freeDiscovery&&parse(row.diagnostic_json,[]).at(-1)?.code==='free_discovery_finished'){
    if(body.allowMeteredPublicResearch!==true)return row;
    input.freeDiscovery=false;
-   input.meteredPublicResearchApproved=true;
+   input.meteredPublicResearchApproved=true;input.fullResearch=true;
   }
-  const candidate=parse(row.result_json,input.candidate),{contactOptions}=await loadBuyerContactContext(env,{workspaceId},candidate),diagnostics=parse(row.diagnostic_json,[]),paused=currentWindowPause(row,input,diagnostics),phase=input.freeDiscovery?(row.phase==='identities'?'identities':'official'):paused&&row.phase!=='done'?row.phase:resumePhase(candidate,input,contactOptions);
+  const candidate=parse(row.result_json,input.candidate),{contactOptions}=await loadBuyerContactContext(env,{workspaceId},candidate),diagnostics=parse(row.diagnostic_json,[]),paused=currentWindowPause(row,input,diagnostics),phase=expanding?'identities':input.freeDiscovery?(row.phase==='identities'?'identities':'official'):paused&&row.phase!=='done'?row.phase:resumePhase(candidate,input,contactOptions);
   if(phase==='done')return row;
   const startedAt=new Date().toISOString();
   if(paused)diagnostics.push({phase,code:'resumed',reason:'Resumed unfinished research',at:startedAt});
   const updated=await stmt(env,`UPDATE buyer_research_jobs SET phase=?,diagnostic_json=?,input_json=?,last_error='',status='queued',requested_by=?,session_hash=?,lease_token=NULL,lease_until=0,next_at=0,phase_ms=0,phase_runs=0,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND revision=? AND ${callerSql}`,phase,JSON.stringify(diagnostics.slice(-20)),JSON.stringify({...input,executionWindowStartedAt:startedAt}),user.id,user.sessionTokenHash,row.id,row.revision,...callerArgs(workspaceId,user)).run();
   if(!updated.meta.changes)throw Object.assign(Error('Buyer research changed; reload its saved progress'),{status:409});
-  await stmt(env,`UPDATE buyer_research_tasks SET attempts=0,status='failed' WHERE job_id=? AND status<>'complete' AND EXISTS(SELECT 1 FROM buyer_research_jobs WHERE id=? AND status='queued' AND revision=? AND requested_by=? AND session_hash=?) AND ${callerSql}`,row.id,row.id,row.revision+1,user.id,user.sessionTokenHash,...callerArgs(workspaceId,user)).run();
+  await stmt(env,`UPDATE buyer_research_tasks SET attempts=0,status='failed' WHERE job_id=? AND status<>'complete' AND (status<>'running' OR ?=0) AND EXISTS(SELECT 1 FROM buyer_research_jobs WHERE id=? AND status='queued' AND revision=? AND requested_by=? AND session_hash=?) AND ${callerSql}`,row.id,input.fullResearch?1:0,row.id,row.revision+1,user.id,user.sessionTokenHash,...callerArgs(workspaceId,user)).run();
  }
  return readBuyerJob(env,workspaceId,{id:row.id});
 }
