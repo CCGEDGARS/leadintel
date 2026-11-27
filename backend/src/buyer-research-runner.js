@@ -133,13 +133,13 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
   };
   // Reserve a bounded task before dispatch. Its guards still enforce time,
   // lease and identity while the reserved query room permits receipt saving.
-  const executeTask=async(kind,value,operation,options)=>{
+  const withTaskBudget=async operation=>{
    if(invocationBudget&&!invocationBudget.admit(64)){invocationExhausted=true;throw Object.assign(Error('Shared invocation query budget reached; saved work will continue'),{code:'TIME_BUDGET'});}
    activeTaskReservations++;
-   try{return await executeTaskBody(kind,value,operation,options);}
+   try{return await operation();}
    finally{activeTaskReservations--;invocationBudget?.release(64);}
   };
-  const task=(kind,value,operation,options)=>{const key=kind+'|'+value;if(inflightTasks.has(key))return inflightTasks.get(key);const pending=executeTask(kind,value,operation,options);inflightTasks.set(key,pending);pending.finally(()=>{if(inflightTasks.get(key)===pending)inflightTasks.delete(key);}).catch(()=>{});return pending;};
+  const task=(kind,value,operation,options)=>{const key=kind+'|'+value;if(inflightTasks.has(key))return inflightTasks.get(key);const pending=withTaskBudget(()=>executeTaskBody(kind,value,operation,options));inflightTasks.set(key,pending);pending.finally(()=>{if(inflightTasks.get(key)===pending)inflightTasks.delete(key);}).catch(()=>{});return pending;};
   const search=async query=>restoreSearch(await task('search',query,async()=>{
    let rows;try{rows=await nativeSearch(query,{signal:controller.signal,diversify:Boolean(input.recheck&&Object.values(input.recheck.plans).some(plan=>plan.queries.includes(query))||input.recheck&&candidate.people.some(person=>D.buyerGmailResearchQueries(candidate,person).includes(query)))});}catch(error){if(services.search)for(const entry of error.researchTrace||[])observe(entry);throw error;}
    if(!Array.isArray(rows))throw Error('Search response is invalid');
@@ -349,13 +349,25 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
     candidate.people=D.retainBuyerIdentities(D.mergeBuyerPool(candidate.people||[],[...trace.people,...profiled],input.profile),input.profile,candidate).slice(0,10);acquirePeople();phase=nextPhase[phase];}
    }else if(phase==='contacts'){
     if(candidate.people?.length){
-     if(input.emailWaterfallVersion&&(input.fullResearch||freeContactChecks||input.recheck)){
-      const selected=D.mandatoryBuyerResearchPriorities(candidate.people,candidate,{contactOptions}).filter(person=>D.sourcedBuyerIdentity(person,candidate)&&D.qualifyBuyer(person,{decisionMakers:person.matchedBuyerRole||person.title},candidate).eligible).slice(0,4);
+     const checkedEmailOwners=new Set();
+     const checkPriorityEmails=async()=>{
+      if(!input.emailWaterfallVersion||!(input.fullResearch||freeContactChecks||input.recheck))return;
+      await guard();
+      const ranked=D.rankedBuyerShortlist(candidate.people,input.profile,candidate);
+      const priorityIds=new Set(ranked.priorityIds);
+      const emailOwner=person=>JSON.stringify([person.id,person.publicName||person.name,person.title]);
+      const selected=candidate.people.filter(person=>priorityIds.has(person.id||D.buyerIdentity(person))&&!checkedEmailOwners.has(emailOwner(person)));
+      if(!selected.length||!contactOptions.companyId)return;
       const context={workspaceId:row.workspace_id,userId:row.requested_by,guard,writeAuthority:()=>({sql:writeGuard,args:[row.id,lease,clock(),contextVersion]})};
-      await checkFreeEmails(env,context,candidate,contactOptions.companyId,selected,{confirmedEmail:contactOptions.confirmedEmail,lookup:services.emailWaterfall,signal:controller.signal,refresh:!!input.recheck,jobId:row.id});
-     }
+      await withTaskBudget(()=>checkFreeEmails(env,context,candidate,contactOptions.companyId,selected,{confirmedEmail:contactOptions.confirmedEmail,lookup:services.emailWaterfall,signal:controller.signal,refresh:!!input.recheck,jobId:row.id}));
+      for(const person of selected)checkedEmailOwners.add(emailOwner(person));
+     };
+     // Continue from the saved public pass before retrying slow queries.
+     // A changed shortlist can still introduce another buyer later in this slice.
+     if(input.contactSchedulingVersion)await checkPriorityEmails();
      scheduledContactWork=true;report=await D.runMandatoryBuyerResearch(candidate,{search,readPage:read,rows,guard,signal:controller.signal,contactOptions,rankedPriorities:input.fullResearch===true||freeContactChecks,recheckPlans:input.recheck?.plans,maxDurationMs:Math.min(remaining,input.recheck?Math.max(1,input.recheck.maxActiveMs-phaseMs):180000),observeTools:false,buyerAgentContext:D.buyerAgentContext(candidate,input.profile),accountability:report,crossCheck:freeContactChecks?undefined:async person=>task('independent',JSON.stringify([person.id,person.name,person.title,...(services.independent?[]:['grounded-low-v1'])]),async()=>{let result;try{result=await (services.independent?services.independent(person,controller.signal):searchWorkspaceBuyerContact(env,row.workspace_id,{company:candidate.company,domain:row.domain,person,signal:controller.signal}));}catch(error){observe({provider:'gemini',operation:'search',status:'failed',reason:'Independent research unavailable'});throw error;}if(result.status==='not_configured'||result.status==='unavailable'&&/not configured/i.test(result.reason||'')){observe({provider:'gemini',operation:'search',status:'skipped',reason:'Independent provider not configured'});return {...result,status:'not_configured'};}if(result.status!=='complete'||result.web_search===false){observe({provider:'gemini',operation:'search',status:'failed',reason:'Independent research unavailable'});throw Error('Independent research unavailable');}observe({provider:result.provider||'gemini',operation:'search',status:'succeeded',results:result.results?.length||0});return result;})});
      confirmNamed();
+     await checkPriorityEmails();
      // A retained dispatch is not sent again, so it is not work this phase can still retry.
      const retryable=report.status!=='complete'&&!changed&&report.stopReason!=='time_budget'?(await stmt(env,"SELECT task_key,status,request_value FROM buyer_research_tasks WHERE job_id=? AND phase='contacts' AND status<>'complete' AND (status='running' OR attempts<2)",row.id).all()).results.filter(task=>contactTasks.has(task.task_key)&&!(task.status==='running'&&retainsDispatch(task.request_value))).length:0;
      if(report.status==='complete'||!changed&&report.stopReason!=='time_budget'&&!retryable){

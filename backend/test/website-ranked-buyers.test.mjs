@@ -84,7 +84,7 @@ test('a fresh Danish website scan ranks three sourced buyers and preserves each 
   [home,company],[home+'om-os/',about],[home+'kontakt/','Kontakt Fjord Form'],
   [profile,'# Karl Vester\n\n**Projektleder**\n\n## Employment History\n\n### [Fjord Form](https://www.linkedin.com/company/fjord-form)\n\n- 2023-02-01 - now: Projektleder']
  ]);
- const batch=[];
+ const batch=[],sequence=[];
  const f=await journeyFixture({
   durableJobs:true,durableWebsite:true,
   initialCandidate:{company:'Existing Company',domain:'existing.example',buyerRoles:['CEO','Production Director','Project Manager'],people:[]},
@@ -93,16 +93,27 @@ test('a fresh Danish website scan ranks three sourced buyers and preserves each 
   },
   researchServices:{
    read:async url=>{
+    if(url===home)sequence.push('company website');
     const markdown=pages.get(url);
     if(!markdown)throw Error('Page unavailable in fixture');
     return {data:{url,markdown,links:[],metadata:{sourceURL:url,statusCode:200}}};
    },
-   search:async query=>/linkedin|projekt|project|manager/i.test(query)?[{url:profile,title:'Karl Vester - Projektleder',description:'Projektleder · Erfaring: Fjord Form'}]:[],
-   registry:async()=>({status:'unsupported'}),apollo:async()=>({people:[]}),
-   plan:async(_env,_workspace,{queries})=>({queries:queries.slice(0,4),findMorePeople:false}),
-   dossier:async()=>({status:'partial',continuation:false,people:[],facts:[],channels:[],sources:[],passes:[]}),
+   search:async query=>{
+    if(/linkedin|projekt|project|manager/i.test(query)){
+     if(sequence.includes('AI search plan'))sequence.push('public people search');
+     return [{url:profile,title:'Karl Vester - Projektleder',description:'Projektleder · Erfaring: Fjord Form'}];
+    }
+    return [];
+   },
+   registry:async()=>({status:'unsupported'}),apollo:async()=>{sequence.push('Apollo identities');return {people:[]};},
+   plan:async(_env,_workspace,{queries})=>{
+    sequence.push('AI search plan');
+    return {queries:queries.slice(0,4),findMorePeople:false};
+   },
+   dossier:async()=>{sequence.push('company research');return {status:'partial',continuation:false,people:[],facts:[],channels:[],sources:[],passes:[]};},
    review:async()=>({supervisor:{status:'not_assessed'},conflicts:[]}),
    emailWaterfall:async(_env,_workspace,owner,names,options)=>{
+    sequence.push('priority email lookup');
     assert.equal(owner,domain);assert.equal(options.maxCredits,0);batch.push([...names]);
     return names.map(name=>{
      if(name==='Karl Vester')return {status:'incomplete',reason:'No provider ran within the credit allowance.'};
@@ -159,8 +170,16 @@ test('a fresh Danish website scan ranks three sourced buyers and preserves each 
  }
  await page.waitForFunction(()=>discovery?.selectedProspects?.some(c=>c.buyerResearchJob?.id&&!['queued','running'].includes(c.buyerResearchJob.status)));
  await assertResults();
+ const first=stage=>{assert.ok(sequence.includes(stage),stage+' must run');return sequence.indexOf(stage);};
+ assert.ok(first('company website')<first('Apollo identities'));
+ assert.ok(first('Apollo identities')<first('AI search plan'));
+ assert.ok(first('AI search plan')<first('public people search'));
+ assert.ok(first('public people search')<first('company research'));
+ assert.ok(first('company research')<first('priority email lookup'));
+ const callsBeforeReload=[...sequence];
  assert.equal((await page.evaluate(()=>LeadIntelServerBridge.saveNow({saveIntent:true,explicitSave:true}))).saved,true);
  await page.reload();await openScanner();await assertResults();
+ assert.deepEqual(sequence,callsBeforeReload);
  assert.deepEqual(batch.map(names=>names.sort()),[['Erik Madsen','Karl Vester','Lars Jensen']]);
  assert.equal(f.DB.raw.prepare('SELECT count(*) AS n FROM buyer_research_jobs WHERE domain=?').get(domain).n,1);
  assert.equal(f.DB.raw.prepare('SELECT count(*) AS n FROM additional_contact_attempts').get().n,0);
