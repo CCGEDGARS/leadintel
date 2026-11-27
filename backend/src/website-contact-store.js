@@ -1,3 +1,4 @@
+import {apolloCapabilities,resolveWorkspaceServiceCredential} from './service-integrations.js';
 import {websiteLinkedInReviewCurrent,websiteLinkedInQueries,WEBSITE_LINKEDIN_REVIEW_VERSION} from './website-linkedin-review.js';
 import {managementLimit,managementShortlist,MANAGEMENT_RESEARCH_VERSION} from './website-management.js';
 import {cookieValue,sha256} from './security.js';
@@ -50,7 +51,14 @@ export async function websiteContactView(env,row){
  }
  return view;
 }
-export async function startWebsiteContacts(env,context,body){
+function missingManagementPass(state){
+ return !state.managementResearchVersion||state.managementResearchVersion===1&&!state.managementDirectoryDone;
+}
+async function newlyAvailableDirectory(env,workspaceId,state){
+ const last=state.tools?.findLast(t=>t.provider==='apollo'&&t.operation==='identity_search');
+ return last?.status==='skipped'&&(await apolloCapabilities(env,workspaceId)).discovery&&(await resolveWorkspaceServiceCredential(env,workspaceId,'apollo')).configured;
+}
+export async function startWebsiteContacts(env,context,body,seedPage,scanTrace=[]){
  const company=await contactSql(env,"SELECT * FROM crm_companies WHERE workspace_id=? AND id=? AND deleted_at IS NULL AND lifecycle_status NOT IN ('suppressed','archived')",context.workspaceId,String(body.companyId||'')).first();
  if(!company||!normalizeDomain(company.normalized_domain))throw contactError('Save and check the company website before researching contacts.');
  const limit=body.action==='shortlist'?managementLimit(body.managementLimit??10):null;
@@ -59,7 +67,7 @@ export async function startWebsiteContacts(env,context,body){
  const previousInput=old&&contactParse(old.input_json);
  if(old&&previousInput.company===company.company_name&&previousInput.domain===company.normalized_domain&&(!limit||previousInput.managementLimit===limit&&previousInput.buyerRoles===roles)){
   const saved=contactParse(old.state_json);
-  if(limit&&['complete','incomplete'].includes(old.status)&&saved.stopReason==='sources_checked'&&!saved.managementResearchVersion){
+  if(limit&&['complete','incomplete'].includes(old.status)&&saved.stopReason==='sources_checked'&&(missingManagementPass(saved)||await newlyAvailableDirectory(env,context.workspaceId,saved))){
    return commandWebsiteContacts(env,context,{action:'resume',jobId:old.id,revision:old.revision,upgradeManagement:true});
   }
   return old;
@@ -78,6 +86,11 @@ export async function startWebsiteContacts(env,context,body){
    state.tasks=(previous.tasks||[]).filter(t=>t.status==='complete'&&!t.archived&&Date.now()-Date.parse(t.checkedAt||t.result?.extractedAt)<30*86400000);
    state.people=managementShortlist(previous.people||[],limit,roles);
   }
+ }
+ if(seedPage&&limit){
+  input.website=seedPage.url;
+  state.tools.push(...scanTrace.map(entry=>({...entry,at:new Date().toISOString()})));
+  if(!state.tasks.some(t=>t.kind==='read'&&t.value===seedPage.url))state.tasks.push({kind:'read',value:seedPage.url,status:'complete',attempts:1,checkedAt:seedPage.extractedAt,result:seedPage});
  }
  const result=await contactSql(env,`INSERT INTO website_contact_jobs(id,workspace_id,company_id,requested_by,requested_role,session_hash,input_json,state_json,deadline_at) SELECT ?,?,?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM sessions s JOIN workspace_members m ON m.user_id=s.user_id WHERE s.token_hash=? AND s.expires_at>datetime('now') AND m.workspace_id=? AND m.user_id=? AND m.role=?) AND EXISTS(SELECT 1 FROM crm_companies c WHERE c.id=? AND c.workspace_id=? AND c.company_name=? AND c.normalized_domain=? AND c.deleted_at IS NULL AND c.lifecycle_status NOT IN ('suppressed','archived')) ON CONFLICT DO NOTHING`,id,context.workspaceId,company.id,context.userId,context.role,context.sessionHash,JSON.stringify(input),JSON.stringify(state),Date.now()+WEBSITE_CONTACT_PASS_MS,context.sessionHash,context.workspaceId,context.userId,context.role,company.id,context.workspaceId,input.company,input.domain).run();
  if(!result.meta.changes){
@@ -133,8 +146,10 @@ export async function commandWebsiteContacts(env,context,body){
  const linkedinUpgrade=body.action==='check-linkedin';
  if(linkedinUpgrade&&row.status==='canceled')return row;
  if(body.personId&&!(state.people||[]).some(p=>String(p.id)===String(body.personId)))throw contactError('The selected contact changed.',404);
- const managementUpgrade=body.upgradeManagement===true&&Boolean(contactParse(row.input_json).managementLimit)&&!state.managementResearchVersion&&state.stopReason==='sources_checked';
+ const managementUpgrade=body.upgradeManagement===true&&Boolean(contactParse(row.input_json).managementLimit)&&state.stopReason==='sources_checked'&&(missingManagementPass(state)||await newlyAvailableDirectory(env,context.workspaceId,state));
  if(!['incomplete','canceled'].includes(row.status)&&!(row.status==='complete'&&(body.refreshIdentities===true||linkedinUpgrade||managementUpgrade)))return row;
+ const directoryOnly=managementUpgrade&&Boolean(state.managementResearchVersion);
+ if(directoryOnly)delete state.managementDirectoryDone;
  if(managementUpgrade)state.managementResearchVersion=MANAGEMENT_RESEARCH_VERSION;
  if(linkedinUpgrade){state.linkedinReviewVersion=WEBSITE_LINKEDIN_REVIEW_VERSION;for(const person of state.people||[])if(!websiteLinkedInReviewCurrent(contactParse(row.input_json),person)){delete person.freeResearchStatus;if(person.contactResearch?.checks?.linkedin)person.contactResearch.checks.linkedin.profileMatchVersion=0;}}
  if(body.refreshIdentities===true){
@@ -144,7 +159,16 @@ export async function commandWebsiteContacts(env,context,body){
   state.identitySearchHistory=[...(state.identitySearchHistory||[]),...previous.map(t=>({query:t.value,checkedAt:t.checkedAt,result:t.result}))].slice(-30);
   for(const task of previous){task.archived=true;task.attempts=0;}
  }
- {state.operationLimit=(state.tasks||[]).length+600;state.batchLimit=linkedinUpgrade||body.refreshIdentities===true?Math.min(300,(state.people||[]).length):Math.min(300,(state.people||[]).filter(p=>p.freeResearchStatus).length+10);state.freeRevision=(state.freeRevision||1)+1;state.passStartedAt=Date.now();state.passBudgetMs=WEBSITE_CONTACT_PASS_MS;delete state.stopReason;for(const task of state.tasks||[])if(task.status==='failed'){task.attempts=0;task.status='pending';}for(const person of state.people||[])if(person.freeResearchStatus==='needs_review')delete person.freeResearchStatus;if(contactParse(row.input_json).managementLimit){delete state.managementIndexUnavailable;delete state.managementDirectoryDone;state.gaps=[];state.managementDiscoveryDone=false;}state.label='Continuing unfinished public contact checks';}
+ state.operationLimit=(state.tasks||[]).length+600;
+ state.batchLimit=linkedinUpgrade||body.refreshIdentities===true?Math.min(300,(state.people||[]).length):Math.min(300,(state.people||[]).filter(p=>p.freeResearchStatus).length+10);
+ state.freeRevision=(state.freeRevision||1)+1;state.passStartedAt=Date.now();state.passBudgetMs=WEBSITE_CONTACT_PASS_MS;
+ delete state.stopReason;
+ if(!directoryOnly){
+  for(const task of state.tasks||[])if(task.status==='failed'){task.attempts=0;task.status='pending';}
+  for(const person of state.people||[])if(person.freeResearchStatus==='needs_review')delete person.freeResearchStatus;
+  if(contactParse(row.input_json).managementLimit){delete state.managementIndexUnavailable;delete state.managementDirectoryDone;state.gaps=[];state.managementDiscoveryDone=false;}
+ }
+ state.label='Continuing unfinished public contact checks';
  }
  const result=await contactSql(env,`UPDATE website_contact_jobs SET status=?,state_json=?,requested_by=?,requested_role=?,session_hash=?,deadline_at=?,revision=revision+1,lease_token=NULL,lease_until=0,updated_at=CURRENT_TIMESTAMP WHERE id=? AND workspace_id=? AND revision=? AND EXISTS(SELECT 1 FROM workspace_members m JOIN sessions s ON s.user_id=m.user_id WHERE m.workspace_id=? AND m.user_id=? AND m.role=? AND s.token_hash=? AND s.expires_at>datetime('now')) AND EXISTS(SELECT 1 FROM crm_companies c WHERE c.id=website_contact_jobs.company_id AND c.workspace_id=website_contact_jobs.workspace_id AND c.company_name=json_extract(input_json,'$.company') AND c.normalized_domain=json_extract(input_json,'$.domain') AND c.deleted_at IS NULL AND c.lifecycle_status NOT IN ('suppressed','archived'))`,'queued',JSON.stringify(state),context.userId,context.role,context.sessionHash,Date.now()+state.passBudgetMs,row.id,context.workspaceId,row.revision,context.workspaceId,context.userId,context.role,context.sessionHash).run();
  if(!result.meta.changes)throw contactError('The company or research authority changed.');

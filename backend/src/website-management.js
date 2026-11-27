@@ -141,7 +141,7 @@ export async function findPublicBuyerContactPages(candidate,{index,read,refresh,
  return notes.join(' ')||'Free website and register checks finished.';
 }
 
-export const MANAGEMENT_RESEARCH_VERSION=1;
+export const MANAGEMENT_RESEARCH_VERSION=2;
 const employerRoster=url=>/^https:\/\/(?:[a-z]{2,3}\.)?linkedin\.com\/company\/[\w%-]+\/?(?:[?#].*)?$/i.test(url);
 
 // A directory hint is never a name. Only the shared employer/role resolver

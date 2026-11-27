@@ -76,3 +76,9 @@ test('failed homepage reads retain the provider reason and do not launch a fallb
  const [row]=await runner.verify([{name:'BØGE STÅL',sourceUrl:'https://bogestaal.example/',website:''}]);
  assert.equal(row.identityStatus,'unresolved');assert.match(row.identityEvidence,/Firecrawl credits exhausted/);assert.equal(row.website,'');
 });
+
+test('a saved legal name can match an exact trading name in the title and body',()=>{
+ const page={url:'https://nordisk-staal.dk/en/',title:'Nordisk Staal | Home',text:'At Nordisk Staal, we design complex steel structures.'};
+ assert.equal(S.assessIdentity({name:'Nordisk Staal A/S'},page).verified,true);
+ assert.equal(S.assessIdentity({name:'Nordisk Staal Coating ApS'},page).verified,false);
+});

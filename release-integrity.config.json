@@ -3690,6 +3690,8 @@
       "status": 200,
       "contains": [
         "website-scanning-card",
+        "Scan website',busy",
+        "action:'scan-website'",
         "Find companies &amp; decision-makers",
         "Monitor websites",
         "Delete canceled because",

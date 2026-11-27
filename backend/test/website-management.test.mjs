@@ -10,7 +10,7 @@ test('shortlist checks published channels, excludes payroll and reuses a complet
  for(const limit of [0,11,1.5])assert.throws(()=>managementLimit(limit));
  const f=await buyerJobsFixture(t),context={workspaceId,userId:f.users.owner.id,role:'owner',sessionHash:f.users.owner.sessionTokenHash};
  const detail=await upsertCrmCompany(f.DB,context,{company_name:'Finance Group',website:'https://finance.example/'});
- const body={action:'shortlist',companyId:detail.company.id,managementLimit:2};
+ const body={action:'shortlist',companyId:detail.company.id,managementLimit:1};
  const job=await startWebsiteContacts(f.env,context,body);
  const reads=[];
  const services={read:async url=>{reads.push(url);return {url,title:'Finance Group',markdown:url.endsWith('/team')?'# Finance Group team\n## Anna Andersson\n### Production Manager\nEmail: anna@finance.example\nPhone: 12345678\n[LinkedIn](https://www.linkedin.com/in/anna-andersson/)\nEmail: anna.work@gmail.com\n## Maria Jensen\n### Payroll & Administration\nEmail: maria@finance.example':'# Finance Group\nFinance Group provides financial services.',links:['https://finance.example/team']};}};
@@ -20,6 +20,15 @@ test('shortlist checks published channels, excludes payroll and reuses a complet
  const [anna]=result.people;assert.equal(anna.publishedStaffCard.email,'anna@finance.example');assert.equal(anna.publishedStaffCard.phone,'12345678');assert.match(anna.publicLinkedinUrl,/anna-andersson/);assert.equal(anna.gmailMatches[0]?.email,'anna.work@gmail.com');assert.equal(anna.paidReadiness.eligible,true);assert.equal(reads.length,2);
  assert.equal((await startWebsiteContacts(f.env,context,body)).id,job.id);
  assert.ok(JSON.parse(row.state_json).tasks.every(t=>t.kind==='read'));
+ assert.equal(result.tools.find(t=>t.provider==='apollo').status,'skipped');
+ // v1 skipped the directory when official pages already filled the shortlist.
+ const state=JSON.parse(row.state_json);state.managementResearchVersion=1;delete state.managementDirectoryDone;
+ f.DB.raw.prepare('UPDATE website_contact_jobs SET state_json=? WHERE id=?').run(JSON.stringify(state),job.id);
+ const upgraded=await startWebsiteContacts(f.env,context,body);assert.equal(upgraded.id,job.id);
+ let searches=0;
+ await runWebsiteContactJobs(f.env,{jobId:job.id,services:{...services,apollo:async payload=>{searches++;assert.equal(payload.discovery_scope,'company');return {people:[]};}}});
+ assert.equal(searches,1);assert.equal(reads.length,2);
+ assert.equal((await startWebsiteContacts(f.env,context,body)).status,'complete');
 });
 test('cap and preferences apply before individual research',()=>{
  const names=['Anna Black','Bert Olsen','Cecilia Lind','David Brown','Erik Berg','Felix Turner','Grace Moore','Hugo Allen','Iris Green','John Wilson','Karen White','Laura Gray'];
