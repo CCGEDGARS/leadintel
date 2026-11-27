@@ -27,7 +27,7 @@ function confirm(message,options={}){
  actions.append(cancel,...(alternative?[alternative]:[]),accept);card.append(brand,title,text,actions);dialog.append(card);d.body.append(dialog);
  return new Promise(resolve=>{
   let finished=false;
-  function finish(value){if(finished)return;finished=true;pending=false;const valid=account()===captured&&(!parent||parent.open)&&originalFocus?.isConnected!==false;root.removeEventListener('leadintel:workspace-changed',cancelAction);root.removeEventListener('leadintel:server-conflict',cancelAction);if(dialog.open&&typeof dialog.close==='function')dialog.close();dialog.remove();if(originalFocus?.isConnected)originalFocus.focus();resolve(valid?value:false);}
+  function finish(value){if(finished)return;finished=true;pending=false;const valid=account()===captured&&(!parent||parent.open)&&(originalFocus?.isConnected!==false||options.isCurrent?.()===true);root.removeEventListener('leadintel:workspace-changed',cancelAction);root.removeEventListener('leadintel:server-conflict',cancelAction);if(dialog.open&&typeof dialog.close==='function')dialog.close();dialog.remove();if(originalFocus?.isConnected)originalFocus.focus();resolve(valid?value:false);}
   const cancelAction=()=>finish(false);cancel.onclick=cancelAction;accept.onclick=()=>finish(true);if(alternative)alternative.onclick=()=>finish('alternative');
   dialog.addEventListener('cancel',e=>{e.preventDefault();finish(false);});dialog.addEventListener('close',()=>finish(false));
   dialog.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();finish(false);}if(e.key==='Tab'){if(e.shiftKey&&d.activeElement===cancel){e.preventDefault();accept.focus();}else if(!e.shiftKey&&d.activeElement===accept){e.preventDefault();cancel.focus();}}});
