@@ -1610,8 +1610,13 @@ function buyerContactRows(person={},candidate={},result={}){
     const label=status==='not_found'?'Not found in checked sources':'Check incomplete';
     return `<span class="buyer-field-state">${label}</span><details class="buyer-field-evidence"><summary>Search details</summary><small>${esc(statusText(channel))}</small></details>`;
   };
+  const workDomain=canonicalDomain(candidate.domain);
+  const evidence=person.waterfallEmail;
+  const bound=evidence?.domain===workDomain&&evidence.identityName===(person.publicName||person.name)&&evidence.identityRole===person.title;
+  const providerEmail=bound&&evidence.status==='found'&&typeof evidence.email==='string'&&evidence.email.endsWith('@'+workDomain)?evidence.email:'';
+  const addresses=[...new Set([providerEmail,contact.work_email,person.hunterFound,...found.map(row=>row.email)].filter(email=>email&&String(email).toLowerCase().endsWith('@'+workDomain)))].filter(email=>person.hunterChecks?.[email]?.deliverability!=='undeliverable'&&person.hunterChecks?.[email]?.status!=='invalid');
+  const workEmailStatus=addresses.length||published?'found':bound&&evidence.status==='incomplete'?'incomplete':channelStatus('company');
   const renderEmails=type=>{
-    const domain=type==='gmail'?'gmail.com':canonicalDomain(candidate.domain);
     const guesses=type==='company'?emailPatternCandidates(person,candidate.domain,[...(candidate.people||[]),...(candidate.buyerDiscovery?.companyContacts||[])]):LeadIntelDiscovery.gmailGuessCandidates?.(person)||[];
     if(type==='gmail'){
       const matches=[...new Map((person.gmailMatches||[]).filter(row=>/@(?:gmail|googlemail)\.com$/i.test(row.email)&&source(row.url)).map(row=>[row.email,row])).values()];
@@ -1623,11 +1628,7 @@ function buyerContactRows(person={},candidate={},result={}){
       const receipt=logs.length?`<details class="buyer-email-patterns"><summary>Gmail research · ${checked}/${logs.length} searches · ${matches.length} possible matches</summary>${logs.map(row=>`<small>${esc(row.query||'Gmail source search')} · ${esc(row.status)} · ${Number(row.resultCount)||0} results${row.reason?' · '+esc(row.reason):''}</small>`).join('')}</details>`:'';
       return (listings.length?listings.join(''):earlier||emptyChannel(type))+patternHtml+receipt;
     }
-    const evidence=person.waterfallEmail;
-    const bound=evidence?.domain===domain&&evidence.identityName===(person.publicName||person.name)&&evidence.identityRole===person.title;
-    const providerEmail=bound&&evidence.status==='found'&&typeof evidence.email==='string'&&evidence.email.endsWith('@'+domain)?evidence.email:'';
     const receipt=bound&&evidence.status!=='found'?'<small>Firecrawl email finder · '+esc(evidence.reason||'Check incomplete')+'</small>':'';
-    const addresses=[...new Set([providerEmail,...(type==='company'?[contact.work_email,person.hunterFound]:[]),...found.map(row=>row.email)].filter(email=>email&&String(email).toLowerCase().endsWith('@'+domain)))].filter(email=>person.hunterChecks?.[email]?.deliverability!=='undeliverable'&&person.hunterChecks?.[email]?.status!=='invalid');
     const patterns=guesses.filter(row=>!addresses.includes(row.email)&&person.hunterChecks?.[row.email]?.deliverability!=='undeliverable'&&person.hunterChecks?.[row.email]?.status!=='invalid');
     const patternHtml=patterns.length?`<details class="buyer-email-patterns"><summary>Unverified email patterns (${patterns.length})</summary><p>Name-based research suggestions · no published person–email association.</p>${patterns.slice(0,4).map(row=>`<span class="buyer-email-result">${esc(row.email)} · Unverified pattern</span>`).join('')}</details>`:'';
     if(!addresses.length)return (published||(bound&&evidence.status==='incomplete'?'<span class="buyer-field-state">Check incomplete</span>':emptyChannel(type)))+receipt+patternHtml;
@@ -1655,9 +1656,8 @@ function buyerContactRows(person={},candidate={},result={}){
   const reviewDisabled=reviewable&&(!crmAuthenticated()||bridge()?.conflict||bridge()?.resolvingSync||candidate.peopleStatus==='loading'||candidate.publicContactStatus==='loading'||enrichmentPending.has(personKey(candidate,person))||buyerSelectionPending.size||buyerCompanySavePending.size||buyerCompanyRemovalPending.size);
   const review=reviewable?`<button class="secondary-btn small" type="button" data-review-linkedin="${esc(candidate.domain)}" data-person-index="${reviewIndex}" data-person-id="${esc(person.id)}" data-person-identity="${esc(buyerActionIdentity(candidate,person,true))}" data-buyer-context="${esc(JSON.stringify([bridge()?.workspace?.id||'',bridge()?.session?.user?.id||'',bridge()?.workspace?.role||'',bridge()?.session?.authenticated===true]))}" aria-haspopup="dialog" ${reviewDisabled?'disabled':''}>Review profile</button>`:'';
   const linkedin=profile?`<a class="buyer-contact-value" href="${esc(profile)}" target="_blank" rel="noopener noreferrer">View profile ↗</a><small>${esc(linkedInLabel)}</small>${review}`:emptyChannel('linkedin');
-  const hasCompanyEmail=[contact.work_email,person.hunterFound,...found.map(row=>row.email)].some(email=>email&&String(email).toLowerCase().endsWith('@'+canonicalDomain(candidate.domain))&&person.hunterChecks?.[email]?.deliverability!=='undeliverable'&&person.hunterChecks?.[email]?.status!=='invalid');
   const hasGmail=[...(person.gmailMatches||[]),...found].some(row=>source(row.url)&&/@(?:gmail|googlemail)\.com$/i.test(row.email));
-  return `<div class="buyer-contact-fields" aria-label="Contact details"><div data-contact-channel="linkedin" data-contact-status="${profile?'found':channelStatus('linkedin')}"><strong>LinkedIn</strong><span>${linkedin}</span></div><div data-contact-channel="phone" data-contact-status="${contact.phone_number||savedPhone||person.publicPhone&&phoneEvidence||staff?.publicPhone&&staff.publicPhoneUrl===staff.publicNameUrl?'found':person.publicPhone?'incomplete':channelStatus('phone')}"><strong>Direct work phone</strong><span>${phone}</span></div><div data-contact-channel="company" data-contact-status="${hasCompanyEmail||published?'found':channelStatus('company')}"><strong>Work email</strong><span>${renderEmails('company')}</span></div><div data-contact-channel="gmail" data-contact-status="${hasGmail?'possible_match':channelStatus('gmail')}"><strong>Public business Gmail</strong><span>${renderEmails('gmail')}</span></div></div>`;
+  return `<div class="buyer-contact-fields" aria-label="Contact details"><div data-contact-channel="linkedin" data-contact-status="${profile?'found':channelStatus('linkedin')}"><strong>LinkedIn</strong><span>${linkedin}</span></div><div data-contact-channel="phone" data-contact-status="${contact.phone_number||savedPhone||person.publicPhone&&phoneEvidence||staff?.publicPhone&&staff.publicPhoneUrl===staff.publicNameUrl?'found':person.publicPhone?'incomplete':channelStatus('phone')}"><strong>Direct work phone</strong><span>${phone}</span></div><div data-contact-channel="company" data-contact-status="${workEmailStatus}"><strong>Work email</strong><span>${renderEmails('company')}</span></div><div data-contact-channel="gmail" data-contact-status="${hasGmail?'possible_match':channelStatus('gmail')}"><strong>Public business Gmail</strong><span>${renderEmails('gmail')}</span></div></div>`;
 }
 function emailPatternCandidates(person={},domain='',people=[]){
   return LeadIntelDiscovery.rankedEmailGuesses(person,domain,people);

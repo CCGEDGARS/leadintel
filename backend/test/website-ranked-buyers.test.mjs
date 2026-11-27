@@ -70,3 +70,98 @@ test('a saved website scan starts the ranked public job and opens Messages for i
  assert.deepEqual(errors,[]);
  assert.equal(f.externalCalls.some(c=>/people\/match|enrich|send_email/.test(c.url)),false);
 });
+
+test('a fresh Danish website scan ranks three sourced buyers and preserves each email outcome without a second lookup', {timeout:90000}, async t=>{
+ const executablePath=process.env.LEADINTEL_CHROMIUM_PATH||'/usr/bin/chromium';
+ let chromium;
+ try{({chromium}=await loadPlaywright());await access(executablePath);}
+ catch(error){if(process.env.LEADINTEL_REQUIRE_BROWSER==='true')throw error;t.skip('Chromium unavailable');return;}
+
+ const domain='fjord-form.dk',company='Fjord Form',home='https://'+domain+'/';
+ const profile='https://dk.linkedin.com/in/karl-vester-fixture';
+ const about='I dag ejes Fjord Form A/S af produktionsdirektør Erik Madsen og CEO Lars Jensen. Erik Madsen og Lars Jensen står for den daglige drift af virksomheden.';
+ const pages=new Map([
+  [home,company],[home+'om-os/',about],[home+'kontakt/','Kontakt Fjord Form'],
+  [profile,'# Karl Vester\n\n**Projektleder**\n\n## Employment History\n\n### [Fjord Form](https://www.linkedin.com/company/fjord-form)\n\n- 2023-02-01 - now: Projektleder']
+ ]);
+ const batch=[];
+ const f=await journeyFixture({
+  durableJobs:true,durableWebsite:true,
+  initialCandidate:{company:'Existing Company',domain:'existing.example',buyerRoles:['CEO','Production Director','Project Manager'],people:[]},
+  externalFetch:async input=>{
+   if(String(input)===home)return new Response('<html><title>Fjord Form</title><h1>Fjord Form</h1><p>Fjord Form manufactures steel structures for industrial customers.</p></html>',{headers:{'Content-Type':'text/html'}});
+  },
+  researchServices:{
+   read:async url=>{
+    const markdown=pages.get(url);
+    if(!markdown)throw Error('Page unavailable in fixture');
+    return {data:{url,markdown,links:[],metadata:{sourceURL:url,statusCode:200}}};
+   },
+   search:async query=>/linkedin|projekt|project|manager/i.test(query)?[{url:profile,title:'Karl Vester - Projektleder',description:'Projektleder · Erfaring: Fjord Form'}]:[],
+   registry:async()=>({status:'unsupported'}),apollo:async()=>({people:[]}),
+   plan:async(_env,_workspace,{queries})=>({queries:queries.slice(0,4),findMorePeople:false}),
+   dossier:async()=>({status:'partial',continuation:false,people:[],facts:[],channels:[],sources:[],passes:[]}),
+   review:async()=>({supervisor:{status:'not_assessed'},conflicts:[]}),
+   emailWaterfall:async(_env,_workspace,owner,names,options)=>{
+    assert.equal(owner,domain);assert.equal(options.maxCredits,0);batch.push([...names]);
+    return names.map(name=>{
+     if(name==='Karl Vester')return {status:'incomplete',reason:'No provider ran within the credit allowance.'};
+     if(name==='Erik Madsen')return {status:'found',email:'em@'+domain,finder:'enrow',qualification:'valid',mailbox:'unverified'};
+     assert.equal(name,'Lars Jensen');
+     return {status:'found',email:'lj@'+domain,finder:'orbisearch',qualification:'safe',mailbox:'deliverable',verifier:'orbisearch',confidence:98,catchAll:false};
+    });
+   }
+  }
+ });
+ t.after(()=>f.close());
+ const state=await f.getState();
+ state.payload.discovery.selectedProspects=[];
+ state.payload.main.step=2;state.payload.meta.discovery.visibleStep=2;
+ await f.replace(state.payload,state.version);
+ const browser=await chromium.launch({executablePath,args:['--no-sandbox']});t.after(()=>browser.close());
+ const context=await browser.newContext();
+ await context.addCookies([{name:'leadintel_session',value:sessionToken,url:f.origin}]);
+ await context.route('**/*',route=>new URL(route.request().url()).origin===f.origin?route.continue():route.abort());
+ const page=await context.newPage();
+ async function openScanner(){
+  await page.waitForFunction(()=>window.LeadIntelServerBridge?.session?.authenticated&&window.LeadIntelDiscoveryUI?.openWebsiteBuyers);
+  await page.locator('[data-step-marker="2"]').click();
+  await page.locator('#website-scanning-open').click();
+ }
+ await page.goto(f.origin+'/customer/');await openScanner();
+ await page.locator('#website-scanning-url').fill(home);
+ await page.getByRole('button',{name:'Scan website',exact:true}).click();
+ await page.getByRole('table',{name:'Website scan results'}).waitFor();
+ await page.getByRole('button',{name:'Find buyers',exact:true}).filter({visible:true}).click();
+ await page.waitForFunction(()=>discovery?.selectedProspects?.some(c=>c.buyerResearchJob?.id));
+ const job=f.DB.raw.prepare('SELECT id FROM buyer_research_jobs WHERE domain=?').get(domain);
+ for(let i=0;i<25;i++){
+  const {status}=f.DB.raw.prepare('SELECT status FROM buyer_research_jobs WHERE id=?').get(job.id);
+  if(!['running','queued'].includes(status))break;
+  await f.runJobs(job.id);
+ }
+ const panel=page.locator('#website-buyer-results'),cards=panel.locator('.selected-prospect-person');
+ async function assertResults(){
+  try{await panel.getByText('3 priority buyers',{exact:true}).waitFor({timeout:12000});}
+  catch(error){throw Error('Unexpected shortlist: '+await panel.innerText(),{cause:error});}
+  for(const [name,expected] of [
+   ['Lars Jensen',['lj@'+domain,'Mailbox deliverable']],
+   ['Erik Madsen',['em@'+domain,'Mailbox unverified']],
+   ['Karl Vester',['Check incomplete','No provider ran within the credit allowance.']]
+  ]){
+   const card=cards.filter({hasText:name});const text=await card.innerText();
+   assert.deepEqual(await card.locator('[data-contact-channel]').evaluateAll(nodes=>nodes.map(node=>node.dataset.contactChannel)),['linkedin','phone','company','gmail']);
+   const workEmail=card.locator('[data-contact-channel=company]');
+   assert.equal(await workEmail.getAttribute('data-contact-status'),name==='Karl Vester'?'incomplete':'found',name+' work email field state');
+   for(const value of expected)assert.ok(text.includes(value),name+' should show '+value+'; actual '+text);
+   assert.deepEqual(await card.locator('.buyer-four-actions button').allTextContents(),['Paid email','Paid phone','Refresh','Proceed']);
+  }
+ }
+ await page.waitForFunction(()=>discovery?.selectedProspects?.some(c=>c.buyerResearchJob?.id&&!['queued','running'].includes(c.buyerResearchJob.status)));
+ await assertResults();
+ assert.equal((await page.evaluate(()=>LeadIntelServerBridge.saveNow({saveIntent:true,explicitSave:true}))).saved,true);
+ await page.reload();await openScanner();await assertResults();
+ assert.deepEqual(batch.map(names=>names.sort()),[['Erik Madsen','Karl Vester','Lars Jensen']]);
+ assert.equal(f.DB.raw.prepare('SELECT count(*) AS n FROM buyer_research_jobs WHERE domain=?').get(domain).n,1);
+ assert.equal(f.DB.raw.prepare('SELECT count(*) AS n FROM additional_contact_attempts').get().n,0);
+});
