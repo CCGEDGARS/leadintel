@@ -124,6 +124,18 @@
       }
       const owner=scope.owner,source=unchanged?{}:root.LeadIntelDiscovery?.mergeRetainedBuyerResearch?.(owner,job.candidate||{},{retainPeople:true})||job.candidate||{},jobIds=job.input?.personIds||job.progress?.personIds,selectedIds=scope.personIds?.length?scope.personIds:Array.isArray(jobIds)&&jobIds.length?jobIds:null,selected=selectedIds&&new Set(selectedIds.map(String)),byId=new Map((owner.people||[]).map(p=>[String(p.id),p]));
       const receiptOwners=scope.restoreReceipts?(owner.people||[]).filter(p=>!['contactResearch','emailResearch','gmailMatches','gmailCandidates'].some(k=>Object.hasOwn(scope.localEdits(p),k))):[];
+      // A full local roster must still admit a better-ranked identity from the server.
+      // Keep displaced research in the discovery pool and preserve locally selected or edited people.
+      const incoming=new Set((job.candidate?.people||[]).map(p=>String(p.id)));
+      if(!unchanged&&!selected&&job.input?.fullResearch&&incoming.size===10&&owner.people?.length===10){
+        const missing=[...incoming].filter(id=>!byId.has(id)).length;
+        const replaceable=owner.people.filter(p=>!incoming.has(String(p.id))&&!LOCAL_PERSON.some(key=>p[key])&&!Object.keys(scope.localEdits(p)).length);
+        const displaced=replaceable.slice(-missing);
+        if(missing&&displaced.length){
+          source.buyerDiscovery={...source.buyerDiscovery,pool:root.LeadIntelDiscovery.mergeBuyerPool(source.buyerDiscovery?.pool||[],displaced,scope.profile)};
+          owner.people=owner.people.filter(p=>!displaced.includes(p));
+        }
+      }
       for(const person of (unchanged?[]:source.people||[]).slice(0,10)){
         const existing=byId.get(String(person.id));if(selected&&!selected.has(String(person.id)))continue;
         if(existing){
@@ -157,7 +169,7 @@
       // longer runs it must not depend on when the job is read, or every reading makes an untouched workspace count
       // as changed and sends it to the server again: so how long the job ran, not how long ago it started.
       const elapsedMs=(running?Date.now():Date.parse(job.updatedAt))-Date.parse(ref.startedAt);
-      owner.buyerResearchProgress={fullResearch:Boolean(job.input?.fullResearch),peopleFirst:Boolean(job.input?.peopleFirst),phase:running?job.phase||'company':job.status==='complete'?'complete':'error',label:job.progress?.label||'Buyer research needs review',step:({official:1,dossier:job.input?.peopleFirst&&!job.input?.fullResearch?4:2,identities:job.input?.peopleFirst&&!job.input?.fullResearch?2:3,company:1,roles:2,people:3,identity:4,contacts:job.input?.peopleFirst&&!job.input?.fullResearch?3:4,review:5,paid:5})[job.phase]||1,total:5,executionStatus:job.status,aiReviewStatus:job.quality?.aiReviewStatus||'not_assessed',startedAt:ref.startedAt,elapsedSeconds:Number.isFinite(elapsedMs)?Math.max(0,Math.floor(elapsedMs/1000)):0,timing:running?job.progress?.timing||{}:endedTiming(job.progress?.timing),credits:job.progress?.credits||null,windowPaused:job.progress?.windowPaused,stages:job.progress?.stages,connection:'connected',completedChecks:Number(job.progress?.completed)||0,inProgressChecks:Number(job.progress?.inProgress)||0,checkpointAt:job.progress?.lastActivityAt||job.updatedAt,jobId:job.id,diagnostics:(job.diagnostics||[]).slice(-10),...options.progressFields};
+      owner.buyerResearchProgress={freeDiscovery:job.input?.freeDiscovery===true,fullResearch:Boolean(job.input?.fullResearch),peopleFirst:Boolean(job.input?.peopleFirst),phase:running?job.phase||'company':job.status==='complete'?'complete':'error',label:job.progress?.label||'Buyer research needs review',step:({official:1,dossier:job.input?.fullResearch?3:job.input?.peopleFirst?4:2,identities:job.input?.peopleFirst?2:3,company:1,roles:2,people:3,identity:4,contacts:job.input?.peopleFirst&&!job.input?.fullResearch?3:4,review:5,paid:5})[job.phase]||1,total:5,executionStatus:job.status,aiReviewStatus:job.quality?.aiReviewStatus||'not_assessed',startedAt:ref.startedAt,elapsedSeconds:Number.isFinite(elapsedMs)?Math.max(0,Math.floor(elapsedMs/1000)):0,timing:running?job.progress?.timing||{}:endedTiming(job.progress?.timing),credits:job.progress?.credits||null,windowPaused:job.progress?.windowPaused,stages:job.progress?.stages,connection:'connected',completedChecks:Number(job.progress?.completed)||0,inProgressChecks:Number(job.progress?.inProgress)||0,checkpointAt:job.progress?.lastActivityAt||job.updatedAt,jobId:job.id,diagnostics:(job.diagnostics||[]).slice(-10),...options.progressFields};
       if(job.crm)options.hydrateCrm?.(owner,job.crm);
       if(scope.restoreReceipts&&!ACTIVE.has(job.status)&&receiptOwners.length===(owner.people||[]).length&&Array.isArray(job.savedBuyerResearch))root.LeadIntelDiscovery?.restoreBuyerResearchReceipts?.(owner,job.savedBuyerResearch);
       scope.acceptRoster();options.onProgress?.({...job.progress,phase:job.phase,job,status:job.status});options.persist?.(owner,job);return true;

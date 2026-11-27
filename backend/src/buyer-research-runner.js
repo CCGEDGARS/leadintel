@@ -47,7 +47,7 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
   if(input.fullResearch){input.freeDiscovery=false;input.meteredPublicResearchApproved=true;}
   const siteOnly=input.freeDiscovery===true;
   const peopleFirst=input.peopleFirst&&standaloneBuyerDiscovery(input);
-  const nextPhase=peopleFirst&&!input.fullResearch?{...standardPhaseOrder,official:'identities',identities:'contacts',contacts:input.dossierPassFinished?'review':'dossier',dossier:'review'}:standardPhaseOrder;
+  const nextPhase=input.fullResearch?{...standardPhaseOrder,official:'identities',identities:'dossier',dossier:'contacts',review:'done'}:peopleFirst?{...standardPhaseOrder,official:'identities',identities:'contacts',contacts:input.dossierPassFinished?'review':'dossier',dossier:'review'}:standardPhaseOrder;
   const {contactOptions}=await loadBuyerContactContext(env,{workspaceId:row.workspace_id},reconciledCandidate);
   // A stale legacy paid slice first settles through the existing paid evidence
   // gate. Keep it eligible for terminal recovery, which captures its original

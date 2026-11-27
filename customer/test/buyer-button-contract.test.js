@@ -77,7 +77,7 @@ test('confirmed phone-only buyer has a truthful phone action and cannot create a
 test('a named work email in a saved public listing enables green Proceed without paid research',async()=>{
  const r=runtime();try{
   Object.assign(r.person,{publicEmail:'teemu.suursalmi@example.com',publicEmailUrl:'https://directory.example/teemu-suursalmi',emailResearch:{status:'partial'}});
-  const root=r.controls();assert.equal(root.querySelector('[data-prospect-enrich-email]').getAttribute('aria-pressed'),'true');assert.equal(root.querySelector('[data-keep-buyer]').disabled,false);assert.match(root.textContent,/Listed company email accepted/);assert.match(r.c.buyerContactRows(r.person,r.candidate),/Listed company email · Accepted · mailbox unverified/);
+  const root=r.controls();assert.equal(root.querySelector('[data-prospect-enrich-email]').getAttribute('aria-pressed'),'true');assert.equal(root.querySelector('[data-keep-buyer]').disabled,false);assert.match(root.textContent,/Listed company email accepted/);assert.match(r.c.buyerContactRows(r.person,r.candidate),/Listed company email · Accepted[\s\S]*Mailbox unverified/);
   let paid=0;r.c.LeadIntelAdditionalContacts={confirm:async()=>{paid++;}};assert.equal(await r.c.confirmBuyerContact(r.candidate,0,{kind:'email',paidOnly:true,personId:r.person.id}),true);assert.equal(paid,0);
   const reopened=D.normalizeDiscoveryState(JSON.parse(JSON.stringify({selectedProspects:[r.candidate]}))).selectedProspects[0];assert.equal(D.listedBuyerEmailSource(reopened,reopened.people[0]).email,r.person.publicEmail);
  }finally{r.close();}
@@ -89,7 +89,7 @@ for(const defect of ['generic','guess-only','wrong-domain','rejected','conflicti
   assert.equal(r.controls().querySelector('[data-keep-buyer]').disabled,true);
  }finally{r.close();}
 });
-for(const defect of ['unread','stale'])test('a coherent '+defect+' listing is usable without claiming fresh official confirmation',()=>{const r=runtime();try{officialEmail(r);if(defect==='unread')r.person.publicEmailEvidence.sourceRead=false;else r.person.publicEmailEvidence.checkedAt='2020-01-01';assert.equal(D.acceptedOfficialBuyerEmail(r.candidate,r.person),'');assert.equal(r.controls().querySelector('[data-keep-buyer]').disabled,false);assert.match(r.c.buyerContactRows(r.person,r.candidate),/Listed company email · Accepted · mailbox unverified/);}finally{r.close();}});
+for(const defect of ['unread','stale'])test('a coherent '+defect+' listing is usable without claiming fresh official confirmation',()=>{const r=runtime();try{officialEmail(r);if(defect==='unread')r.person.publicEmailEvidence.sourceRead=false;else r.person.publicEmailEvidence.checkedAt='2020-01-01';assert.equal(D.acceptedOfficialBuyerEmail(r.candidate,r.person),'');assert.equal(r.controls().querySelector('[data-keep-buyer]').disabled,false);assert.match(r.c.buyerContactRows(r.person,r.candidate),/Listed company email · Accepted[\s\S]*Mailbox unverified/);}finally{r.close();}});
 for(const rejection of ['source','mailbox'])test('an acknowledged CRM listing respects a later '+rejection+' rejection',()=>{
  const r=runtime();try{savedEmail(r);Object.assign(r.person,{publicEmail:'teemu@example.com',publicEmailUrl:'https://directory.example/teemu'});Object.assign(r.c.contact,{email_status:'public_listed',source:'public_listing',verification_provider:null,public_email_url:r.person.publicEmailUrl});
   assert.equal(r.controls().querySelector('[data-keep-buyer]').disabled,false);

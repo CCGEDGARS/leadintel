@@ -68,3 +68,7 @@ The shared search strategy tests exercise authenticated requests, scheduled work
 ### 27 November · One website scan
 
 The two Step 2 controls dispatched different work for the same URL. The fast path required a typed company name and the extraction path stopped at a list. Scan website now identifies the submitted source. A confirmed homepage starts the saved management job with its original page receipt. A directory returns grounded rows for selection. The directory lookup also runs when the official shortlist is full, and records a skipped result if the workspace lacks Apollo discovery. Fresh-browser regression coverage checks the locale homepage, one CRM job, retained page evidence, and zero paid contact calls.
+
+### 27 November · Public shortlist and field approvals
+
+Two entry points shared the Find buyers label. The selected-company action could stop after identity discovery, while contact checks required a separate expansion. A company-level email purchase also appeared before the public job finished. The explicit click now starts the company’s durable public research plan, restores prior evidence, and schedules contact checks for the ranked priority buyers. Missing-field labels use the person’s saved query receipts. Paid email and phone remain distinct person-scoped actions.

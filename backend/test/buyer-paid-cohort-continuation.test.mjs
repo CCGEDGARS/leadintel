@@ -5,7 +5,7 @@ import app from '../src/app.js';
 import {buyerJobsFixture,workspaceId} from './buyer-research-jobs-fixture.mjs';
 import {handleBuyerResearchRoute} from '../src/buyer-research-routes.js';
 import {runBuyerResearchJobs} from '../src/buyer-research-runner.js';
-import {readBuyerJob} from '../src/buyer-research-store.js';
+import {readBuyerJob,startBuyerJob} from '../src/buyer-research-store.js';
 import {upsertCrmCompany,upsertCrmIntelligence,getCrmCompany} from '../src/crm.js';
 import {controlledLookup} from './paid-lookup-fixture.mjs';
 import {paidCohortCandidate} from './paid-candidate-fixture.mjs';
@@ -24,7 +24,15 @@ async function cohortFixture(t,{limit=4,phone=true,callIds=true,paidEmailLimit,s
  }
  const context={workspaceId,userId:f.users.owner.id,role:'owner'},company=(await upsertCrmCompany(f.env.DB,context,{company:c.company,domain:c.domain})).company;c.crmId=company.id;await upsertCrmIntelligence(f.env.DB,context,c.crmId,Crm.mapDiscoveryCandidateToCrm(c).intelligence);
  f.DB.raw.prepare("INSERT INTO additional_contact_policies(workspace_id,enabled,phone_enabled,provider,daily_limit,monthly_limit,max_per_company,approved_by,automatic_buyer_limit) VALUES(?,1,?,'treg',10,100,10,?,?)").run(workspaceId,Number(phone),f.users.owner.id,limit);
- const response=await handleBuyerResearchRoute(new Request('https://app.fixture.test/api/buyers/research?workspace_id='+workspaceId,{method:'POST',headers:{Cookie:'leadintel_session='+f.users.owner.token,'Content-Type':'application/json'},body:JSON.stringify({action:'start',candidate:c,paidResearch:true,paidEmailLimit})}),f.env);assert.equal(response.status,200);const job=(await response.json()).job;
+ let job;
+ if(paidEmailLimit!==undefined){
+  const response=await handleBuyerResearchRoute(new Request('https://app.fixture.test/api/buyers/research?workspace_id='+workspaceId,{method:'POST',headers:{Cookie:'leadintel_session='+f.users.owner.token,'Content-Type':'application/json'},body:JSON.stringify({action:'start',candidate:c,paidResearch:true,paidEmailLimit})}),f.env);
+  assert.equal(response.status,400);assert.equal(f.DB.raw.prepare('SELECT count(*) AS total FROM buyer_research_jobs').get().total,0);
+  // Existing approved jobs can still finish their previously captured email allowance.
+  job=await startBuyerJob(f.env,workspaceId,f.users.owner,{candidate:c,paidResearch:true,paidEmailLimit});
+ }else{
+  const response=await handleBuyerResearchRoute(new Request('https://app.fixture.test/api/buyers/research?workspace_id='+workspaceId,{method:'POST',headers:{Cookie:'leadintel_session='+f.users.owner.token,'Content-Type':'application/json'},body:JSON.stringify({action:'start',candidate:c,paidResearch:true,paidEmailLimit})}),f.env);assert.equal(response.status,200);job=(await response.json()).job;
+ }
  f.DB.raw.prepare("UPDATE buyer_research_jobs SET phase='paid',result_json=? WHERE id=?").run(JSON.stringify(c),job.id);
  const calls=[],lookup=await controlledLookup(f,calls,{callIds}),queries=[],body=c.people.map(p=>'### '+p.name+'\n'+p.title+'\nForge Industries').join('\n\n');
  const services={paidLookup:lookup,search:async query=>{queries.push(query);return [];},read:async url=>({url,markdown:body,sourceRead:true,extractedAt:stamp,metadata:{sourceURL:url}}),independent:async()=>({status:'not_configured',results:[]}),review:async(_env,_workspace,input)=>({provider:'controlled-review',supervisor:{status:'complete',reviewedPersonIds:input.people.map(p=>p.id),findings:[]},conflicts:[]})};

@@ -105,3 +105,14 @@ test('subsidiary scope review accepts employer after a role in the exact profile
  const result=D.matchBuyerScopeEvidence(person,[{url:person.linkedin_url,title:'Jane Buyer - Operations Manager - Example Minerals | LinkedIn'}],{company:'Example',market:'Sweden'});
  assert.equal(result.opportunityScope.status,'review_required');
 });
+
+test('three relevant managers fill three priority places when a fourth identity belongs to another company',()=>{
+ const rows=[
+  buyer({id:'proc',name:'Anna Berg',title:'Strategic Sourcing Manager'}),
+  buyer({id:'eng',name:'Robert Jensen',title:'Engineering Director'}),
+  buyer({id:'ops',name:'Clara Solberg',title:'Operations Director'}),
+  buyer({id:'wrong',name:'Eric Lund',title:'Engineering Director',organization:'Different Company'})
+ ];
+ const ranked=D.rankedBuyerShortlist(rows,profile,company);
+ assert.deepEqual(new Set(ranked.priorityIds),new Set(['proc','eng','ops']));
+});

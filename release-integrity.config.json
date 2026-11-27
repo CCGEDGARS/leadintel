@@ -1092,8 +1092,10 @@
         "buyer-proceed-ready",
         ">Proceed",
         "data-recheck-buyer",
-        ">E-mail",
-        ">Phone"
+        ">Paid email",
+        ">Paid phone",
+        "Not found in checked sources",
+        "Check incomplete"
       ],
       "notContains": [
         "!verified&&!linkedinReady"
@@ -9287,7 +9289,8 @@
       "contains": [
         "async function saveListedBuyerEmail",
         "email_status:'public_listed'",
-        "Listed company email \u00b7 Accepted \u00b7 mailbox unverified"
+        "Listed company email \u00b7 Accepted",
+        "Mailbox unverified"
       ]
     },
     {

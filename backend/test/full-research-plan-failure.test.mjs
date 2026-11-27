@@ -73,8 +73,8 @@ for(const [label,answer,cause] of [
   assert.equal(run.plan?.status,'complete');
   const saved=JSON.parse(run.plan.result_json);
   assert.equal(saved.provider,'rules');assert.ok(saved.queries.length<=3);
-  // The fixture company already has a named buyer: the rule plan does not ask for more people.
-  assert.equal(saved.findMorePeople,false);assert.equal(run.seen.peopleSearches,0);
+  // A partial roster still needs the bounded public people search.
+  assert.equal(saved.findMorePeople,true);assert.ok(run.seen.peopleSearches>0);
   for(const query of saved.queries)assert.ok(run.seen.searches.includes(query),'planned query was not searched: '+query);
   // The job says which plan it used and why the model's plan was not available.
   const note=run.diagnostics.find(d=>d.code==='query_plan');
