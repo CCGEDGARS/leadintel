@@ -2348,13 +2348,13 @@
       "url": "/customer/workspace-storage-ui.js",
       "status": 200,
       "contains": [
-        "CRM records and research use the data allowance.",
-        "Uploaded files use the separate file allowance.",
+        "data-storage-action=\"checkout\"",
+        "data-storage-action=\"portal\"",
         "status.upgrade.records_limit_bytes",
         "status.upgrade.files_limit_bytes",
-        "Edit storage plans and workspace limits",
+        "LeadIntelStoragePlans.open",
         "Existing data remains readable",
-        "Billing setup is in progress",
+        "Stripe checkout is awaiting billing setup.",
         "context()!==requested"
       ]
     },
