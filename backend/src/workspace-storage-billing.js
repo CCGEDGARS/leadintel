@@ -1,7 +1,7 @@
 import Stripe from 'stripe';
 import {cookieValue,sha256,allowedOrigin} from './security.js';
 import {getStorageStatus,storageAccount,storageErrorResponse} from './workspace-storage.js';
-import {storagePreferences,listStorageFiles} from './workspace-storage-management.js';
+import {storagePreferences,listStorageFiles,storageBreakdown,storageGroup,removeBackup,removeFlowVersion,removeArchivedDraft} from './workspace-storage-management.js';
 export const STRIPE_STORAGE_API_VERSION='2026-09-30.endive';
 const json=(data,status=200,cors={})=>new Response(JSON.stringify(data),{status,headers:{'Content-Type':'application/json','Cache-Control':'no-store',...cors}});
 const id=value=>typeof value==='string'?value:value?.id||'';
@@ -49,18 +49,45 @@ async function authorize(request,env,workspace,owner){
  if(!user)throw fail('Authentication required',401);
  const member=await stmt(env,'SELECT role FROM workspace_members WHERE workspace_id=? AND user_id=?',workspace,user.id).first();
  if(!member||owner&&member.role!=='owner')throw fail('Workspace owner permission is required',403);
- return member;
+ return {...member,userId:user.id};
 }
 export async function handleStorageRoute(request,env,cors={},options={}){
  const url=new URL(request.url);if(!url.pathname.startsWith('/api/storage/'))return null;
  try{
   const action=url.pathname.slice('/api/storage/'.length),workspace=url.searchParams.get('workspace_id')||'';
-  if(!['status','checkout','portal','files','preferences'].includes(action))return json({error:'Not found'},404,cors);
+  if(!['status','checkout','portal','files','backup','version','draft','preferences'].includes(action))return json({error:'Not found'},404,cors);
   const read=request.method==='GET'&&['status','files','preferences'].includes(action);
-  if(!read&&(request.method!=='POST'||!['checkout','portal','preferences'].includes(action)))return json({error:'Method not allowed'},405,cors);
+  if(!read&&(request.method!=='POST'||!['checkout','portal','backup','version','draft','preferences'].includes(action)))return json({error:'Method not allowed'},405,cors);
   if(!read&&(!allowedOrigin(request,env.APP_ORIGIN)||!request.headers.get('Content-Type')?.startsWith('application/json')))throw fail('Storage request origin is not permitted',403);
   const member=await authorize(request,env,workspace,!read);
-  if(action==='files')return json(await listStorageFiles(env,workspace),200,cors);
+  if(action==='files'){
+   if(url.searchParams.has('group'))return json(await storageGroup(env,workspace,url.searchParams.get('group'),Number(url.searchParams.get('offset')||0),member.userId),200,cors);
+   const list=await listStorageFiles(env,workspace);
+   list.groups=await storageBreakdown(env,workspace);
+   const usage=await storageAccount(env,workspace);
+   list.usage={records:usage.records_bytes,files:usage.files_bytes};
+   const plus=usage.plan_key==='plus'&&usage.paid_until>Date.now()/1000;
+   list.priority=usage.records_bytes/usage[plus?'plus_records_limit':'included_records_limit']>=usage.files_bytes/usage[plus?'plus_files_limit':'included_files_limit']?'records_bytes':'files_bytes';
+   return json(list,200,cors);
+  }
+  if(action==='draft'){
+   const body=await request.json();
+   if(typeof body?.id!=='string'||!Number.isSafeInteger(body.revision))throw fail('Invalid archived draft',400);
+   await removeArchivedDraft(env,workspace,member.userId,body.id,body.revision);
+   return json({deleted:true},200,cors);
+  }
+  if(action==='version'){
+   const body=await request.json();
+   if(typeof body?.flow_id!=='string'||body.flow_id.length>160||!Number.isSafeInteger(body.version)||body.version<1)throw fail('Invalid workflow version',400);
+   await removeFlowVersion(env,workspace,body.flow_id,body.version);
+   return json({deleted:true},200,cors);
+  }
+  if(action==='backup'){
+   const body=await request.json();
+   if(typeof body?.id!=='string'||body.id.length>160)throw fail('Invalid backup',400);
+   await removeBackup(env,workspace,body.id);
+   return json({deleted:true},200,cors);
+  }
   if(action==='preferences'){
    const account=await storageAccount(env,workspace);
    if(!read){

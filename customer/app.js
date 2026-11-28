@@ -1709,6 +1709,23 @@ function renderResearchReports(){
   researchReportUi ||= globalThis.LeadIntelResearchReport.install({getState:()=>state,save:saveState,onStrategy:()=>window.dispatchEvent(new CustomEvent('leadintel:open-market-strategy'))});
   researchReportUi.render();
 }
+window.LeadIntelStorageReports={
+  list(){
+    return (window.LeadIntelResearchReport?.normalize(state.market?.researchReports)||[]).map(report=>({
+      id:report.id,name:report.company+' · '+(report.mode||'Research report'),date:report.createdAt,
+      bytes:new TextEncoder().encode(JSON.stringify(report)).length
+    }));
+  },
+  async remove(id){
+    const market=state.market;
+    const prior=market.researchReports,initialized=market.researchReportsInitialized;
+    if(!window.LeadIntelResearchReport.deleteSaved(market,id))throw Error('Report changed. Reopen storage.');
+    if(saveState()===false){market.researchReports=prior;market.researchReportsInitialized=initialized;throw Error('Report deletion could not be saved.');}
+    renderResearchReports();
+    const result=await window.LeadIntelServerBridge.saveNow({explicitSave:true,saveIntent:true});
+    if(!result?.saved)throw Error('The report change is pending workspace sync. Reopen storage after syncing.');
+  }
+};
 function setActivationFeedback(message,tone){
   const target=$("strategy-activation-feedback");
   if(!target)return;

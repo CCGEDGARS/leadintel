@@ -39,3 +39,39 @@ test('file inventory is workspace scoped; existing guarded deletion frees metere
  assert.equal((await remove(2)).status,409);assert.equal(f.objects.size,2);
  assert.equal((await remove(1)).status,200);assert.equal(f.objects.size,0);assert.equal((await getStorageStatus(f.env,'storage-w1')).files.used_bytes,0);assert.equal((await (await f.call('files')).json()).files.length,0);
 });
+
+test('inventory accounts for all measured bytes, pages items, and releases only the selected older backup',async()=>{
+ const f=await fixture();
+ for(let n=0;n<53;n++)f.DB.raw.prepare("INSERT INTO snapshots(id,workspace_id,payload_json,generated_at) VALUES(?,'storage-w1',?,CURRENT_TIMESTAMP)").run('backup-'+n,JSON.stringify('x'.repeat(n+1)));
+ f.DB.raw.prepare("INSERT INTO snapshots(id,workspace_id,payload_json,generated_at) VALUES('peer','storage-w2','{}',CURRENT_TIMESTAMP)").run();
+ const list=async()=> (await f.call('files')).json();
+ const before=await list();
+ assert.equal(before.usage.records,before.groups.filter(g=>g.meter==='records_bytes').reduce((n,g)=>n+g.bytes,0));
+ const group=async(key,offset)=>{const url=new URL(f.request('files').url);url.searchParams.set('group',key);url.searchParams.set('offset',offset);return handleStorageRoute(new Request(url,f.request('files')),f.env);};
+ for(const key of Object.keys((await import('../src/workspace-storage-models.js')).storageModels))assert.equal((await group(key,0)).status,200,key);
+ const first=await (await group('snapshots',0)).json(),last=await (await group('snapshots',50)).json();
+ assert.equal(first.items.length,50);assert.equal(last.items.length,3);assert.equal(first.items[0].old_backup,0);
+ const remove=id=>f.call('backup',{method:'POST',body:{id}});
+ assert.equal((await remove('backup-52')).status,409);assert.equal((await remove('peer')).status,409);
+ assert.equal((await remove('backup-51')).status,200);
+ assert.equal(before.usage.records-(await list()).usage.records,first.items[1].bytes);
+ assert.equal((await remove('backup-51')).status,409);
+});
+
+test('workflow version deletion immediately releases only unshared snapshot chunks',async()=>{
+ const f=await fixture(),db=f.DB.raw;
+ db.exec("INSERT INTO saved_flows(id,workspace_id,name,latest_version) VALUES('flow','storage-w1','Test',3)");
+ const manifest=snapshot=>JSON.stringify({format:'leadintel-workspace-records-v1',snapshot});
+ for(const [v,snapshot] of [[1,'shared'],[2,'unique'],[3,'shared']]){
+  db.prepare("INSERT INTO saved_flow_versions(workspace_id,flow_id,version,name,payload_json,config_json,created_by) VALUES('storage-w1','flow',?,'Test',?,'{}','storage-owner')").run(v,manifest(snapshot));
+  db.prepare("INSERT OR IGNORE INTO workspace_payload_records VALUES('storage-w1',?,0,'reference content')").run(snapshot);
+ }
+ const del=version=>f.call('version',{method:'POST',body:{flow_id:'flow',version}});
+ assert.equal((await del(3)).status,409);
+ assert.equal((await del(1)).status,200);
+ assert.ok(db.prepare("SELECT 1 FROM workspace_payload_records WHERE snapshot_id='shared'").get());
+ const before=(await getStorageStatus(f.env,'storage-w1')).records.used_bytes;
+ assert.equal((await del(2)).status,200);
+ assert.ok(!(db.prepare("SELECT 1 FROM workspace_payload_records WHERE snapshot_id='unique'").get()));
+ assert.ok((await getStorageStatus(f.env,'storage-w1')).records.used_bytes<before);
+});
