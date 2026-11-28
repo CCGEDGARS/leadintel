@@ -9,7 +9,7 @@ function mount({authenticated=true,fetcher}={}){
  w.eval(fs.readFileSync(file,'utf8'));return {w,calls};
 }
 test('authenticated settings show real usage and included/upgrade amounts without pretending checkout is active',async()=>{
- const {w}=mount();try{await w.LeadIntelStorage.refresh();const card=w.document.getElementById('workspace-storage-card');assert.match(card.textContent,/4 MB/);assert.match(card.textContent,/100 MB/);assert.match(card.textContent,/1 GB/);assert.match(card.textContent,/500 MB/);assert.match(card.textContent,/10 GB/);card.querySelector('[data-storage-action="checkout"]').click();assert.match(card.textContent,/awaiting billing setup/);card.querySelector('[data-storage-action="portal"]').click();assert.match(card.textContent,/Stripe billing setup is pending/);}finally{w.close();}
+ const {w}=mount();try{await w.LeadIntelStorage.refresh();const card=w.document.getElementById('workspace-storage-card');assert.match(card.textContent,/4 MB/);assert.match(card.textContent,/100 MB/);assert.match(card.textContent,/1 GB/);assert.match(card.textContent,/500 MB/);assert.match(card.textContent,/10 GB/);assert.equal(card.querySelector('[data-storage-action="checkout"]'),null);assert.equal(card.querySelector('[data-storage-action="portal"]'),null);assert.match(card.textContent,/awaiting billing setup/);}finally{w.close();}
 });
 test('a public shared link requests no storage data and never shows another account usage',async()=>{
  const {w,calls}=mount({authenticated:false});try{await w.LeadIntelStorage.refresh();assert.equal(calls.length,0);assert.match(w.document.getElementById('workspace-storage-card').textContent,/Sign in/);assert.equal(w.document.querySelector('progress'),null);}finally{w.close();}
@@ -23,7 +23,7 @@ test('a late response from another workspace cannot overwrite the new user stora
 });
 test('temporary Stripe outage keeps usage visible and explains disabled billing in yellow',async()=>{
  const {w}=mount({fetcher:async()=>({ok:true,json:async()=>payload('w1',{billing:{setup_required:false,checkout_ready:false,can_upgrade:false,can_manage:false,payment_issue:false,available:false,message:'Storage billing is temporarily unavailable. Your storage usage and saved data remain available.'}})})});
- try{await w.LeadIntelStorage.refresh();const card=w.document.getElementById('workspace-storage-card');assert.match(card.textContent,/4 MB/);assert.match(card.textContent,/billing is temporarily unavailable/);assert.ok(card.classList.contains('is-warning'));assert.equal(card.classList.contains('is-error'),false);card.querySelector('[data-storage-action="checkout"]').click();assert.match(card.textContent,/Stripe checkout is temporarily unavailable/);assert.ok(w.LeadIntelStorage.attentionItems().some(item=>item.id==='storage-billing-connection'&&item.severity==='recommendation'));}finally{w.close();}
+ try{await w.LeadIntelStorage.refresh();const card=w.document.getElementById('workspace-storage-card');assert.match(card.textContent,/4 MB/);assert.match(card.textContent,/billing is temporarily unavailable/);assert.ok(card.classList.contains('is-warning'));assert.equal(card.classList.contains('is-error'),false);assert.equal(card.querySelector('[data-storage-action="checkout"]'),null);assert.ok(card.querySelector('[data-storage-action="refresh"]'));assert.ok(w.LeadIntelStorage.attentionItems().some(item=>item.id==='storage-billing-connection'&&item.severity==='recommendation'));}finally{w.close();}
 });
 test('platform admin opens workspace limits inside storage and a usage refresh retains edits',async()=>{
  const {w}=mount();try{
@@ -39,5 +39,18 @@ test('platform admin opens workspace limits inside storage and a usage refresh r
   assert.equal(field.value,'500');field.value='550';
   await w.LeadIntelStorage.refresh();
   assert.equal(w.document.querySelector('[name="plus_records_limit"]').value,'550');
+ }finally{w.close();}
+});
+
+test('owners see the billing action for their current plan beside file management',async()=>{
+ let plus=false;
+ const {w}=mount({fetcher:async()=>({ok:true,json:async()=>payload('w1',{plan:{key:plus?'plus':'included',name:plus?'Storage Plus':'Included'},billing:{can_upgrade:!plus,can_manage:plus,checkout_ready:true}})})});
+ try{
+  const actions=()=>Array.from(w.document.querySelectorAll('.storage-actions button'),b=>b.dataset.storageAction);
+  await w.LeadIntelStorage.refresh();
+  assert.deepEqual(actions(),['checkout','manage']);
+  plus=true;
+  await w.LeadIntelStorage.refresh();
+  assert.deepEqual(actions(),['portal','manage']);
  }finally{w.close();}
 });
