@@ -1,4 +1,4 @@
-import './website-scanning.js?v=20261119-domain-identity-v1&management=1&search-strategy=20261127-v1&single-scan=1&ranked-scan=1';
+import './website-scanning.js?v=20261119-domain-identity-v1&management=1&search-strategy=20261127-v1&single-scan=1&ranked-scan=1&fresh-scans=20261128-v1';
 import './website-scanning-handoff.js?v=20261111-contacts-v1';
 import './website-contact-ui.js?v=20261125-v3-identity&paid-feedback=1&public-coverage=1&research-reading=20261126-v1&management=1&management-coverage=20261127-v1&search-strategy=20261127-v1&single-scan=1&phone-sequence=1';
 (function(root){
@@ -45,14 +45,14 @@ function openRankedBuyers(rows,{restoreOnly=false}={}){
  let panel=$('website-buyer-results');
  if(!panel){panel=d.createElement('section');panel.id='website-buyer-results';panel.className='website-contact-results';$('website-scanning-workspace').append(panel);}
  const current=()=>scope()===ticket&&snapshot?.id===scanId&&mode==='find';
- root.LeadIntelDiscoveryUI.openWebsiteBuyers(rows,panel,current,{restoreOnly});
+ root.LeadIntelDiscoveryUI.openWebsiteBuyers(rows,panel,current,{restoreOnly,scanId:snapshot.scopedBuyers?scanId:null,legacyScan:!snapshot.scopedBuyers});
  panel.scrollIntoView?.({behavior:'smooth',block:'start'});
 }
 function close(){closeContacts();$('website-scanning-workspace').hidden=true;$('website-scanning-open').hidden=false;$('website-scanning-open').setAttribute('aria-expanded','false');$('website-scanning-open').focus();}
 function render(){const area=$('website-scanning-results');if(!area)return;area.hidden=mode!=='find';$('website-scanning-monitor').hidden=mode!=='monitor';d.querySelectorAll('[data-scan-mode]').forEach(n=>n.setAttribute('aria-pressed',String(n.dataset.scanMode===mode)));if(mode!=='find')return;
  const rows=snapshot?.rows||[],selected=S.selectedRows(rows,{fitOnly:snapshot?.fitOnly}),checked=rows.filter(r=>r.identityStatus==='verified').length,saved=rows.filter(r=>r.crmId).length,history=collection().items;
  const button=(action,label,disabled=false,extra='')=>'<button class="'+(['scan','buyers'].includes(action)?'primary-btn':'secondary-btn')+'" type="button" data-scan-action="'+action+'" '+(disabled?'disabled':'')+' '+extra+'>'+label+'</button>';
- area.innerHTML='<h4>Step 2 · Fast research</h4><p>Scan a company website or directory, then choose Find buyers to research decision-makers.</p><div class="website-scan-form"><label>Website URL<input id="website-scanning-url" type="url" placeholder="https://example.com" value="'+esc(urlDraft)+'" '+(busy?'disabled':'')+'></label><label>List name (optional)<input id="website-scanning-name" maxlength="100" value="'+esc(nameDraft)+'" '+(busy?'disabled':'')+'></label></div><p>Saved research → company and staff pages → Apollo Free people search → DuckDuckGo and public sources for missing details. Firecrawl can read a difficult page. Your connected AI can identify companies on a directory or unclear page. These two services may charge. Paid email and phone lookups need separate approval.</p><div class="website-scan-actions">'+button('scan',busy==='scan'?'Scanning website…':'Scan website',busy)+(busy?button('cancel','Cancel'): '')+'</div><p class="website-scan-status" id="website-scanning-status" role="status" aria-live="polite">'+esc(status)+'</p>'+(history.length?'<label>Saved scans (up to 3)<select id="website-scanning-history" '+(busy?'disabled':'')+'>'+history.map(v=>'<option value="'+esc(v.id)+'" '+(v.id===snapshot?.id?'selected':'')+'>'+esc(v.name||v.url)+' · '+v.rows.length+(v.rows.length===1?' company':' companies')+'</option>').join('')+'</select></label>':'')+
+ area.innerHTML='<h4>Step 2 · Fast research</h4><p>Scan a company website or directory, then choose Find buyers to research decision-makers.</p><div class="website-scan-form"><label>Website URL<input id="website-scanning-url" type="url" placeholder="https://example.com" value="'+esc(urlDraft)+'" '+(busy?'disabled':'')+'></label><label>List name (optional)<input id="website-scanning-name" maxlength="100" value="'+esc(nameDraft)+'" '+(busy?'disabled':'')+'></label></div><p>Saved research → company and staff pages → Apollo Free people search → DuckDuckGo and public sources for missing details. Firecrawl can read a difficult page. Your connected AI can identify companies on a directory or unclear page. These two services may charge. Paid email and phone lookups need separate approval.</p><div class="website-scan-actions">'+button('scan',busy==='scan'?'Scanning website…':'Scan website',busy)+(busy?button('cancel','Cancel'): '')+'</div><p class="website-scan-status" id="website-scanning-status" role="status" aria-live="polite">'+esc(status)+'</p>'+(history.length?'<label>Saved scans (up to 3)<select id="website-scanning-history" '+(busy?'disabled':'')+'> '+(snapshot?'':'<option value="" selected>Choose a saved scan</option>')+history.map(v=>'<option value="'+esc(v.id)+'" '+(v.id===snapshot?.id?'selected':'')+'>'+esc(v.name||v.url)+(v.createdAt?' · '+esc(new Date(v.createdAt).toLocaleString()):'')+' · '+v.rows.length+(v.rows.length===1?' company':' companies')+'</option>').join('')+'</select></label>':'')+
  (snapshot?'<div class="website-scan-counts"><span><strong>'+rows.length+'</strong> '+(rows.length===1?'company':'companies')+' extracted</span><span><strong>'+checked+'</strong> websites checked</span><span><strong>'+saved+'</strong> saved in CRM</span></div><p>Choose which companies to research for decision-makers.</p><small>Edit company names or websites when needed, then check the website again. Contact research uses public sources first; paid email and phone tools need separate approval.</small><div class="website-scan-actions">'+button('select-all','Select all',busy)+button('select-none','Clear selection',busy)+button('verify','Check selected websites',busy||!selected.length)+'</div><div class="website-scan-table-wrap"><table class="website-scan-table"><caption>Website scan results</caption><thead><tr><th>Select</th><th>Company &amp; website</th><th>Source evidence</th><th>Review</th></tr></thead><tbody>'+rows.map(r=>'<tr><td><input type="checkbox" aria-label="Select '+esc(r.name)+'" data-scan-selected="'+esc(r.id)+'" '+(r.selected?'checked':'')+' '+(busy?'disabled':'')+'></td><td><input aria-label="Company name '+esc(r.name)+'" data-scan-name="'+esc(r.id)+'" value="'+esc(r.name)+'" '+(busy?'disabled':'')+'><input aria-label="Website for '+esc(r.name)+'" data-scan-website="'+esc(r.id)+'" value="'+esc(r.website)+'" placeholder="Official website, or leave blank to search" '+(busy?'disabled':'')+'>'+(r.website?'<a href="'+esc(r.website)+'" target="_blank" rel="noopener noreferrer">Open website ↗</a>':'')+'<p class="website-scan-description"><research-reading>'+esc(r.description||'')+'</research-reading></p>'+linkDescription(r)+'</td><td><blockquote><research-reading>'+esc(r.quote)+'</research-reading></blockquote><a href="'+esc(r.sourceUrl)+'" target="_blank" rel="noopener noreferrer">Listing source ↗</a>'+(r.person?'<small>Listed person: '+esc(r.person)+' · role still needs verification</small>':'')+'</td><td><strong>'+({verified:'Website checked',unchecked:'Website not checked',unresolved:'Website unresolved'}[r.identityStatus]||'Website not checked')+'</strong><small>'+esc(r.identityEvidence)+'</small>'+button('remove','Remove',busy,'data-row-id="'+esc(r.id)+'"')+'</td></tr>').join('')+'</tbody></table></div><div class="website-scan-actions">'+button('save','Save selected to CRM',busy||!selected.length)+button('buyers','Find buyers',busy||!selected.length)+button('campaign','Prepare campaign',busy||!selected.length)+button('delete','Delete this scan',busy)+'</div><p>'+selected.length+' selected. Find buyers ranks up to four of ten managers using saved evidence and your connected web and AI researchers. Research providers may charge for usage. Check websites before saving or preparing a campaign separately. Company and message approval remain separate.</p>':'');
 }
 async function request(path,body,options={}){const workspace=bridge()?.workspace?.id;if(!workspace||!bridge()?.session?.authenticated)throw Error('Sign in before scanning websites.');const response=await root.fetch('https://leadintel-api.edgars-7e7.workers.dev'+path+(path.includes('?')?'&':'?')+'workspace_id='+encodeURIComponent(workspace),{method:'POST',credentials:'include',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify(body),signal:options.signal});const payload=await response.json();if(!response.ok)throw Error(payload.error||'Research service returned '+response.status);return payload;}
@@ -62,38 +62,32 @@ async function act(action,id){
  if(action==='cancel'){controller?.abort();return;}if(busy)return;
  if(action==='select-all'||action==='select-none'){closeContacts();snapshot?.rows.forEach(r=>r.selected=action==='select-all');persist();render();return;}
  if(action==='remove'){closeContacts();snapshot.rows=snapshot.rows.filter(r=>r.id!==id);persist();render();return;}
- if(action==='delete'){closeContacts();const deleteScope=scope(),deleteId=snapshot?.id;if(!(await (root.LeadIntelDialogs?.confirm('Delete this saved scan? Companies already saved in CRM will remain available.')??false)))return;if(deleteScope!==scope()||snapshot?.id!==deleteId){status='Delete canceled because the active workspace or scan changed.';render();return;}const state=read(),c=collection();c.items=c.items.filter(v=>v.id!==deleteId);c.activeId=c.items[0]?.id||'';state.websiteScans=c;root.localStorage.setItem(KEY,JSON.stringify(state));root.dispatchEvent(new root.CustomEvent('leadintel:workspace-dirty'));snapshot=c.items[0]||null;urlDraft=snapshot?.url||'';nameDraft=snapshot?.name||'';status='Scan deleted. CRM records were preserved.';render();return;}
+ if(action==='delete'){closeContacts();const deleteScope=scope(),deleteId=snapshot?.id;if(!(await (root.LeadIntelDialogs?.confirm('Delete this saved scan? Its CRM companies and saved buyer research are kept.')??false)))return;if(deleteScope!==scope()||snapshot?.id!==deleteId){status='Delete canceled because the active workspace or scan changed.';render();return;}const state=read(),c=collection();c.items=c.items.filter(v=>v.id!==deleteId);c.activeId=c.items[0]?.id||'';state.websiteScans=c;root.localStorage.setItem(KEY,JSON.stringify(state));root.dispatchEvent(new root.CustomEvent('leadintel:workspace-dirty'));snapshot=c.items[0]||null;urlDraft=snapshot?.url||'';nameDraft=snapshot?.name||'';status='Scan deleted. CRM records were preserved.';render();return;}
  const ticket=scope();if(!ticket){status='Sign in before scanning websites.';render();return;}context=ticket;const current=()=>ticket===scope();const operation=new AbortController();controller=operation;const timer=setTimeout(()=>operation.abort(),180000);busy=action;status='Preparing…';render();const progress=(message,row)=>{if(!current())return;status=message;if(row&&snapshot){const i=snapshot.rows.findIndex(v=>v.id===row.id);if(i>=0)snapshot.rows[i]={...row};persist();}render();};
  try{
  if(action==='scan'){
   const url=S.safeUrl(urlDraft);if(!url)throw Error('Enter a public source page URL.');
   closeContacts();
-  const saved=collection().items.find(item=>item.url===url&&item.rows.length&&(
-   item.fastResearch&&item.rows[0]?.crmId||
-   item.rows.every(row=>row.crmId&&row.identityStatus==='verified')||
-   Date.now()-Date.parse(item.createdAt)<30*86400000));
+  const scanId=root.crypto.randomUUID();
+  snapshot=null;render();
   const options={signal:operation.signal,isCurrent:current};
-  let result;
-  if(saved){snapshot=saved;}
-  else{
-   progress('Reading the website and identifying companies…');
-   result=await S.bounded((async()=>{
-    let scan;
-    do{
-     if(!current()||options.signal.aborted)throw Error('Scan canceled.');
-     scan=await request('/api/websites/contacts',{action:'scan-website',url},options);
-     if(scan.pending){
-      progress('A scan of this website is already running. Waiting for its results…');
-      await S.bounded(new Promise(resolve=>setTimeout(resolve,1500)),options);
-     }
-    }while(scan.pending);
-    return scan;
-   })(),{...options,timeout:100000});
-   if(!current()||controller.signal.aborted)return;
-   snapshot=S.normalizeSnapshot({id:root.crypto.randomUUID(),name:nameDraft||(result.fastResearch?result.rows[0].name:'Website prospects'),createdAt:new Date().toISOString(),managementLimit:10,...result});
-  }
+  progress('Reading the website and identifying companies…');
+  const result=await S.bounded((async()=>{
+   let scan;
+   do{
+    if(!current()||options.signal.aborted)throw Error('Scan canceled.');
+    scan=await request('/api/websites/contacts',{action:'scan-website',url,scanId},options);
+    if(scan.pending){
+     progress('A scan of this website is already running. Waiting for its results…');
+     await S.bounded(new Promise(resolve=>setTimeout(resolve,1500)),options);
+    }
+   }while(scan.pending);
+   return scan;
+  })(),{...options,timeout:100000});
+  if(!current()||controller.signal.aborted)return;
+  snapshot=S.normalizeSnapshot({id:scanId,scopedBuyers:true,name:nameDraft||(result.fastResearch?result.rows[0].name:'Website prospects'),createdAt:new Date().toISOString(),managementLimit:10,...result});
   const count=snapshot.rows.length,summary=count===0?'No companies found':count===1?'1 company found':count+' companies found';
-  status=(saved?'Saved scan opened. ':'Page scan complete. ')+summary+'. '+(count?'Review the website scan results below. Choose Find buyers when ready. ':'')+(saved?'':result.notice||'');
+  status='Page scan complete. '+summary+'. '+(count?'Review the website scan results below. Choose Find buyers when ready. ':'')+(result.notice||'');
   snapshot.notice=status;persist();
  }
  else if(action==='verify'){const selected=S.selectedRows(snapshot?.rows||[],{fitOnly:snapshot?.fitOnly});const checked=await runner.verify(selected,{signal:controller.signal,isCurrent:current,onProgress:progress,timeout:25000});if(!current())throw Error('Workspace changed.');const map=new Map(checked.map(r=>[r.id,r]));snapshot.rows=snapshot.rows.map(r=>map.get(r.id)||r);status='Website checks finished. '+checked.filter(r=>r.identityStatus==='verified').length+' of '+checked.length+' verified; unresolved companies remain available for review.';snapshot.notice=status;persist();}

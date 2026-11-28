@@ -204,9 +204,9 @@ test('Step 2 shows company evidence on scan and preserves it across reopening wi
  observing=false;const reopened=await open();
  assert.equal(await reopened.locator('#website-scanning-url').inputValue(),homepage);
  observing=true;await reopened.locator('[data-scan-action="scan"]').click();
- await reopened.waitForFunction(()=>document.querySelector('#website-scanning-status')?.textContent.includes('Saved scan opened'));
+ await reopened.waitForFunction(()=>document.querySelector('#website-scanning-status')?.textContent.includes('Page scan complete') && document.querySelector('#website-scanning-history')?.options.length===2);
  assert.equal(f.DB.raw.prepare('SELECT count(*) n FROM website_contact_jobs').get().n,0);
- assert.deepEqual(metered,[]);assert.deepEqual(reads,[homepage]);
+ assert.deepEqual(metered,[]);assert.deepEqual(reads,[homepage,homepage]);
  await reopened.locator('[data-scan-action=buyers]').click();
  await reopened.locator('#website-buyer-results').waitFor();
  assert.equal(f.DB.raw.prepare('SELECT count(*) n FROM additional_contact_attempts').get().n,0);

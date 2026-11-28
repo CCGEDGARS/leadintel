@@ -168,6 +168,18 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
    }
   };
   const read=async url=>task('read',C.url(url),async()=>{
+   if(input.websiteScanId){
+    const receipt=await stmt(env,`SELECT t.result_json FROM buyer_research_jobs j JOIN buyer_research_tasks t ON t.job_id=j.id
+     WHERE j.workspace_id=? AND j.domain=? AND j.id<>? AND json_extract(j.input_json,'$.candidate.crmId')=?
+     AND json_extract(j.input_json,'$.candidate.company')=? AND t.task_key=? AND t.kind='read' AND t.status='complete'
+     AND t.updated_at>=datetime('now','-30 days') AND datetime(json_extract(t.result_json,'$.extractedAt')) BETWEEN datetime('now','-30 days') AND datetime('now')
+     ORDER BY t.updated_at DESC LIMIT 1`,row.workspace_id,row.domain,row.id,candidate.crmId||'',candidate.company,await sha256('read|'+C.url(url))).first();
+    const page=receipt&&parse(receipt.result_json);
+    if(page?.sourceRead&&page.markdown&&D.buyerSourceReadLocation(candidate,url,page)){
+     observe({provider:'saved',operation:'extract',status:'reused',results:1});
+     return {...page,reused:true,researchTrace:[{provider:'saved',operation:'extract',status:'reused',results:1}]};
+    }
+   }
    let raw;try{raw=await (services.read||(siteOnly?((url,signal)=>fetchDirectPublicPage(url,{signal:AbortSignal.any([signal,AbortSignal.timeout(8000)])})):null)||((url,signal)=>readPublicBuyerPage(env,row.workspace_id,url,{signal,totalTimeoutMs:18000,directTimeoutMs:3000,firecrawlTimeoutMs:12000,preferFirecrawl:input.fullResearch&&D.canonicalDomain(url)===row.domain,meter:creditMeter})))(url,controller.signal);}catch(error){for(const entry of error.researchTrace||[])observe(entry);throw error;}
    const page=raw?.data||raw||{};
    if(raw?.success===false||page.error||Number(page.metadata?.statusCode)>=400)throw Error('Source read unavailable');

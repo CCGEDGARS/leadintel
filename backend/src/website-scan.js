@@ -28,7 +28,9 @@ export async function scanWebsite(request,env,context,body){
  if(!url)throw contactError('Enter a public website URL.',400);
  const guard=await contactRequestGuard(request,env,context);
  const scope={...context,guard,writeAuthority:guard.writeAuthority};
- const key=await sha256(url),token=crypto.randomUUID(),now=Date.now();
+ const scanId=body.scanId;
+ if(scanId!==undefined&&(typeof scanId!=='string'||!(/^[a-zA-Z0-9-]{1,100}$/).test(scanId)))throw contactError('Invalid scan ID.',400);
+ const key=await sha256(scanId?JSON.stringify([url,scanId]):url),token=crypto.randomUUID(),now=Date.now();
  await guard();
  await contactSql(env,'DELETE FROM website_scan_requests WHERE expires_at<=?',now).run();
  const claim=await contactSql(env,'INSERT INTO website_scan_requests(workspace_id,url_hash,token,expires_at) VALUES(?,?,?,?) ON CONFLICT DO NOTHING',scope.workspaceId,key,token,now+120000).run();
@@ -43,7 +45,7 @@ export async function scanWebsite(request,env,context,body){
   await guard();return result;
  }
  try{
-  const scan=await identifyWebsite(request,env,scope,{url,domain});
+  const scan=await identifyWebsite(request,env,scope,{url,domain,fresh:Boolean(scanId)});
   await guard();
   await contactSql(env,'UPDATE website_scan_requests SET result_json=?,expires_at=? WHERE workspace_id=? AND url_hash=? AND token=?',JSON.stringify(scan),Date.now()+120000,scope.workspaceId,key,token).run();
   return scan;
@@ -53,11 +55,11 @@ export async function scanWebsite(request,env,context,body){
  }
 }
 
-async function identifyWebsite(request,env,scope,{url,domain}){
+async function identifyWebsite(request,env,scope,{url,domain,fresh}){
  const {guard,workspaceId}=scope;
  const known=await findCrmCompanyByDomain(env.DB,workspaceId,domain);
  // Only a prior scan of this exact company page can establish its type without a new read.
- const cached=await fastCompanyPage(env,workspaceId,url,domain);
+ const cached=!fresh&&await fastCompanyPage(env,workspaceId,url,domain);
  let metered=true;
  try{await allowFullResearch(env,workspaceId);}catch(error){if(error.code!=='FULL_RESEARCH_DISABLED')throw error;metered=false;}
  await guard();

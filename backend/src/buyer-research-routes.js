@@ -19,9 +19,9 @@ export async function handleBuyerResearchRoute(request,env,cors={},ctx){
  const checked=await access(request,env,workspaceId,request.method==='POST');if(checked.error)return json({error:checked.error},checked.status,cors);
  try{
   if(request.method==='GET'){
-   const job=await readBuyerJob(env,workspaceId,{id:url.searchParams.get('job_id')||undefined,domain:url.searchParams.get('domain')});
+   const job=await readBuyerJob(env,workspaceId,{id:url.searchParams.get('job_id')||undefined,domain:url.searchParams.get('domain'),websiteScanId:url.searchParams.get('scan_id'),legacyScan:url.searchParams.get('legacy_scan')==='1'});
    const result=await publicBuyerJob(env,job,{recoverRetained:!url.searchParams.get('job_id')});
-   if(result&&url.searchParams.get('restore')==='1'&&!url.searchParams.get('job_id')){result.savedBuyerResearch=await savedBuyerResearchReceipts(env,job);result.savedBuyerRoster=await savedBuyerRoster(env,job);}
+   if(result&&!result.input.websiteScanId&&url.searchParams.get('restore')==='1'&&!url.searchParams.get('job_id')){result.savedBuyerResearch=await savedBuyerResearchReceipts(env,job);result.savedBuyerRoster=await savedBuyerRoster(env,job);}
    return json({job:result},200,cors);
   }
   if(Number(request.headers.get('Content-Length')||0)>262144)return json({error:'Buyer context exceeds the request limit'},413,cors);
