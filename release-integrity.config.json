@@ -10259,6 +10259,8 @@
       "contains": [
         "Manage storage",
         "data-auto-reports",
+        "filesLoaded=true",
+        "Saving preferences could not be loaded.",
         "expectedRevision:file.revision",
         "LeadIntelDialogs?.confirm",
         "reportCopiesAllowed",
@@ -10310,7 +10312,7 @@
       "url": "/customer/",
       "status": 200,
       "contains": [
-        "workspace-storage-management.js?v=20261119-v1",
+        "workspace-storage-management.js?v=20261119-v1&inventory=20261128&d1-recovery=1",
         "storage-management=20261119-v1",
         "storage-saving=20261119-v1"
       ]

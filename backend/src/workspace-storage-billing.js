@@ -53,8 +53,8 @@ async function authorize(request,env,workspace,owner){
 }
 export async function handleStorageRoute(request,env,cors={},options={}){
  const url=new URL(request.url);if(!url.pathname.startsWith('/api/storage/'))return null;
+ const action=url.pathname.slice('/api/storage/'.length),workspace=url.searchParams.get('workspace_id')||'';
  try{
-  const action=url.pathname.slice('/api/storage/'.length),workspace=url.searchParams.get('workspace_id')||'';
   if(!['status','checkout','portal','files','backup','version','draft','preferences'].includes(action))return json({error:'Not found'},404,cors);
   const read=request.method==='GET'&&['status','files','preferences'].includes(action);
   if(!read&&(request.method!=='POST'||!['checkout','portal','backup','version','draft','preferences'].includes(action)))return json({error:'Method not allowed'},405,cors);
@@ -147,7 +147,10 @@ export async function handleStorageRoute(request,env,cors={},options={}){
    await stmt(env,'UPDATE workspace_storage_accounts SET stripe_checkout_id=?,stripe_checkout_price_id=?,stripe_checkout_url=?,stripe_checkout_expires=?,checkout_token=NULL,checkout_lease=0 WHERE workspace_id=? AND checkout_token=?',session.id,priceId,session.url,session.expires_at,workspace,token).run();
    return json({url:session.url},200,cors);
   }catch(cause){await stmt(env,'UPDATE workspace_storage_accounts SET checkout_token=NULL,checkout_lease=0 WHERE workspace_id=? AND checkout_token=?',workspace,token).run();throw cause;}
- }catch(cause){return storageErrorResponse(cause,cors)||json({error:cause.status?cause.message:'Storage billing is temporarily unavailable. Retry from Settings; your saved data is preserved.'},cause.status||503,cors);}
+ }catch(cause){
+  const fallback={files:'Storage inventory could not be loaded. Refresh files to try again.',preferences:'Storage saving preferences are unavailable.',backup:'The backup could not be removed.',draft:'The draft could not be removed.',version:'The workflow version could not be removed.',status:'Storage usage could not be loaded.'};
+  return storageErrorResponse(cause,cors)||json({error:cause.status?cause.message:fallback[action]||'Storage billing is temporarily unavailable. Retry from Settings; your saved data is preserved.'},cause.status||503,cors);
+ }
 }
 const eventTypes=new Set(['checkout.session.completed','checkout.session.async_payment_succeeded','customer.subscription.created','customer.subscription.updated','customer.subscription.deleted','customer.subscription.paused','customer.subscription.resumed','invoice.paid','invoice.payment_failed','invoice.payment_action_required','invoice.marked_uncollectible','invoice.voided']);
 async function applyEvent(env,event,stripe){

@@ -31,9 +31,10 @@ function scope(model){
 }
 export async function storageBreakdown(env,workspace){
  const groups=Object.entries(storageModels);
- const rows=[];
- for(let i=0;i<groups.length;i+=16){
-  const sql=groups.slice(i,i+16).map(([key,m])=>"SELECT '"+key+"' AS key,COUNT(*) AS count,COALESCE(SUM("+size(m)+"),0) AS bytes FROM "+key+" r WHERE "+scope(m)).join(' UNION ALL ');
+ // D1 permits five SELECT terms per compound statement.
+ const termsPerQuery=5,rows=[];
+ for(let i=0;i<groups.length;i+=termsPerQuery){
+  const sql=groups.slice(i,i+termsPerQuery).map(([key,m])=>"SELECT '"+key+"' AS key,COUNT(*) AS count,COALESCE(SUM("+size(m)+"),0) AS bytes FROM "+key+" r WHERE "+scope(m)).join(' UNION ALL ');
   rows.push(...(await stmt(env,sql,workspace).all()).results);
  }
  return rows.filter(row=>row.bytes>0).map(row=>({...row,label:label(row.key),meter:storageModels[row.key].meter})).sort((a,b)=>b.bytes-a.bytes);
