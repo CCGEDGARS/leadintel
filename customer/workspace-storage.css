@@ -4,3 +4,9 @@
 .storage-management-dialog{width:min(820px,94vw);max-height:88vh;padding:28px;border:1px solid #d4e3dc;border-radius:20px;color:#193d33;background:#fff;overflow:auto;box-sizing:border-box}.storage-management-dialog::backdrop{background:#17392f80}.storage-management-dialog h2{margin:0}.storage-management-dialog p{line-height:1.6;color:#52695f}.storage-management-dialog [data-storage-close]{padding:10px 14px;border:1px solid #d4e3dc;border-radius:10px;background:white;cursor:pointer}.storage-saving{padding:18px;background:#f0f7f3;border-radius:14px;margin:18px 0}.storage-saving label{display:flex;align-items:center;gap:10px}.storage-saving input{width:18px;height:18px}.storage-file-list{display:grid;gap:10px;margin:18px 0}.storage-file{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px;border:1px solid #d4e3dc;border-radius:12px}.storage-file>div:first-child{min-width:0;overflow-wrap:anywhere}.storage-file small{display:block;margin-top:6px;color:#52695f}.storage-file-actions{display:flex;gap:8px;flex-shrink:0}.storage-delete{color:#a83029!important}.storage-management-dialog button:disabled{opacity:.55;cursor:not-allowed}@media(max-width:600px){.storage-management-dialog{padding:18px}.storage-file{align-items:flex-start;flex-direction:column}.storage-file-actions{flex-wrap:wrap}}
 
 .storage-management-dialog [data-storage-message][data-error="true"]{color:#a83029;background:#fff0ee;padding:12px;border-radius:10px}
+
+[data-plan-editor]{margin-top:1rem}
+[data-plan-editor] fieldset{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,12rem),1fr));gap:1rem;border:0;padding:0;margin:1rem 0}
+[data-plan-editor] label{display:grid;gap:.3rem}
+[data-plan-editor] [hidden]{display:none}
+[data-plan-editor] input,[data-plan-editor] select,[data-plan-editor] button{padding:.55rem;font:inherit;border:1px solid #c6d6cf;border-radius:.5rem;background:white;color:inherit}

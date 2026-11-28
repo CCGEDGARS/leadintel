@@ -54,7 +54,7 @@
   <link rel="stylesheet" href="../customer/confirmation-dialog.css">
   <script defer src="../customer/confirmation-dialog.js"></script>
   <script defer src="admin.js?v=20261026-v2"></script>
-  <script defer src="storage-plans.js"></script>
+  <script defer src="storage-plans.js?v=20261128-inline"></script>
 </head>
 <body>
   <div class="page-shell">
@@ -80,21 +80,7 @@
       <div id="admin-app" class="admin" hidden>
         <section class="admin-card" id="storage">
           <h2>Storage plans and workspace limits</h2>
-          <label>Apply changes to<select id="storage-scope" disabled><option value="">Standard plans · all workspaces using defaults</option></select></label>
-          <p id="storage-context"></p>
-          <form id="storage-editor">
-            <fieldset disabled>
-              <label>Included CRM data (MB)<input name="included_records_limit" type="number" min="0.000001" step="0.000001" required></label>
-              <label>Included files (GB)<input name="included_files_limit" type="number" min="0.000000001" step="0.000000001" required></label>
-              <label>Plus CRM data (MB)<input name="plus_records_limit" type="number" min="0.000001" step="0.000001" required></label>
-              <label>Plus files (GB)<input name="plus_files_limit" type="number" min="0.000000001" step="0.000000001" required></label>
-              <label id="storage-price">Plus monthly price (EUR)<input name="monthly_amount_minor" type="number" min="0.01" max="999999.99" step="0.01" placeholder="Use configured Stripe price"></label>
-            </fieldset>
-            <button id="storage-save" type="submit" class="primary-btn" disabled>Save limits</button>
-            <button id="storage-reset" type="button" class="admin-btn" hidden>Use standard limits</button>
-            <button id="storage-reload" type="button" class="admin-btn">Reload settings</button>
-          </form>
-          <p id="storage-status" class="admin-status" role="status"></p>
+          <div id="storage-plan-settings"></div>
         </section>
         <section class="admin-card">
           <h1>Invite a customer</h1>

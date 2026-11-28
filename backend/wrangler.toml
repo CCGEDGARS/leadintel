@@ -11,12 +11,11 @@ WORKSPACE_STORAGE_ENABLED = "true"
 COMPANY_LIST_LANES = "8"
 STRIPE_ACCOUNT_ID = "acct_1Gn4gwGqAtOWOEjZ"
 STRIPE_LIVEMODE = "true"
-STRIPE_STORAGE_BILLING_ENABLED = "false"
-# Enable only after Price, VAT policy and restricted Worker secrets are configured.
-# STRIPE_STORAGE_TAX_POLICY_READY = "true" after merchant tax review
-# STRIPE_STORAGE_AUTOMATIC_TAX = "true" requires active Stripe Tax registration/settings and product code
-# STRIPE_STORAGE_PLUS_PRICE_ID
-# STRIPE_STORAGE_TAX_BEHAVIOR = "inclusive" or "exclusive" (must match configured Price)
+STRIPE_STORAGE_BILLING_ENABLED = "true"
+STRIPE_STORAGE_TAX_POLICY_READY = "true"
+STRIPE_STORAGE_AUTOMATIC_TAX = "true"
+STRIPE_STORAGE_PLUS_PRICE_ID = "price_1UPhkBGqAtOWOEjZskSnAlVv"
+STRIPE_STORAGE_TAX_BEHAVIOR = "inclusive"
 # Secrets: STRIPE_RESTRICTED_KEY, STRIPE_WEBHOOK_SECRET
 
 WRITING_REFERENCES_ALLOWED_WORKSPACES = "edgars-latvia"

@@ -66,9 +66,9 @@ export async function handleStorageRoute(request,env,cors={},options={}){
     try{status.upgrade.price=(await catalogue(env,options.stripe||client(env))).quote;status.billing.available=true;}
     catch{status.billing.available=false;status.billing.checkout_ready=false;status.billing.can_upgrade=false;status.billing.can_manage=false;status.billing.message='Storage billing is temporarily unavailable. Your storage usage and saved data remain available.';}
    }
-   if(status.billing.setup_required){
+   if(!status.upgrade.price){
     const settings=await env.DB.prepare('SELECT monthly_amount_minor FROM storage_plan_settings WHERE id=1').first();
-    if(settings.monthly_amount_minor)status.upgrade.price={amount_minor:settings.monthly_amount_minor,currency:'eur',interval:'month'};
+    status.upgrade.price={amount_minor:settings.monthly_amount_minor??900,currency:'eur',interval:'month',tax_behavior:env.STRIPE_STORAGE_TAX_BEHAVIOR||'inclusive'};
    }
    return json(status,200,cors);
   }

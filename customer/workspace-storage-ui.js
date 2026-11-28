@@ -20,24 +20,35 @@
   return items;
  }
  function meter(label,m){const used=bytes(m.used_bytes),limit=bytes(m.limit_bytes);return `<div class="storage-meter ${Number(m.percent)>=95?'is-critical':Number(m.percent)>=80?'is-warning':''}"><div><strong>${label}</strong><span>${m.measured===false?'Calculating existing usage…':`${used} / ${limit} · ${Number(m.percent)||0}% used`}</span></div>${m.measured===false?'':`<progress max="${Number(m.limit_bytes)}" value="${Math.min(Number(m.used_bytes),Number(m.limit_bytes))}" aria-label="${label}: ${used} of ${limit}"></progress>`}</div>`;}
- function priceLabel(status){const price=status.upgrade?.price;if(!price)return 'Monthly price will appear when billing is activated.';return `${new Intl.NumberFormat('en-IE',{style:'currency',currency:price.currency}).format(price.amount_minor/100)}/month${price.tax_behavior==='inclusive'?' · tax included':price.tax_behavior==='exclusive'?' · before applicable tax':''}`;}
+ function priceLabel(status){const price=status.upgrade?.price;if(!price)return 'Price unavailable';return `${new Intl.NumberFormat('en-IE',{style:'currency',currency:price.currency}).format(price.amount_minor/100)}/month${price.tax_behavior==='inclusive'?' · VAT included':price.tax_behavior==='exclusive'?' · before applicable tax':''}`;}
+ let view='',viewContext='';
  function render(){
   const host=document.getElementById('workspace-storage-card');if(!host)return;
   const status=scoped(),issues=attentionItems(),red=issues.some(x=>x.severity==='error');
   host.className='workspace-storage-card'+(red?' is-error':issues.length?' is-warning':'');
   const title=`<div class="storage-card-head"><div><span class="eyebrow">Your workspace</span><h3>Storage</h3></div><span class="storage-plan">${esc(status?.plan?.name||'Included')}</span></div>`;
   if(!signedIn()){host.innerHTML=title+'<p>Sign in to view your private storage usage.</p><p class="storage-note">Workspace members share the storage allowance.</p>';return;}
-  host.innerHTML=title+`<p class="storage-note">CRM records and research use the data allowance. Uploaded files use the separate file allowance.</p>${status?meter('CRM & workspace data',status.records)+meter('Files',status.files):'<p role="status">Checking storage usage…</p>'}
+  const admin=bridge()?.session?.user?.platform_admin===true;
+  if(viewContext!==context())view='';
+  const editor=view==='plans'&&admin?host.querySelector('[data-plan-editor]'):null;
+  host.innerHTML=title+`${status?meter('CRM & workspace data',status.records)+meter('Files',status.files):'<p role="status">Checking storage usage…</p>'}
    ${status?.billing?.payment_issue?'<p class="storage-alert" role="alert">Storage payment needs attention. Update your payment method. Saved data is preserved.</p>':''}
    ${status&&(status.records.state==='full'||status.files.state==='full'||blockedContext===context())?'<p class="storage-alert" role="alert">The storage allowance blocks new growth. Upgrade or reduce stored content. Existing data remains readable.</p>':''}
    <p data-storage-connection class="${error?'is-warning':''}" role="status">${error?'Storage check could not connect. Retry; saved data is preserved.':''}</p>
    <div class="storage-upgrade"><strong>Storage Plus</strong><span>${status?bytes(status.upgrade.records_limit_bytes)+' of CRM/workspace data + '+bytes(status.upgrade.files_limit_bytes)+' of files':''}</span><small>${esc(status?priceLabel(status):'Checking upgrade availability…')}</small></div>
-   <p class="storage-note">Pay securely through Stripe. Extra capacity starts after payment is confirmed. AI and research credits are separate.</p>
-   ${status?.billing?.setup_required?'<p class="storage-setup">Billing setup is in progress. Included storage is available.</p>':''}
+
+
    ${status?.billing?.available===false?`<p class="storage-setup is-warning" role="status">${esc(status.billing.message||'Storage billing is temporarily unavailable. Your usage and saved data remain available.')}</p>`:''}
-   <div class="storage-actions"><button class="ai-settings-btn" data-storage-action="manage" type="button">Manage files &amp; saving</button><button class="ai-settings-btn primary" data-storage-action="checkout" type="button" ${busy||!status?.billing?.can_upgrade?'disabled':''}>${busy?'Opening…':'Upgrade storage'}</button><button class="ai-settings-btn" data-storage-action="portal" type="button" ${busy||!status?.billing?.can_manage?'disabled':''}>Manage billing</button><button class="ai-settings-btn" data-storage-action="refresh" type="button">Refresh usage</button></div>
-   ${bridge()?.session?.user?.platform_admin===true?`<a href="/admin/?workspace=${encodeURIComponent(bridge().workspace.id)}#storage">Edit storage plans and workspace limits</a>`:''}
+   <div class="storage-actions"><button class="ai-settings-btn" data-storage-action="manage" type="button">Manage files &amp; saving</button><button class="ai-settings-btn primary" data-storage-action="checkout" type="button" ${busy||!status||bridge().workspace.role!=='owner'?'disabled':''}>${busy?'Opening…':'Upgrade storage'}</button><button class="ai-settings-btn" data-storage-action="portal" type="button" ${busy||!status||bridge().workspace.role!=='owner'?'disabled':''}>Manage billing</button><button class="ai-settings-btn" data-storage-action="refresh" type="button">Refresh usage</button>${admin?'<button class="ai-settings-btn" type="button" data-storage-action="plans">Plans &amp; limits</button>':''}</div>
+   ${view==='plans'&&admin?'<div data-plan-editor></div>':''}
+   ${view==='portal'?'<p role="status">'+(status?.billing?.setup_required?'Stripe billing setup is pending.':status?.billing?.available===false?'Stripe billing is temporarily unavailable.':'This workspace has no Stripe billing account yet. A billing account is created at checkout.')+'</p>':''}
+   ${view==='checkout'?'<p role="status">'+(status?.plan?.key==='plus'?'Storage Plus is already active for this workspace.':status?.billing?.setup_required?'Stripe checkout is awaiting billing setup.': 'Stripe checkout is temporarily unavailable.')+'</p>':''}
    ${bridge()?.workspace?.role!=='owner'?'<small>Only the workspace owner can change its storage plan.</small>':''}`;
+  if(view==='plans'&&admin){
+   const slot=host.querySelector('[data-plan-editor]');
+   if(editor)slot.replaceWith(editor);
+   else root.LeadIntelStoragePlans.open(slot,bridge().workspace.id,apiBase+'/api/access/storage-plans',refresh);
+  }
  }
  function changed(){render();root.dispatchEvent(new root.CustomEvent('leadintel:storage-status-changed'));}
  async function refresh(){
@@ -54,7 +65,12 @@
  async function action(kind){
   if(kind==='refresh')return refresh();
   if(kind==='manage')return root.LeadIntelStorageManagement?.open();
-  const requested=context(),status=scoped();if(!requested||busy||bridge()?.workspace?.role!=='owner'||!(kind==='checkout'?status?.billing.can_upgrade:status?.billing.can_manage))return;
+  const requested=context(),status=scoped();
+  if(!requested||busy)return;
+  if(kind==='plans'&&bridge().session.user?.platform_admin){view=view==='plans'?'':'plans';viewContext=requested;render();return;}
+  if(!status||bridge().workspace.role!=='owner'||!['checkout','portal'].includes(kind))return;
+  if(!(kind==='checkout'?status.billing.can_upgrade:status.billing.can_manage)){view=kind;viewContext=requested;render();return;}
+  view='';
   busy=true;render();
   try{
    const response=await root.fetch(`${apiBase}/api/storage/${kind}?workspace_id=${encodeURIComponent(bridge().workspace.id)}`,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json',Accept:'application/json'},body:'{}'});
@@ -67,7 +83,7 @@
  }
  function mount(){
   const drawer=document.getElementById('ai-settings-drawer');if(!drawer||document.getElementById('workspace-storage-card'))return;
-  if(!document.querySelector('[data-workspace-storage-css]')){const css=document.createElement('link');css.rel='stylesheet';css.href='workspace-storage.css?v=20261119-management-v1';css.dataset.workspaceStorageCss='1';document.head.appendChild(css);}
+  if(!document.querySelector('[data-workspace-storage-css]')){const css=document.createElement('link');css.rel='stylesheet';css.href='workspace-storage.css?v=20261128-inline';css.dataset.workspaceStorageCss='1';document.head.appendChild(css);}
   const card=document.createElement('section');card.id='workspace-storage-card';card.setAttribute('aria-label','Workspace storage');
   const anchor=document.getElementById('communication-integration-heading')?.closest('section')||document.getElementById('ai-engine-summary');if(anchor)anchor.insertAdjacentElement('afterend',card);else drawer.appendChild(card);
   card.addEventListener('click',event=>{const button=event.target.closest('[data-storage-action]');if(button)void action(button.dataset.storageAction);});render();
