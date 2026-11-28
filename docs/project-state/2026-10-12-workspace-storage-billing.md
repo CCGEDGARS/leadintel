@@ -37,3 +37,5 @@ Use Cloudflare's documented wrangler d1 execute --remote --file import for pendi
 ### 28 November 2026 · Storage actions
 
 The card offers file management alongside the relevant owner action for checkout or billing. Plan administration is under More options. A failed availability check offers a retry and identifies restricted-key read permissions when Stripe reports a denial. Checkout with automatic tax allows Stripe to save both the billing address and business name. The storage billing and UI tests cover the owner actions and recovery after a denied tax-registration read.
+
+The customer card now has one plan action and no workspace picker, including for platform admins. The Files meter label opens file management. A successful book deletion refreshes usage from the server. Restricted-key checkout verifies the configured merchant-private price, product, mode and tax settings without requesting account-wide information. Signed webhook processing verifies the event mode, canonical Stripe objects, workspace customer mapping and permitted price.

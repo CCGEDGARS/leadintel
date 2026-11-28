@@ -2352,7 +2352,7 @@
         "data-storage-action=\"portal\"",
         "status.upgrade.records_limit_bytes",
         "status.upgrade.files_limit_bytes",
-        "LeadIntelStoragePlans.open",
+        "Buy storage",
         "Existing data remains readable",
         "Stripe checkout is awaiting billing setup.",
         "context()!==requested"

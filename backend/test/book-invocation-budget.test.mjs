@@ -27,3 +27,18 @@ test('cleanup, quota recovery and another workspace book share one scheduled inv
  assert.ok(settled.every(r=>r.status==='fulfilled'));assert.ok(queries()<900,`shared scheduled work used ${queries()} statements`);assert.equal(metered.bookInvocationBudget.used,queries());assert.ok(sourceCalls>0);assert.ok(skillCalls<60);assert.equal(DB.raw.prepare("SELECT count(*) n FROM workspace_skill_parts WHERE skill_id='deleting'").get().n,0);
  assert.equal(DB.raw.prepare("SELECT status FROM workspace_skills WHERE id='pending'").get().status,'Processing');
 });
+
+test('deleting a book releases its metered files and records for its workspace',async()=>{
+ const {raw,DB}=await fixture({peer:true});
+ const env=withWorkspaceStorage(raw);
+ const {getStorageStatus}=await import('../src/workspace-storage.js');
+ const {deleteWritingReference}=await import('../src/writing-reference-store.js');
+ const book=DB.raw.prepare("SELECT id,revision FROM writing_reference_sources WHERE workspace_id='storage-w2'").get();
+ const before=await getStorageStatus(env,'storage-w2'),other=await getStorageStatus(env,'storage-w1');
+ assert.ok(before.files.used_bytes>0);
+ await deleteWritingReference(env,{workspaceId:'storage-w2',userId:'storage-owner'},{id:book.id,expectedRevision:book.revision});
+ const after=await getStorageStatus(env,'storage-w2');
+ assert.equal(after.files.used_bytes,0);
+ assert.ok(after.records.used_bytes<before.records.used_bytes);
+ assert.deepEqual(await getStorageStatus(env,'storage-w1'),other);
+});

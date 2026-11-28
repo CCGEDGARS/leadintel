@@ -22,9 +22,9 @@ async function stripeRead(resource,read){
  }
 }
 async function catalogue(env,stripe){
- const [account,price]=await Promise.all([stripeRead('account information',()=>stripe.accounts.retrieve()),stripeRead('the storage price and product',()=>stripe.prices.retrieve(env.STRIPE_STORAGE_PLUS_PRICE_ID,{expand:['product']}))]);
+ // Stripe prices are private to the issuing merchant. Look up the exact configured ID with this key.
+ const price=await stripeRead('the storage price and product',()=>stripe.prices.retrieve(env.STRIPE_STORAGE_PLUS_PRICE_ID,{expand:['product']}));
  const mode=env.STRIPE_LIVEMODE==='true';
- if(account.id!==env.STRIPE_ACCOUNT_ID)throw fail('Storage billing merchant configuration needs attention');
  if(!price.active||price.id!==env.STRIPE_STORAGE_PLUS_PRICE_ID||price.livemode!==mode||price.currency!=='eur'||!Number.isInteger(price.unit_amount)||price.unit_amount<=0||price.recurring?.interval!=='month'||price.recurring.interval_count!==1||price.recurring.usage_type!=='licensed'||!price.product?.active||price.product.metadata?.leadintel_storage_plan!=='plus'||price.tax_behavior!==env.STRIPE_STORAGE_TAX_BEHAVIOR)throw fail('Storage billing price configuration needs attention');
  if(env.STRIPE_STORAGE_AUTOMATIC_TAX==='true'){
   const [settings,registrations]=await Promise.all([stripeRead('Stripe Tax settings',()=>stripe.tax.settings.retrieve()),stripeRead('Stripe Tax registrations',()=>stripe.tax.registrations.list({status:'active',limit:1}))]);
@@ -175,6 +175,6 @@ export async function handleStorageWebhook(request,env,options={}){
   if(event.livemode!==(env.STRIPE_LIVEMODE==='true')||!/^evt_[A-Za-z0-9_-]+$/.test(event.id)||!Number.isSafeInteger(event.created)||event.account)throw Error('invalid event context');
  }catch(cause){return json({error:cause.status===413?'Storage event is too large':'Invalid storage webhook signature or context'},cause.status===413?413:400);}
  if(!eventTypes.has(event.type))return json({ignored:true});
- try{const stripe=options.stripe||client(env);const account=await stripe.accounts.retrieve();if(account.id!==env.STRIPE_ACCOUNT_ID)throw fail('Invalid storage merchant',400);return json(await applyEvent(env,event,stripe));}
+ try{const stripe=options.stripe||client(env);return json(await applyEvent(env,event,stripe));}
  catch(cause){return json({error:cause.status===400?'Invalid storage event ownership':'Storage event requires retry'},cause.status===400?400:503);}
 }
