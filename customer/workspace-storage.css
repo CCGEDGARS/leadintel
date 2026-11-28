@@ -10,3 +10,5 @@
 [data-plan-editor] label{display:grid;gap:.3rem}
 [data-plan-editor] [hidden]{display:none}
 [data-plan-editor] input,[data-plan-editor] select,[data-plan-editor] button{padding:.55rem;font:inherit;border:1px solid #c6d6cf;border-radius:.5rem;background:white;color:inherit}
+
+.storage-options{margin-top:.8rem}.storage-options summary{cursor:pointer;color:#456052;font-size:.875rem}.storage-options[open] summary{margin-bottom:.6rem}

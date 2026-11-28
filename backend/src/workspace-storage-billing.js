@@ -5,17 +5,29 @@ import {storagePreferences,listStorageFiles} from './workspace-storage-managemen
 export const STRIPE_STORAGE_API_VERSION='2026-09-30.endive';
 const json=(data,status=200,cors={})=>new Response(JSON.stringify(data),{status,headers:{'Content-Type':'application/json','Cache-Control':'no-store',...cors}});
 const id=value=>typeof value==='string'?value:value?.id||'';
-const fail=(message,status=503)=>Object.assign(Error(message),{status});
+const fail=(message,status=503)=>Object.assign(Error(message),{status,storagePublicError:true});
 const stmt=(env,sql,...args)=>env.DB.prepare(sql).bind(...args);
 function client(env){return new Stripe(env.STRIPE_RESTRICTED_KEY,{apiVersion:STRIPE_STORAGE_API_VERSION,httpClient:Stripe.createFetchHttpClient(),maxNetworkRetries:1,timeout:15000});}
 function returnUrl(env){const url=new URL(env.CUSTOMER_APP_URL);if(url.protocol!=='https:'||url.username||url.password)throw fail('Billing return URL is not configured');url.searchParams.set('settings','ai');return url;}
+function billingMessage(cause){
+ if(cause.storagePublicError&&cause.status===503)return cause.message;
+ if(cause.statusCode===401)return 'Stripe could not authenticate the storage billing key.';
+ return 'Storage billing is temporarily unavailable. Try again shortly.';
+}
+async function stripeRead(resource,read){
+ try{return await read();}
+ catch(cause){
+  if(cause.statusCode===403)throw fail('The storage billing key needs read access to '+resource+'.');
+  throw cause;
+ }
+}
 async function catalogue(env,stripe){
- const [account,price]=await Promise.all([stripe.accounts.retrieve(),stripe.prices.retrieve(env.STRIPE_STORAGE_PLUS_PRICE_ID,{expand:['product']})]);
+ const [account,price]=await Promise.all([stripeRead('account information',()=>stripe.accounts.retrieve()),stripeRead('the storage price and product',()=>stripe.prices.retrieve(env.STRIPE_STORAGE_PLUS_PRICE_ID,{expand:['product']}))]);
  const mode=env.STRIPE_LIVEMODE==='true';
  if(account.id!==env.STRIPE_ACCOUNT_ID)throw fail('Storage billing merchant configuration needs attention');
  if(!price.active||price.id!==env.STRIPE_STORAGE_PLUS_PRICE_ID||price.livemode!==mode||price.currency!=='eur'||!Number.isInteger(price.unit_amount)||price.unit_amount<=0||price.recurring?.interval!=='month'||price.recurring.interval_count!==1||price.recurring.usage_type!=='licensed'||!price.product?.active||price.product.metadata?.leadintel_storage_plan!=='plus'||price.tax_behavior!==env.STRIPE_STORAGE_TAX_BEHAVIOR)throw fail('Storage billing price configuration needs attention');
  if(env.STRIPE_STORAGE_AUTOMATIC_TAX==='true'){
-  const [settings,registrations]=await Promise.all([stripe.tax.settings.retrieve(),stripe.tax.registrations.list({status:'active',limit:1})]);
+  const [settings,registrations]=await Promise.all([stripeRead('Stripe Tax settings',()=>stripe.tax.settings.retrieve()),stripeRead('Stripe Tax registrations',()=>stripe.tax.registrations.list({status:'active',limit:1}))]);
   if(settings.status!=='active'||!registrations.data?.some(r=>r.status==='active')||!id(price.product.tax_code))throw fail('Storage tax configuration requires verification');
  }
  const settings=await env.DB.prepare('SELECT monthly_amount_minor FROM storage_plan_settings WHERE id=1').first();
@@ -64,7 +76,7 @@ export async function handleStorageRoute(request,env,cors={},options={}){
   if(action==='status'){
    if(status.billing.checkout_ready){
     try{status.upgrade.price=(await catalogue(env,options.stripe||client(env))).quote;status.billing.available=true;}
-    catch{status.billing.available=false;status.billing.checkout_ready=false;status.billing.can_upgrade=false;status.billing.can_manage=false;status.billing.message='Storage billing is temporarily unavailable. Your storage usage and saved data remain available.';}
+    catch(cause){status.billing.available=false;status.billing.checkout_ready=false;status.billing.can_upgrade=false;status.billing.can_manage=false;status.billing.message=billingMessage(cause);}
    }
    if(!status.upgrade.price){
     const settings=await env.DB.prepare('SELECT monthly_amount_minor FROM storage_plan_settings WHERE id=1').first();
@@ -104,7 +116,7 @@ export async function handleStorageRoute(request,env,cors={},options={}){
    const success=returnUrl(env);success.searchParams.set('storage_checkout','returned');
    const cancel=returnUrl(env);cancel.searchParams.set('storage_checkout','canceled');
    const suffix=Array.from(crypto.getRandomValues(new Uint8Array(8)),v=>String.fromCharCode(97+v%26)).join('');
-   const session=await stripe.checkout.sessions.create({mode:'subscription',customer:row.stripe_customer_id,line_items:[{price:priceId,quantity:1}],subscription_data:{billing_mode:{type:'flexible'}},...(env.STRIPE_STORAGE_AUTOMATIC_TAX==='true'?{automatic_tax:{enabled:true},tax_id_collection:{enabled:true},customer_update:{address:'auto'},billing_address_collection:'required'}:{}),integration_identifier:'leadintel_storage_'+suffix,success_url:success.toString(),cancel_url:cancel.toString()},{idempotencyKey:'leadintel-storage-checkout-'+workspace+'-'+token});
+   const session=await stripe.checkout.sessions.create({mode:'subscription',customer:row.stripe_customer_id,line_items:[{price:priceId,quantity:1}],subscription_data:{billing_mode:{type:'flexible'}},...(env.STRIPE_STORAGE_AUTOMATIC_TAX==='true'?{automatic_tax:{enabled:true},tax_id_collection:{enabled:true},customer_update:{address:'auto',name:'auto'},billing_address_collection:'required'}:{}),integration_identifier:'leadintel_storage_'+suffix,success_url:success.toString(),cancel_url:cancel.toString()},{idempotencyKey:'leadintel-storage-checkout-'+workspace+'-'+token});
    await stmt(env,'UPDATE workspace_storage_accounts SET stripe_checkout_id=?,stripe_checkout_price_id=?,stripe_checkout_url=?,stripe_checkout_expires=?,checkout_token=NULL,checkout_lease=0 WHERE workspace_id=? AND checkout_token=?',session.id,priceId,session.url,session.expires_at,workspace,token).run();
    return json({url:session.url},200,cors);
   }catch(cause){await stmt(env,'UPDATE workspace_storage_accounts SET checkout_token=NULL,checkout_lease=0 WHERE workspace_id=? AND checkout_token=?',workspace,token).run();throw cause;}

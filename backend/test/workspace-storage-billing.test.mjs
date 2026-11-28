@@ -115,3 +115,22 @@ test('new checkouts use the edited monthly price and previous subscription invoi
  f.invoice.lines.data[0].pricing.price_details.price='price_new';f.invoice.lines.data[0].period.end+=1000;
  assert.equal((await f.deliver('invoice.paid','evt_prior_override')).status,200);assert.equal(until(),original+1000);
 });
+
+test('Stripe Tax registration access is actionable and a successful retry enables tax-inclusive checkout',async()=>{
+ const f=await fixture();
+ f.env.STRIPE_STORAGE_AUTOMATIC_TAX='true';
+ const plan=await f.stripe.prices.retrieve();
+ plan.product.tax_code='txcd_10000000';
+ f.stripe.prices.retrieve=async()=>plan;
+ f.stripe.tax={settings:{retrieve:async()=>({status:'active'})},registrations:{list:async()=>{throw Object.assign(Error('private provider detail'),{statusCode:403});}}};
+ const route=action=>f.mod.handleStorageRoute(f.request(action),f.env,{}, {stripe:f.stripe});
+ const denied=await (await route('status')).json();
+ assert.equal(denied.billing.can_upgrade,false);
+ assert.equal(denied.billing.message,'The storage billing key needs read access to Stripe Tax registrations.');
+ f.stripe.tax.registrations.list=async()=>({data:[{status:'active'}]});
+ assert.equal((await (await route('status')).json()).billing.can_upgrade,true);
+ assert.equal((await route('checkout')).status,200);
+ const checkout=f.calls.find(entry=>entry.mode==='subscription');
+ assert.deepEqual(checkout.customer_update,{address:'auto',name:'auto'});
+ assert.deepEqual(checkout.automatic_tax,{enabled:true});
+});
