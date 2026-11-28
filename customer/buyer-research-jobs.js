@@ -69,7 +69,7 @@
       const bridge=getBridge(),workspaceId=bridge?.workspace?.id,userId=bridge?.session?.user?.id;
       if(!workspaceId||!bridge?.session?.authenticated)throw Error('Sign in to read buyer research.');
       const profile=options.profile||{},key=inputKey(owner,profile),company=companyIdentity(owner),protectedPeople=new Map();let expectedRoster=roster(owner),expectedPeople=new Map((owner.people||[]).map(p=>[String(p.id),bounded(p)]));
-      return {owner,bridge,workspaceId,userId,key,profile,personIds:options.personIds?.map(String).slice(0,10),localEdits:person=>{const id=String(person.id),prior=expectedPeople.get(id)||{},local=protectedPeople.get(id)||{};for(const key of new Set([...Object.keys(prior),...Object.keys(person)]))if(stable(person[key])!==stable(prior[key]))local[key]=bounded(person[key]);protectedPeople.set(id,local);return local;},current:()=>!options.signal?.aborted&&getBridge()===bridge&&bridge.session?.authenticated&&bridge.workspace?.id===workspaceId&&bridge.session?.user?.id===userId&&companyIdentity(owner)===company&&inputKey(owner,profile)===key&&roster(owner)===expectedRoster&&(!options.isCurrent||options.isCurrent()===true),acceptRoster:()=>{expectedRoster=roster(owner);expectedPeople=new Map((owner.people||[]).map(p=>[String(p.id),bounded(p)]));}};
+      return {owner,bridge,workspaceId,userId,key,profile,scanId:options.scanId,legacyScan:options.legacyScan,personIds:options.personIds?.map(String).slice(0,10),localEdits:person=>{const id=String(person.id),prior=expectedPeople.get(id)||{},local=protectedPeople.get(id)||{};for(const key of new Set([...Object.keys(prior),...Object.keys(person)]))if(stable(person[key])!==stable(prior[key]))local[key]=bounded(person[key]);protectedPeople.set(id,local);return local;},current:()=>!options.signal?.aborted&&getBridge()===bridge&&bridge.session?.authenticated&&bridge.workspace?.id===workspaceId&&bridge.session?.user?.id===userId&&companyIdentity(owner)===company&&inputKey(owner,profile)===key&&roster(owner)===expectedRoster&&(!options.isCurrent||options.isCurrent()===true),acceptRoster:()=>{expectedRoster=roster(owner);expectedPeople=new Map((owner.people||[]).map(p=>[String(p.id),bounded(p)]));}};
     }
     async function request(scope,method,body,jobId,controller){
       if(!scope.current())throw abortError();
@@ -77,6 +77,8 @@
       let contextTimer;
       const canceled=new Promise((_,reject)=>{stop=()=>{transport.abort();reject(abortError());};contextTimer=setInterval(()=>{if(!scope.current())stop();},100);controller.signal.addEventListener('abort',stop,{once:true});timer=setTimeout(()=>{transport.abort();reject(Object.assign(Error('Buyer research status request timed out. Reopen the company to read saved progress.'),{code:'BUYER_JOB_REQUEST_TIMEOUT'}));},requestTimeoutMs);});
       const query=new URLSearchParams({workspace_id:scope.workspaceId,...(jobId?{job_id:jobId}:{domain:domain(scope.owner.domain||scope.owner.website)})});
+      if(!jobId&&scope.scanId)query.set('scan_id',scope.scanId);
+      if(!jobId&&scope.legacyScan)query.set('legacy_scan','1');
       if(scope.restoreReceipts&&method==='GET'&&!jobId)query.set('restore','1');
       const path=body?.action==='start'&&body.freeDiscovery&&!body.paidResearch&&!body.personIds?.length?'/api/buyers/research/free':'/api/buyers/research';
       try{
@@ -90,6 +92,7 @@
       return Object.assign(Error(roleMismatch?'Saved research uses different buyer roles. Refresh buyers to research the current roles; completed evidence is retained.':'Saved research does not match the current company or seller context. Completed evidence is retained.'),{name:'BuyerResearchContextError',code:roleMismatch?'BUYER_JOB_ROLES_MISMATCH':'BUYER_JOB_CONTEXT_MISMATCH',phase:job?.phase||'start',jobId:sameCompany?job?.id:undefined});
     }
     function matching(scope,job){
+      if(scope.scanId&&job?.input?.websiteScanId!==scope.scanId)return false;
       if(!job||domain(job.domain||job.candidate?.domain)!==domain(scope.owner.domain)||!job.id||!ACTIVE.has(job.status)&&!TERMINAL.has(job.status))return false;
       const c=job.candidate;if(c&&fold(c.company||c.companyName)!==fold(scope.owner.company||scope.owner.companyName))return false;
       if(c?.buyerRoles&&stable(roles(c.buyerRoles))!==stable(rolesFor(scope.owner,scope.profile)))return false;
@@ -195,8 +198,8 @@
     }
     async function execute(owner,options,readOnly){
       const scope=capture(owner,options),key=`${scope.workspaceId}|${domain(owner.domain)}`,old=active.get(key);
-      scope.restoreReceipts=readOnly&&!scope.personIds?.length;
-      if(old&&old.scope.owner===owner&&old.scope.current()&&(readOnly||!old.readOnly)){
+      scope.restoreReceipts=readOnly&&!scope.scanId&&!scope.personIds?.length;
+      if(old&&old.scope.owner===owner&&old.scope.scanId===scope.scanId&&old.scope.legacyScan===scope.legacyScan&&old.scope.current()&&(readOnly||!old.readOnly)){
         const samePeople=stable([...(old.scope.personIds||[])].sort())===stable([...(scope.personIds||[])].sort());
         if(!readOnly&&options.paidEmailLimit&&!old.readOnly)throw Error('Buyer research is already running. Wait for its results before starting a paid search.');
         if(!readOnly&&!samePeople){
@@ -214,8 +217,8 @@
       stop=()=>controller.abort();options.signal?.addEventListener('abort',stop,{once:true});
       const entry={scope,controller,promise:null,readOnly,fullResearch:options.fullResearch===true};
       entry.promise=(async()=>{
-        const expectedJobId=options.resumeExisting?owner.buyerResearchJob?.id:null;
-        let observedJob=await request(scope,'GET',null,null,controller);
+        const expectedJobId=options.jobId||(options.resumeExisting?owner.buyerResearchJob?.id:null);
+        let observedJob=await request(scope,'GET',null,options.jobId||null,controller);
         const queueStarted=Date.now();
         // Another tab/server observer may own active research. Never replace it
         // merely because this click selected a different person.
@@ -226,9 +229,10 @@
         }
         let job=observedJob;
         if(job&&!matching(scope,job)){options.onMismatch?.(contextFailure(scope,job));job=null;}
-        if(!readOnly&&options.fullResearch){
+        if(!readOnly&&options.fullResearch&&!(scope.scanId&&job)){
           if(scope.bridge.conflict)throw Error('Resolve the workspace sync conflict before starting Full research.');
-          job=await request(scope,'POST',{action:'start',...requestInput(owner,scope.profile),peopleFirst:true,fullResearch:true,allowFreeFallback:true,...(options.force?{force:true}:{}),...(options.resumeExisting?{resumeIncomplete:true}:{})},null,controller);
+          const input=requestInput(scope.scanId?{...owner,people:[],buyerDiscovery:undefined}:owner,scope.profile);
+          job=await request(scope,'POST',{action:'start',...input,peopleFirst:true,fullResearch:true,allowFreeFallback:true,...(scope.scanId?{websiteScanId:scope.scanId}:{}),...(options.force?{force:true}:{}),...(options.resumeExisting?{resumeIncomplete:true}:{})},null,controller);
         }else if(!readOnly&&options.resumeExisting){
           if(scope.bridge.conflict)throw Error('Resolve the workspace synchronization conflict before resuming buyer research.');
           if(!job){
@@ -239,7 +243,7 @@
           const savedPeople=(job.input?.personIds||[]).map(String).sort();
           if(stable(savedPeople)!==stable([...(scope.personIds||[])].sort()))throw Error('The selected buyers have changed. Reopen the company to see its latest progress.');
           if(TERMINAL.has(job.status)&&job.status!=='complete')job=await request(scope,'POST',{action:'resume',...(options.allowMeteredPublicResearch?{allowMeteredPublicResearch:true}:{}),jobId:job.id,expectedRevision:job.revision},null,controller);
-        }else if(!readOnly){
+        }else if(!readOnly&&!(scope.scanId&&options.fullResearch&&job)){
           if(scope.bridge.conflict)throw Error('Resolve the workspace synchronization conflict before starting or resuming buyer research.');
           const jobIds=job?.input?.personIds||job?.progress?.personIds,selected=scope.personIds?.length?new Set(scope.personIds):null;
           const jobSelected=job?.input?.scope==='selected_buyers'||Boolean(jobIds?.length),scopeCovered=selected?jobSelected&&new Set((jobIds||[]).map(String)).size===selected.size&&scope.personIds.every(id=>jobIds?.map(String).includes(id)):!jobSelected;
@@ -263,7 +267,7 @@
     async function cancel(owner,options={}){
       const scope=capture(owner,options),key=`${scope.workspaceId}|${domain(owner.domain)}`,entry=active.get(key),controller=new AbortController();
       if(scope.bridge.conflict)throw Error('Resolve the workspace synchronization conflict before canceling buyer research.');
-      const ref=references.get(owner)||owner.buyerResearchJob;
+      const ref=options.jobId?{id:options.jobId}:references.get(owner)||owner.buyerResearchJob;
       const job=ref?.id?await request(scope,'GET',null,ref.id,controller):await request(scope,'GET',null,null,controller);
       if(!job||!matching(scope,job))return null;
       const result=await request(scope,'POST',{action:'cancel',jobId:job.id,expectedRevision:job.revision},null,controller);

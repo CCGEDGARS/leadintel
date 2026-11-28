@@ -183,4 +183,46 @@ test('a fresh Danish website scan ranks three sourced buyers and preserves each 
  assert.deepEqual(batch.map(names=>names.sort()),[['Erik Madsen','Karl Vester','Lars Jensen']]);
  assert.equal(f.DB.raw.prepare('SELECT count(*) AS n FROM buyer_research_jobs WHERE domain=?').get(domain).n,1);
  assert.equal(f.DB.raw.prepare('SELECT count(*) AS n FROM additional_contact_attempts').get().n,0);
+ const previousScan=await page.locator('#website-scanning-history').inputValue();
+ f.DB.raw.prepare("UPDATE buyer_research_jobs SET status='needs_review',last_error='workspace_records_full:5678',revision=revision+1 WHERE id=?").run(job.id);
+ await page.getByRole('button',{name:'Scan website',exact:true}).click();
+ await page.waitForFunction(old=>document.querySelector('#website-scanning-history')?.value!==old&&document.querySelector('#website-scanning-history')?.options.length===2,previousScan);
+ assert.equal(await panel.isVisible(),false);
+ const newScan=await page.locator('#website-scanning-history').inputValue();
+ await page.getByRole('button',{name:'Find buyers',exact:true}).filter({visible:true}).click();
+ await page.waitForFunction(old=>discovery.selectedProspects.some(c=>c.buyerResearchJob?.id&&c.buyerResearchJob.id!==old),job.id);
+ const fresh=f.DB.raw.prepare("SELECT * FROM buyer_research_jobs WHERE json_extract(input_json,'$.websiteScanId')=?").get(newScan);
+ assert.notEqual(fresh.id,job.id);
+ assert.equal(await panel.getByText(/Buyer research paused · CRM/).count(),0);
+ await page.locator('#website-scanning-history').selectOption(previousScan);
+ await panel.getByText(/Buyer research paused · CRM/).first().waitFor();
+ await page.locator('#website-scanning-history').selectOption(newScan);
+ await page.waitForFunction(id=>discovery.selectedProspects.some(c=>c.buyerResearchJob?.id===id),fresh.id);
+ assert.equal(await panel.getByText(/Buyer research paused · CRM/).count(),0);
+ assert.equal(f.DB.raw.prepare('SELECT COUNT(*) n FROM buyer_research_jobs WHERE domain=?').get(domain).n,2);
+
+ for(let i=0;i<25;i++){
+  const {status}=f.DB.raw.prepare('SELECT status FROM buyer_research_jobs WHERE id=?').get(fresh.id);
+  if(!['running','queued'].includes(status))break;
+  await f.runJobs(fresh.id);
+ }
+ await page.waitForFunction(id=>discovery.selectedProspects.some(c=>c.buyerResearchJob?.id===id&&!['running','queued'].includes(c.buyerResearchJob.status)),fresh.id);
+ assert.ok(f.DB.raw.prepare("SELECT COUNT(*) AS n FROM buyer_research_tasks WHERE job_id=? AND kind='read' AND json_extract(result_json,'$.reused')=1").get(fresh.id).n>0);
+ for(const email of ['lj@'+domain,'em@'+domain])await panel.getByText(email,{exact:true}).first().waitFor();
+ assert.equal(batch.flat().filter(name=>name==='Lars Jensen'||name==='Erik Madsen').length,2,'Previously found addresses require no second lookup');
+
+ // Delete the paused scan, then scan that same URL again while its CRM record still exists.
+ await page.locator('#website-scanning-history').selectOption(previousScan);
+ await panel.getByText(/Buyer research paused · CRM/).first().waitFor();
+ await page.getByRole('button',{name:'Delete this scan',exact:true}).click();
+ await page.getByRole('dialog').getByRole('button').last().click();
+ await page.waitForFunction(()=>document.querySelector('#website-scanning-history')?.options.length===1);
+ await page.getByRole('button',{name:'Scan website',exact:true}).click();
+ await page.waitForFunction(([deleted,other])=>{
+  const select=document.querySelector('#website-scanning-history');
+  return select?.options.length===2&&select.value&&![deleted,other].includes(select.value)&&![...select.options].some(o=>o.value===deleted);
+ },[previousScan,newScan]);
+ assert.equal(await panel.isVisible(),false);
+ assert.equal(f.DB.raw.prepare('SELECT COUNT(*) n FROM buyer_research_jobs WHERE domain=?').get(domain).n,2,'Scanning alone starts no buyer lookup');
+
 });

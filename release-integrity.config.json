@@ -3692,6 +3692,7 @@
       "status": 200,
       "contains": [
         "website-scanning-card",
+        "id:scanId,scopedBuyers:true",
         "Scan website',busy",
         "action:'scan-website'",
         "Find companies &amp; decision-makers",
@@ -7388,6 +7389,7 @@
       "contains": [
         "/api/buyers/research",
         "createClient",
+        "websiteScanId:scope.scanId",
         "restore",
         "expectedRevision"
       ]

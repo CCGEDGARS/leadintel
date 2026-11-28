@@ -55,7 +55,7 @@ export function normalizeBuyerInput(body,stored={}){
  if(!domain||!domain.includes('.')||/^\d+(?:\.\d+){3}$/.test(domain)||/[\s:@[\]]/.test(domain)||/^(localhost|.*\.local)$/.test(domain)||!String(raw.company||'').trim())throw Object.assign(Error('A named company with a public domain is required'),{status:400});
  const saved=[...(stored.discovery?.selectedProspects||[]),...(stored.discovery?.candidates||[]),...(stored.discovery?.pipeline||[])].find(c=>D.canonicalDomain(c.domain)===domain);
  const selected=(body.personIds||[]).map(String).slice(0,10),roles=D.buyerResearchRoles(raw,body.profile||{},activeBuyerProfile(stored));
- const normalized=D.normalizeDiscoveryState({selectedProspects:[{...saved,...raw,domain,buyerSearchMode:'user_selected_target',buyerRoles:roles.join('; ')}]}).selectedProspects[0];
+ const normalized=D.normalizeDiscoveryState({selectedProspects:[{...(body.websiteScanId?{}:saved),...raw,domain,buyerSearchMode:'user_selected_target',buyerRoles:roles.join('; ')}]}).selectedProspects[0];
  if(!normalized)throw Object.assign(Error('Company research input is invalid'),{status:400});
  // Client snapshots are input claims, never server execution receipts. Source pages
  // are read by the job before any new contact evidence can be accepted.
@@ -70,8 +70,10 @@ export function normalizeBuyerInput(body,stored={}){
  const personIds=normalized.people.map(p=>String(p.id));
  return {candidate:normalized,profile,roles,personIds,scope:selected.length?'selected_buyers':'all_buyers'};
 }
-export async function buyerInputKey(input){return sha256(JSON.stringify([...(input.taskId?[input.taskId]:[]),...(input.freeDiscovery?['free-discovery']:[]),input.paidResearch,input.candidate.domain,input.candidate.company,input.profile,input.roles.slice().sort(),input.personIds.slice().sort(),input.candidate.people.map(p=>[p.id,p.publicName||p.name,p.title,p.organization]).sort((a,b)=>String(a[0]).localeCompare(String(b[0])))]));}
-export async function readBuyerJob(env,workspaceId,{id,domain}={}){
+export async function buyerInputKey(input){return sha256(JSON.stringify([...(input.websiteScanId?[input.websiteScanId]:[]),...(input.taskId?[input.taskId]:[]),...(input.freeDiscovery?['free-discovery']:[]),input.paidResearch,input.candidate.domain,input.candidate.company,input.profile,input.roles.slice().sort(),input.personIds.slice().sort(),input.candidate.people.map(p=>[p.id,p.publicName||p.name,p.title,p.organization]).sort((a,b)=>String(a[0]).localeCompare(String(b[0])))]));}
+export async function readBuyerJob(env,workspaceId,{id,domain,websiteScanId,legacyScan}={}){
+ if(!id&&websiteScanId)return stmt(env,"SELECT * FROM buyer_research_jobs WHERE workspace_id=? AND domain=? AND json_extract(input_json,'$.websiteScanId')=?",workspaceId,D.canonicalDomain(domain),websiteScanId).first();
+ if(!id&&legacyScan)return stmt(env,"SELECT * FROM buyer_research_jobs WHERE workspace_id=? AND domain=? AND json_extract(input_json,'$.websiteScanId') IS NULL ORDER BY rowid DESC LIMIT 1",workspaceId,D.canonicalDomain(domain)).first();
  return id?stmt(env,'SELECT * FROM buyer_research_jobs WHERE workspace_id=? AND id=?',workspaceId,id).first():stmt(env,'SELECT * FROM buyer_research_jobs WHERE workspace_id=? AND domain=? ORDER BY rowid DESC LIMIT 1',workspaceId,D.canonicalDomain(domain)).first();
 }
 export async function recoverInterruptedContactJob(env,{jobId}={}){
@@ -162,7 +164,7 @@ export async function savedBuyerResearchReceipts(env,row){
 }
 export async function publicBuyerJob(env,row,{recoverRetained=false}={}){
  if(!row)return null;const input=parse(row.input_json);let candidate=readBuyerCheckpoint(row.result_json,input.candidate||{});
- if(recoverRetained)candidate=await retainedJobCandidate(env,row,input,candidate);
+ if(recoverRetained&&!input.websiteScanId)candidate=await retainedJobCandidate(env,row,input,candidate);
  await recoverOfficialBuyers(env,row,input,candidate);
  candidate=D.reconcileBuyerEvidence(candidate,{trustedAgentSources:true});
  // A person saved before f5036bf8 with the description of a publication as the job title is not handed out.
@@ -210,7 +212,7 @@ export async function publicBuyerJob(env,row,{recoverRetained=false}={}){
  const finishedFree=input.freeDiscovery&&!input.fullResearch&&row.status==='needs_review'&&diagnostics.at(-1)?.code==='free_discovery_finished';
  const freeOnly=finishedFree&&!await meteredBuyerResearchAllowed(env,row.workspace_id);
  const labels={official:'Reading official company sources',dossier:'Researching the company',identities:'Finding decision-makers',contacts:'Checking contact evidence',review:'Reviewing buyer evidence',paid:'Researching approved paid channels',done:'Research saved'};
- return {id:row.id,domain:row.domain,retainedEvidenceRecovered:recoverRetained,contextKey:row.context_key,crm,input:{...(freeOnly?{freeOnly:true}:{}),freeDiscovery:Boolean(input.freeDiscovery&&!input.fullResearch),publicContactChecks:input.publicContactChecks===true,fullResearch:Boolean(input.fullResearch||input.meteredPublicResearchApproved),peopleFirst:Boolean(input.peopleFirst),paidResearch:Boolean(input.paidResearch),company:input.candidate?.company,domain:row.domain,profile:input.profile,roles:input.roles,personIds:input.scope==='selected_buyers'?input.personIds:[],scope:input.scope},status:row.status,phase:row.phase,resumePhase:resumePhase(candidate,input,contactOptions),revision:row.revision,createdAt,updatedAt,candidate,quality,diagnostics:[...diagnostics,...(row.last_error?[{phase:row.phase,...(buyerRecordLimit(row.last_error)?{code:'workspace_records_full',reason:buyerRecordLimitMessage}:{reason:row.last_error})}]:[])],progress:{timing,stages,credits,windowPaused:Boolean(paused),executionStatus:row.status,completed:Number(completed),total,inProgress:row.status==='running'?Number((totals.results||[]).find(r=>r.status==='running')?.n)||0:0,lastActivityAt,label:buyerRecordLimit(row.last_error)?buyerRecordLimitMessage:input.freeDiscovery&&diagnostics.at(-1)?.code==='free_discovery_finished'?diagnostics.at(-1).reason:paused?paused.reason:activity|| (row.status==='needs_review'?'Research saved · '+(quality.gaps[0]||'review remaining gaps'):input.recheck&&row.phase==='contacts'?Object.values(input.recheck.plans).some(plan=>plan.queries.length)?'Checking missing contact details · alternative public sources':'Rechecking saved sources · no untried alternative queries':labels[row.phase]||row.phase.replaceAll('_',' '))}};
+ return {id:row.id,domain:row.domain,retainedEvidenceRecovered:recoverRetained,contextKey:row.context_key,crm,input:{...(input.websiteScanId?{websiteScanId:input.websiteScanId}:{}),...(freeOnly?{freeOnly:true}:{}),freeDiscovery:Boolean(input.freeDiscovery&&!input.fullResearch),publicContactChecks:input.publicContactChecks===true,fullResearch:Boolean(input.fullResearch||input.meteredPublicResearchApproved),peopleFirst:Boolean(input.peopleFirst),paidResearch:Boolean(input.paidResearch),company:input.candidate?.company,domain:row.domain,profile:input.profile,roles:input.roles,personIds:input.scope==='selected_buyers'?input.personIds:[],scope:input.scope},status:row.status,phase:row.phase,resumePhase:resumePhase(candidate,input,contactOptions),revision:row.revision,createdAt,updatedAt,candidate,quality,diagnostics:[...diagnostics,...(row.last_error?[{phase:row.phase,...(buyerRecordLimit(row.last_error)?{code:'workspace_records_full',reason:buyerRecordLimitMessage}:{reason:row.last_error})}]:[])],progress:{timing,stages,credits,windowPaused:Boolean(paused),executionStatus:row.status,completed:Number(completed),total,inProgress:row.status==='running'?Number((totals.results||[]).find(r=>r.status==='running')?.n)||0:0,lastActivityAt,label:buyerRecordLimit(row.last_error)?buyerRecordLimitMessage:input.freeDiscovery&&diagnostics.at(-1)?.code==='free_discovery_finished'?diagnostics.at(-1).reason:paused?paused.reason:activity|| (row.status==='needs_review'?'Research saved · '+(quality.gaps[0]||'review remaining gaps'):input.recheck&&row.phase==='contacts'?Object.values(input.recheck.plans).some(plan=>plan.queries.length)?'Checking missing contact details · alternative public sources':'Rechecking saved sources · no untried alternative queries':labels[row.phase]||row.phase.replaceAll('_',' '))}};
 }
 // A second Full click reopens its run, including a partial or budget-paused result.
 // Only a separate resume command authorizes another execution window.
@@ -272,6 +274,24 @@ export async function startBuyerJob(env,workspaceId,user,body,trusted=null){
   input.paidResearch.automaticBuyerLimit=Math.min(limit,input.paidResearch.automaticBuyerLimit);
  }
  if(trusted?.taskId){input.taskId=trusted.taskId;if(input.paidResearch){input.paidResearch.email=trusted.email===true&&input.paidResearch.email;input.paidResearch.phone=trusted.phone===true&&input.paidResearch.phone;input.paidResearch.automaticBuyerLimit=Math.min(input.paidResearch.automaticBuyerLimit,trusted.buyerCount);}}
+ if(body.websiteScanId!==undefined){
+  if(!input.peopleFirst||body.fullResearch!==true||trusted||input.paidResearch||typeof body.websiteScanId!=='string'||!/^[a-zA-Z0-9-]{1,100}$/.test(body.websiteScanId))throw Object.assign(Error('Invalid website buyer scan.'),{status:400});
+  input.websiteScanId=body.websiteScanId;
+  const scope={domain:input.candidate.domain,websiteScanId:input.websiteScanId};
+  const existing=await readBuyerJob(env,workspaceId,scope);
+  if(existing)return existing;
+  input.workspaceContext=stored.hash;
+  input.candidate.people=[];input.personIds=[];
+  delete input.candidate.buyerResearchJob;delete input.candidate.buyerResearchProgress;
+  input.candidate.peopleStatus='idle';input.candidate.publicContactStatus='idle';
+  const id=crypto.randomUUID(),key=await buyerInputKey(input);
+  const created=await stmt(env,`INSERT INTO buyer_research_jobs(id,workspace_id,requested_by,session_hash,domain,context_key,input_json,result_json,phase)
+   SELECT ?,?,?,?,?,?,?,?,'official' WHERE ${callerSql} ON CONFLICT DO NOTHING`,id,workspaceId,user.id,user.sessionTokenHash,scope.domain,key,JSON.stringify(input),JSON.stringify(input.candidate),...callerArgs(workspaceId,user)).run();
+  if(created.meta.changes)return readBuyerJob(env,workspaceId,{id});
+  const concurrent=await readBuyerJob(env,workspaceId,scope);
+  if(concurrent)return concurrent;
+  throw Object.assign(Error('Another buyer run is active for this company, or your workspace access changed. Retry Find buyers after the active run finishes.'),{status:409});
+ }
  const key=await buyerInputKey(input);
  input.workspaceContext=stored.hash;
  if(body.force===true&&input.scope==='selected_buyers'){
@@ -375,6 +395,8 @@ export async function commandBuyerJob(env,workspaceId,user,body){
   const updated=await stmt(env,`UPDATE buyer_research_jobs SET status='canceled',lease_token=NULL,lease_until=0,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND revision=? AND ${callerSql}`,row.id,row.revision,...callerArgs(workspaceId,user)).run();if(!updated.meta.changes)throw Object.assign(Error('Buyer research changed; reload its saved progress'),{status:409});
  }else{
   if(activeBuyerJob(row.status))return row;
+  const other=await stmt(env,"SELECT id FROM buyer_research_jobs WHERE workspace_id=? AND domain=? AND id<>? AND status IN ('queued','running')",workspaceId,row.domain,row.id).first();
+  if(other)throw Object.assign(Error('Wait for the active buyer run for this company before resuming this saved run.'),{status:409});
   const input=parse(row.input_json),context=await workspaceBuyerContext(env,workspaceId,input.taskId);
   if(input.workspaceContext!==context.hash)throw Object.assign(Error('The company profile changed. Start research with the updated context.'),{status:409});
   if(meteredCompanyResearch(input)&&body.resumeFreeCompany&&body.allowMeteredPublicResearch!==true)return row;
