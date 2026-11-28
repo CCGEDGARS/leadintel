@@ -23,34 +23,40 @@ test('a late response from another workspace cannot overwrite the new user stora
 });
 test('temporary Stripe outage keeps usage visible and explains disabled billing in yellow',async()=>{
  const {w}=mount({fetcher:async()=>({ok:true,json:async()=>payload('w1',{billing:{setup_required:false,checkout_ready:false,can_upgrade:false,can_manage:false,payment_issue:false,available:false,message:'Storage billing is temporarily unavailable. Your storage usage and saved data remain available.'}})})});
- try{await w.LeadIntelStorage.refresh();const card=w.document.getElementById('workspace-storage-card');assert.match(card.textContent,/4 MB/);assert.match(card.textContent,/billing is temporarily unavailable/);assert.ok(card.classList.contains('is-warning'));assert.equal(card.classList.contains('is-error'),false);assert.equal(card.querySelector('[data-storage-action="checkout"]'),null);assert.ok(card.querySelector('[data-storage-action="refresh"]'));assert.ok(w.LeadIntelStorage.attentionItems().some(item=>item.id==='storage-billing-connection'&&item.severity==='recommendation'));}finally{w.close();}
+ try{await w.LeadIntelStorage.refresh();const card=w.document.getElementById('workspace-storage-card');assert.match(card.textContent,/4 MB/);assert.match(card.textContent,/billing is temporarily unavailable/);assert.ok(card.classList.contains('is-warning'));assert.equal(card.classList.contains('is-error'),false);assert.equal(card.querySelector('[data-storage-action="checkout"]'),null);assert.equal(card.querySelector('[data-storage-action="refresh"]'),null);assert.ok(w.LeadIntelStorage.attentionItems().some(item=>item.id==='storage-billing-connection'&&item.severity==='recommendation'));}finally{w.close();}
 });
-test('platform admin opens workspace limits inside storage and a usage refresh retains edits',async()=>{
- const {w}=mount();try{
-  w.LeadIntelServerBridge.session.user.platform_admin=true;
-  w.eval(fs.readFileSync(path.join(__dirname,'../../admin/storage-plans.js'),'utf8'));
-  await w.LeadIntelStorage.refresh();
-  const fetchStatus=w.fetch;
-  w.fetch=async(url,options)=>String(url).includes('/api/access/storage-plans')?
-   {ok:true,json:async()=>({settings:{monthly_amount_minor:null},workspaces:[{id:'w1',name:'Test workspace'}],selected:{included_records_limit:1e8,included_files_limit:1e9,plus_records_limit:5e8,plus_files_limit:1e10,records_bytes:0,files_bytes:0}})}:fetchStatus(url,options);
-  w.document.querySelector('[data-storage-action="plans"]').click();
-  await new Promise(resolve=>setTimeout(resolve,0));
-  const field=w.document.querySelector('[name="plus_records_limit"]');
-  assert.equal(field.value,'500');field.value='550';
-  await w.LeadIntelStorage.refresh();
-  assert.equal(w.document.querySelector('[name="plus_records_limit"]').value,'550');
- }finally{w.close();}
-});
-
-test('owners see the billing action for their current plan beside file management',async()=>{
+test('owners see the billing action for their current plan as the only button, including for platform admins',async()=>{
  let plus=false;
  const {w}=mount({fetcher:async()=>({ok:true,json:async()=>payload('w1',{plan:{key:plus?'plus':'included',name:plus?'Storage Plus':'Included'},billing:{can_upgrade:!plus,can_manage:plus,checkout_ready:true}})})});
  try{
-  const actions=()=>Array.from(w.document.querySelectorAll('.storage-actions button'),b=>b.dataset.storageAction);
+  w.LeadIntelServerBridge.session.user.platform_admin=true;
+  const actions=()=>Array.from(w.document.querySelectorAll('#workspace-storage-card button'),b=>b.dataset.storageAction);
   await w.LeadIntelStorage.refresh();
-  assert.deepEqual(actions(),['checkout','manage']);
+  assert.deepEqual(actions(),['checkout']);
+  assert.equal(w.document.querySelector('#workspace-storage-card select'),null);
+  assert.ok(w.document.querySelector('a[data-storage-action="manage"]'));
   plus=true;
   await w.LeadIntelStorage.refresh();
-  assert.deepEqual(actions(),['portal','manage']);
+  assert.deepEqual(actions(),['portal']);
+ }finally{w.close();}
+});
+
+test('Buy storage submits one authenticated checkout for the current workspace',async()=>{
+ let finish;
+ const {w,calls}=mount({fetcher:async(url,options)=>options.method==='POST'?new Promise(resolve=>{finish=resolve;}):{ok:true,json:async()=>payload('w1',{billing:{can_upgrade:true,checkout_ready:true}})}});
+ try{
+  await w.LeadIntelStorage.refresh();
+  const buy=()=>w.document.querySelector('[data-storage-action="checkout"]');
+  buy().click();
+  assert.equal(buy().disabled,true);
+  buy().click();
+  const posts=calls.filter(c=>c.options.method==='POST');
+  assert.equal(posts.length,1);
+  assert.equal(new URL(posts[0].url).pathname,'/api/storage/checkout');
+  assert.equal(new URL(posts[0].url).searchParams.get('workspace_id'),'w1');
+  assert.equal(posts[0].options.credentials,'include');
+  finish({ok:false,json:async()=>({error:'Checkout could not open.'})});
+  await new Promise(resolve=>setTimeout(resolve,0));
+  assert.equal(buy().disabled,false);
  }finally{w.close();}
 });
