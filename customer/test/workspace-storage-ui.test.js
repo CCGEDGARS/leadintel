@@ -25,19 +25,19 @@ test('temporary Stripe outage keeps usage visible and explains disabled billing 
  const {w}=mount({fetcher:async()=>({ok:true,json:async()=>payload('w1',{billing:{setup_required:false,checkout_ready:false,can_upgrade:false,can_manage:false,payment_issue:false,available:false,message:'Storage billing is temporarily unavailable. Your storage usage and saved data remain available.'}})})});
  try{await w.LeadIntelStorage.refresh();const card=w.document.getElementById('workspace-storage-card');assert.match(card.textContent,/4 MB/);assert.match(card.textContent,/billing is temporarily unavailable/);assert.ok(card.classList.contains('is-warning'));assert.equal(card.classList.contains('is-error'),false);assert.equal(card.querySelector('[data-storage-action="checkout"]'),null);assert.equal(card.querySelector('[data-storage-action="refresh"]'),null);assert.ok(w.LeadIntelStorage.attentionItems().some(item=>item.id==='storage-billing-connection'&&item.severity==='recommendation'));}finally{w.close();}
 });
-test('owners see the billing action for their current plan as the only button, including for platform admins',async()=>{
+test('owners see the billing action for their current plan beside Manage storage, including for platform admins',async()=>{
  let plus=false;
  const {w}=mount({fetcher:async()=>({ok:true,json:async()=>payload('w1',{plan:{key:plus?'plus':'included',name:plus?'Storage Plus':'Included'},billing:{can_upgrade:!plus,can_manage:plus,checkout_ready:true}})})});
  try{
   w.LeadIntelServerBridge.session.user.platform_admin=true;
   const actions=()=>Array.from(w.document.querySelectorAll('#workspace-storage-card button'),b=>b.dataset.storageAction);
   await w.LeadIntelStorage.refresh();
-  assert.deepEqual(actions(),['checkout']);
+  assert.deepEqual(actions(),['checkout','manage']);
   assert.equal(w.document.querySelector('#workspace-storage-card select'),null);
-  assert.ok(w.document.querySelector('a[data-storage-action="manage"]'));
+  assert.ok(w.document.querySelector('button[data-storage-action="manage"]'));
   plus=true;
   await w.LeadIntelStorage.refresh();
-  assert.deepEqual(actions(),['portal']);
+  assert.deepEqual(actions(),['portal','manage']);
  }finally{w.close();}
 });
 

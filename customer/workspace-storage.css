@@ -12,3 +12,7 @@
 [data-plan-editor] input,[data-plan-editor] select,[data-plan-editor] button{padding:.55rem;font:inherit;border:1px solid #c6d6cf;border-radius:.5rem;background:white;color:inherit}
 
 .storage-options{margin-top:.8rem}.storage-options summary{cursor:pointer;color:#456052;font-size:.875rem}.storage-options[open] summary{margin-bottom:.6rem}
+
+.storage-group{display:block;width:100%;padding:.75rem 0;text-align:left;border:0;border-bottom:1px solid #d7e0da;background:transparent;color:#195842;font:inherit;cursor:pointer}
+.storage-group[aria-expanded="true"]{font-weight:700}
+.storage-management-dialog .storage-file strong{overflow-wrap:anywhere}

@@ -19,7 +19,7 @@
   if(status?.billing?.available===false)items.push({id:'storage-billing-connection',severity:'recommendation',title:'Storage billing is temporarily unavailable',detail:'Usage and saved data remain available. Retry billing in Settings → Storage.',target:{type:'settings'}});
   return items;
  }
- function meter(label,m){const used=bytes(m.used_bytes),limit=bytes(m.limit_bytes);return `<div class="storage-meter ${Number(m.percent)>=95?'is-critical':Number(m.percent)>=80?'is-warning':''}"><div><strong>${label==='Files'?'<a href="#storage-files" data-storage-action="manage" aria-label="Manage files and saving">Files</a>':label}</strong><span>${m.measured===false?'Calculating existing usage…':`${used} / ${limit} · ${Number(m.percent)||0}% used`}</span></div>${m.measured===false?'':`<progress max="${Number(m.limit_bytes)}" value="${Math.min(Number(m.used_bytes),Number(m.limit_bytes))}" aria-label="${label}: ${used} of ${limit}"></progress>`}</div>`;}
+ function meter(label,m){const used=bytes(m.used_bytes),limit=bytes(m.limit_bytes);return `<div class="storage-meter ${Number(m.percent)>=95?'is-critical':Number(m.percent)>=80?'is-warning':''}"><div><strong>${label}</strong><span>${m.measured===false?'Calculating existing usage…':`${used} / ${limit} · ${Number(m.percent)||0}% used`}</span></div>${m.measured===false?'':`<progress max="${Number(m.limit_bytes)}" value="${Math.min(Number(m.used_bytes),Number(m.limit_bytes))}" aria-label="${label}: ${used} of ${limit}"></progress>`}</div>`;}
  function priceLabel(status){const price=status.upgrade?.price;if(!price)return 'Price unavailable';return `${new Intl.NumberFormat('en-IE',{style:'currency',currency:price.currency}).format(price.amount_minor/100)}/month${price.tax_behavior==='inclusive'?' · VAT included':price.tax_behavior==='exclusive'?' · before applicable tax':''}`;}
  let billingContext='',billingError='';
  function render(){
@@ -43,6 +43,7 @@
    <div class="storage-actions">
     ${owner&&status?.billing.can_upgrade?'<button class="ai-settings-btn primary" data-storage-action="checkout" type="button" '+(busy?'disabled':'')+'>Buy storage</button>':''}
     ${owner&&!status?.billing.can_upgrade&&status?.billing.can_manage?'<button class="ai-settings-btn primary" data-storage-action="portal" type="button" '+(busy?'disabled':'')+'>Manage billing</button>':''}
+    ${status?'<button type="button" class="ai-settings-btn" data-storage-action="manage">Manage storage</button>':''}
    </div>
    ${bridge()?.workspace?.role!=='owner'?'<small>Only the workspace owner can change its storage plan.</small>':''}`;
 
@@ -78,7 +79,7 @@
  }
  function mount(){
   const drawer=document.getElementById('ai-settings-drawer');if(!drawer||document.getElementById('workspace-storage-card'))return;
-  if(!document.querySelector('[data-workspace-storage-css]')){const css=document.createElement('link');css.rel='stylesheet';css.href='workspace-storage.css?v=20261128-buy';css.dataset.workspaceStorageCss='1';document.head.appendChild(css);}
+  if(!document.querySelector('[data-workspace-storage-css]')){const css=document.createElement('link');css.rel='stylesheet';css.href='workspace-storage.css?v=20261128-inventory';css.dataset.workspaceStorageCss='1';document.head.appendChild(css);}
   const card=document.createElement('section');card.id='workspace-storage-card';card.setAttribute('aria-label','Workspace storage');
   const anchor=document.getElementById('communication-integration-heading')?.closest('section')||document.getElementById('ai-engine-summary');if(anchor)anchor.insertAdjacentElement('afterend',card);else drawer.appendChild(card);
   card.addEventListener('click',event=>{const button=event.target.closest('[data-storage-action]');if(button){event.preventDefault();void action(button.dataset.storageAction);}});render();

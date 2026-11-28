@@ -53,3 +53,25 @@ test('a storage outage is visible as an error, never as an empty file inventory'
  const w=setup();w.fetch=async()=>{throw Error('Storage connection unavailable');};
  try{w.eval(source('workspace-storage-management.js'));w.LeadIntelStorageManagement.open();await tick();assert.match(w.document.querySelector('dialog').textContent,/File list unavailable/);assert.doesNotMatch(w.document.querySelector('dialog').textContent,/No uploaded company files/);assert.equal(w.document.querySelector('[data-storage-message]').dataset.error,'true');assert.equal(w.document.querySelector('[data-auto-reports]').disabled,true);}finally{w.close();}
 });
+
+test('manager opens the fullest allowance and measures reclaimed records after confirmed deletion',async()=>{
+ const w=setup();let removed=false,refreshes=0;
+ w.LeadIntelStorage={refresh(){refreshes++;}};
+ w.LeadIntelDialogs={confirm:async()=>true};
+ w.fetch=async(url,{method})=>{
+  const u=new URL(url);
+  assert.equal(u.searchParams.get('workspace_id'),'w1');
+  let result;
+  if(u.pathname==='/api/storage/preferences')result={workspace_id:'w1',preferences:{revision:0,auto_report_copies:true}};
+  else if(u.searchParams.has('group'))result={workspace_id:'w1',items:[{id:'backup',name:'November backup',old_backup:true,bytes:5000}],more:false};
+  else if(u.pathname==='/api/storage/backup'){assert.equal(method,'POST');removed=true;result={deleted:true};}
+  else result={workspace_id:'w1',files:[],priority:'records_bytes',groups:removed?[]:[{key:'snapshots',label:'Workspace backups',count:1,bytes:5000,meter:'records_bytes'}],usage:{records:removed?100:5100,files:20}};
+  return {ok:true,json:async()=>result};
+ };
+ try{
+  w.eval(source('workspace-storage-management.js'));w.LeadIntelStorageManagement.open();await tick();
+  assert.equal(w.document.querySelector('[data-group]').getAttribute('aria-expanded'),'true');
+  w.document.querySelector('[data-delete-item]').click();await tick();await tick();
+  assert.ok(removed);assert.equal(refreshes,1);assert.match(w.document.querySelector('[data-storage-message]').textContent,/5 KB workspace data/);
+ }finally{w.close();}
+});
