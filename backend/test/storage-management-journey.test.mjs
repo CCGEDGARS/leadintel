@@ -21,6 +21,19 @@ test('storage settings through authenticated browser HTTP persist preferences an
  await p.locator('[data-storage-close]').click();await p.reload();await p.waitForFunction(()=>window.LeadIntelServerBridge?.ready&&window.LeadIntelStorageManagement);await p.locator('#topbar-account-btn').click();await p.locator('[data-topbar-action="settings"]').click();await p.getByRole('tab',{name:'Storage',exact:true}).click();await p.locator('[data-storage-action="manage"]').click();await p.locator('.storage-management-dialog').getByText('Storage acceptance.pdf',{exact:true}).waitFor();assert.equal(await p.locator('[data-auto-reports]').isChecked(),false);
  assert.equal(await p.evaluate(()=>LeadIntelStorageManagement.reportCopiesAllowed()),false);
  await p.setViewportSize({width:390,height:844});assert.equal(await p.locator('.storage-management-dialog').evaluate(node=>node.scrollWidth<=node.clientWidth),true);
+ // One unavailable section must leave the other usable; retry reads both again.
+ const policyRequest='**/api/storage/preferences?*',inventoryRequest='**/api/storage/files?*';
+ const unavailable=route=>route.fulfill({status:503,contentType:'application/json',body:'{"error":"Unavailable"}'});
+ await p.route(policyRequest,unavailable);await p.locator('[data-storage-reload]').click();
+ await p.getByText('Saving preferences could not be loaded.',{exact:true}).waitFor();
+ assert.ok(await p.locator('[data-auto-reports]').evaluate(node=>node.disabled&&node.indeterminate));
+ assert.ok(await p.locator('[data-delete-file]').isEnabled());
+ await p.unroute(policyRequest);await p.route(inventoryRequest,unavailable);await p.locator('[data-storage-reload]').click();
+ await p.locator('[data-storage-message]').filter({hasText:'File list unavailable.'}).waitFor();
+ assert.ok(await p.locator('[data-auto-reports]').isEnabled());
+ assert.equal(await p.getByText('No uploaded company files or books.').count(),0);
+ await p.unroute(inventoryRequest);await p.locator('[data-storage-reload]').click();
+ await p.locator('.storage-management-dialog').getByText('Storage acceptance.pdf',{exact:true}).waitFor();
  await p.locator('[data-delete-file]').click();await p.locator('[data-li-accept]').click();await p.getByText('No uploaded company files or books.').waitFor();assert.equal(objects.size,0);
  assert.equal(f.DB.raw.prepare('SELECT files_bytes FROM workspace_storage_accounts WHERE workspace_id=?').get(workspaceId).files_bytes,0);
  assert.ok(f.calls.some(call=>call.method==='DELETE'&&call.path.includes(id)&&call.status===200));assert.deepEqual(errors,[]);

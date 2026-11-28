@@ -14,7 +14,7 @@ function statements(sql){
  }
  assert.equal(current.trim(),'');return out;
 }
-test('storage migration and authenticated status execute in the actual Workers D1 runtime',async()=>{
+test('storage migration, inventory, preferences and authenticated status execute in the actual Workers D1 runtime',async()=>{
  const code="import {handleStorageRoute} from './src/workspace-storage-billing.js'; export default {fetch(request,env){return handleStorageRoute(request,env);}};";
  const built=await build({stdin:{contents:code,resolveDir:fileURLToPath(new URL('..',import.meta.url)),sourcefile:'storage-worker.js'},bundle:true,write:false,format:'esm',platform:'browser',conditions:['workerd','worker','browser'],logLevel:'silent'});
  const mf=new Miniflare(convertV4MiniflareOptions({cf:false,modules:true,script:built.outputFiles[0].text,compatibilityDate:'2026-07-20',d1Databases:{DB:'storage-test'}}));
@@ -25,6 +25,17 @@ test('storage migration and authenticated status execute in the actual Workers D
   const response=await mf.dispatchFetch('https://worker.test/api/storage/status?workspace_id=edgars-latvia',{headers:{Cookie:'leadintel_session=storage-test-session'}});
   assert.equal(response.status,200,await response.clone().text());const data=await response.json();assert.equal(data.records.limit_bytes,100000000);assert.equal(data.billing.setup_required,true);
   assert.equal((await mf.dispatchFetch('https://worker.test/api/storage/status?workspace_id=edgars-latvia')).status,401);
+  const route=action=>mf.dispatchFetch('https://worker.test/api/storage/'+action+'?workspace_id=edgars-latvia',{headers:{Cookie:'leadintel_session=storage-test-session'}});
+  await DB.exec("INSERT INTO content_materials(id,workspace_id,title,category,body,created_by) VALUES('inventory','edgars-latvia','Inventory example','draft','saved text','owner-edgars');");
+  const inventory=await route('files');
+  assert.equal(inventory.status,200,await inventory.clone().text());
+  const list=await inventory.json();
+  assert.ok(list.groups.find(group=>group.key==='content_materials'&&group.bytes>0));
+  assert.deepEqual(list.files,[]);
+  const group=await mf.dispatchFetch('https://worker.test/api/storage/files?workspace_id=edgars-latvia&group=content_materials&offset=0',{headers:{Cookie:'leadintel_session=storage-test-session'}});
+  assert.equal(group.status,200,await group.clone().text());
+  assert.equal((await group.json()).items[0].name,'Inventory example');
+  assert.equal((await route('preferences')).status,200);
   await DB.exec("UPDATE workspace_storage_accounts SET included_records_limit=2 WHERE workspace_id='edgars-latvia';");
   await assert.rejects(DB.exec("INSERT INTO content_materials(id,workspace_id,title,category,body,created_by) VALUES('m','edgars-latvia','Too big','draft','saved text','owner-edgars');"),/WORKSPACE_STORAGE_FULL/);
  }finally{await mf.dispose();}

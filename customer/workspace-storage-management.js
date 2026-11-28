@@ -6,7 +6,7 @@
  const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  const bytes=value=>{const n=Number(value||0);return n<1000?n+' B':n<1e6?+(n/1000).toFixed(2)+' KB':+(n/1e6).toFixed(2)+' MB';};
  let dialog,owner='',generation=0,accountEpoch=0,files=[],preferences=null,busy=false,focusBefore;
- let reports=[],groups=[],usage=null,selected='',rows=[],more=false;
+ let filesLoaded=false,reports=[],groups=[],usage=null,selected='',rows=[],more=false;
  const deletion={
   writing_workspace_records:['storage/draft','this archived writing draft'],
   content_materials:['content-materials','its saved content'],
@@ -89,20 +89,34 @@
  }
  function render(){
   const canEdit=bridge()?.workspace?.role==='owner';
-  dialog.querySelector('[data-storage-content]').innerHTML=`${breakdown()}<section class="storage-saving"><h3>Choose what to keep</h3><label><input type="checkbox" data-auto-reports ${preferences?.auto_report_copies?'checked':''} ${!canEdit||busy||!preferences?'disabled':''}> Save an extra report copy after research</label><p>Turn this off to save report copies only when you choose Save report. Research evidence, monitoring findings, CRM records and workflows remain saved.</p><p>Identical company-file uploads are reused. Abandoned book uploads expire automatically; saved books and files are never removed based on age or relevance.</p>${!canEdit?'<small>Only the workspace owner can change saving settings or delete files here.</small>':''}</section><h3>Uploaded files and books</h3><p>Largest files first. Download a copy before deleting. </p><div class="storage-file-list">${files.length?files.map((file,index)=>`<article class="storage-file"><div><strong>${esc(file.name)}</strong><small>${file.kind==='book'?'Book':'Company file'} · ${esc(file.status)} · ${file.measured?bytes(file.bytes):`${bytes(file.bytes)} accounted; total not yet confirmed`}</small></div><div class="storage-file-actions"><a class="ai-settings-btn" href="${path(file.kind,file.id)}/original?workspace_id=${encodeURIComponent(bridge()?.workspace?.id||'')}" target="_blank" rel="noopener">Download</a><button class="ai-settings-btn storage-delete" type="button" data-delete-file="${index}" ${!canEdit||busy||['Processing','Uploading','Deleting'].includes(file.status)?'disabled':''}>${file.kind==='book'?'Delete book':'Delete file'}</button></div></article>`).join(''):preferences?'<p>No uploaded company files or books.</p>':busy?'<p>Loading saved files…</p>':'<p>File list unavailable. Refresh files to try again.</p>'}</div>`;
+  dialog.querySelector('[data-storage-content]').innerHTML=`${breakdown()}<section class="storage-saving"><h3>Choose what to keep</h3><label><input type="checkbox" data-auto-reports ${preferences?.auto_report_copies?'checked':''} ${!canEdit||busy||!preferences?'disabled':''}> Save an extra report copy after research</label><p>Turn this off to save report copies only when you choose Save report. Research evidence, monitoring findings, CRM records and workflows remain saved.</p><p>Identical company-file uploads are reused. Abandoned book uploads expire automatically; saved books and files are never removed based on age or relevance.</p>${!canEdit?'<small>Only the workspace owner can change saving settings or delete files here.</small>':''}</section><h3>Uploaded files and books</h3><p>Largest files first. Download a copy before deleting. </p><div class="storage-file-list">${files.length?files.map((file,index)=>`<article class="storage-file"><div><strong>${esc(file.name)}</strong><small>${file.kind==='book'?'Book':'Company file'} · ${esc(file.status)} · ${file.measured?bytes(file.bytes):`${bytes(file.bytes)} accounted; total not yet confirmed`}</small></div><div class="storage-file-actions"><a class="ai-settings-btn" href="${path(file.kind,file.id)}/original?workspace_id=${encodeURIComponent(bridge()?.workspace?.id||'')}" target="_blank" rel="noopener">Download</a><button class="ai-settings-btn storage-delete" type="button" data-delete-file="${index}" ${!canEdit||busy||['Processing','Uploading','Deleting'].includes(file.status)?'disabled':''}>${file.kind==='book'?'Delete book':'Delete file'}</button></div></article>`).join(''):filesLoaded?'<p>No uploaded company files or books.</p>':busy?'<p>Loading saved files…</p>':'<p>File list unavailable. Refresh files to try again.</p>'}</div>`;
+  dialog.querySelector('[data-auto-reports]').indeterminate=!preferences;
  }
  async function load(expand=true){
-  const token=++generation;busy=true;files=[];preferences=null;reports=[];groups=[];usage=null;selected='';rows=[];more=false;render();say('Loading files and saving preferences…');
+  const token=++generation;busy=true;filesLoaded=false;files=[];preferences=null;reports=[];groups=[];usage=null;selected='';rows=[];more=false;render();say('Loading files and saving preferences…');
   try{
-   const [list,policy]=await Promise.all([api('/api/storage/files'),api('/api/storage/preferences')]);
+   const [inventory,policy]=await Promise.allSettled([api('/api/storage/files'),api('/api/storage/preferences')]);
    if(!current(token))return;
-   if(list.workspace_id!==bridge().workspace.id||policy.workspace_id!==bridge().workspace.id)throw Error('Workspace changed. Reopen storage.');
-   files=list.files;reports=root.LeadIntelStorageReports?.list()||[];groups=list.groups||[];usage=list.usage;preferences=policy.preferences;say(usage?bytes(usage.records)+' workspace data · '+bytes(usage.files)+' files':'');
-   if(expand&&groups.length){
-    const group=groups.find(g=>g.meter===list.priority)||groups[0];
-    const page=await api('/api/storage/files?group='+encodeURIComponent(group.key)+'&offset=0');
-    if(current(token)&&page.workspace_id===bridge().workspace.id){selected=group.key;rows=page.items;more=page.more;}
-   }
+   const workspace=bridge().workspace.id,errors=[];
+   if([inventory,policy].some(response=>response.status==='fulfilled'&&response.value?.workspace_id!==workspace))throw Error('Workspace changed. Reopen storage.');
+   if(policy.status==='fulfilled')preferences=policy.value.preferences;
+   else errors.push('Saving preferences could not be loaded.');
+   if(inventory.status==='fulfilled'){
+    const list=inventory.value;
+    files=list.files;filesLoaded=true;groups=list.groups||[];usage=list.usage;
+    if(expand&&groups.length){
+     const group=groups.find(g=>g.meter===list.priority)||groups[0];
+     try{
+      const page=await api('/api/storage/files?group='+encodeURIComponent(group.key)+'&offset=0');
+      if(!current(token))return;
+      if(page.workspace_id!==workspace)throw Error('Workspace changed.');
+      selected=group.key;rows=page.items;more=page.more;
+     }catch{errors.push('Category details could not be loaded. Select the category to retry.');}
+    }
+   }else errors.push('File list unavailable. Refresh files to try again.');
+   if(!current(token))return;
+   reports=root.LeadIntelStorageReports?.list()||[];
+   say(errors.length?errors.join(' '):usage?bytes(usage.records)+' workspace data · '+bytes(usage.files)+' files':'',errors.length>0);
   }catch(error){if(current(token))say(error.message,true);}
   finally{if(current(token)){busy=false;render();}}
  }
